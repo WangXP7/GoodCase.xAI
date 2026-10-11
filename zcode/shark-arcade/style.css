@@ -1,0 +1,18 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #161310;
+  overflow: hidden;
+}
+#stage {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#game {
+  cursor: none;
+  box-shadow: 0 0 70px rgba(0, 0, 0, .85);
+  touch-action: none;
+}

@@ -1,0 +1,13 @@
+══ V5 中止（Abort）分阶段探针 ══
+
+起飞前：phase=FLIGHT
+飞行段按 ESC 后 0.5s：phase=FLIGHT  outcome=null  failed=false
+  → 中止是否生效：❌ 未生效（ESC 被吞）
+  _abortPulse 残留=true（1 = 从未被消费）
+
+推进到：phase=RELEASE
+松绑段按 ESC：phase=ABORTED  → ✅ 生效
+
+倒计时段按 ESC：phase=IDLE  → ✅ 回 IDLE（不计失败）
+
+飞行段持续推进 5s 寻找 ABORTED：❌ 从未进入 ABORTED

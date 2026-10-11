@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>鹈鹕骑自行车 3D · 正常版</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🚲</text></svg>">
+<link rel="stylesheet" href="./src/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div id="hud">
+    <div class="title">
+      <h1>PELICAN ON A BICYCLE</h1>
+      <p>鹈鹕骑自行车 · 正常版 3D</p>
+    </div>
+    <div class="bar">
+      <a class="cur" href="./index.html">正常版</a>
+      <a href="./pixel.html">像素版</a>
+      <button id="btn-rotate">自动旋转</button>
+    </div>
+    <div class="hint">拖拽旋转 · 滚轮缩放 · 右键平移</div>
+    <div class="tag">两段式 IK 踩踏 · 程序化几何 · 零外部资源</div>
+  </div>
+
+  <div id="err"></div>
+
+  <script>
+    window.__MODE__ = 'smooth';
+    setTimeout(function () {
+      if (!window.__DIAG__) {
+        var d = document.getElementById('err');
+        d.innerHTML = '<b>没能启动 WebGL 场景</b><br>请确认浏览器已启用 WebGL 2，并且 <code>vendor/</code> 目录与页面在同一目录下。';
+        d.classList.add('show');
+      }
+    }, 9000);
+  </script>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

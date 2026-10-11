@@ -1,0 +1,6 @@
+{
+  "name": "rocket-launch-sim-src",
+  "private": true,
+  "type": "module",
+  "description": "Marks src/ as ES module scope so the shared core runs identically in Node (headless verification) and the browser (Phaser)."
+}

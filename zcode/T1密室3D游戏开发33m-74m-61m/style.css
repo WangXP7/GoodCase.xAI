@@ -1,0 +1,94 @@
+/* 三重密室 · 样式 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+body { font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif; color: #e8ecf2; }
+#game { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+#hud .ico { margin-right: 4px; }
+
+/* 面板通用 */
+#objective, #topbar, #inventory {
+  position: absolute; padding: 8px 14px; border-radius: 10px;
+  background: rgba(10, 14, 22, 0.72); border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(6px); font-size: 14px; line-height: 1.5;
+}
+#objective { top: 14px; left: 14px; max-width: 46vw; border-left: 3px solid #ffd166; }
+#objective b { color: #ffd166; }
+#objective.flash { animation: objflash 0.7s ease; }
+@keyframes objflash { 0% { background: rgba(255,209,102,0.45); } 100% { background: rgba(10,14,22,0.72); } }
+#topbar { top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 16px; font-variant-numeric: tabular-nums; }
+#topbar #timer { color: #7ae0c3; font-weight: 600; }
+#topbar #timer.slow { color: #ff6a5e; }
+#inventory { top: 14px; right: 14px; border-right: 3px solid #7ae0c3; }
+
+/* 准星与提示 */
+#crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px;
+  border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 0 4px rgba(0,0,0,0.8); }
+#prompt { position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%);
+  padding: 5px 14px; border-radius: 8px; background: rgba(8,10,16,0.8);
+  border: 1px solid rgba(255,255,255,0.2); font-size: 14px; white-space: nowrap; display: none; }
+#prompt b { color: #ffd166; }
+
+/* 消息堆栈 */
+#toasts { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(720px, 86vw); }
+.toast { padding: 10px 18px; border-radius: 10px; background: rgba(8,10,16,0.88);
+  border: 1px solid rgba(255,255,255,0.16); border-left: 4px solid #7ae0c3;
+  font-size: 15px; text-align: center; animation: tin 0.25s ease; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+.toast.important { border-left-color: #ff5a4e; color: #ffece8; font-weight: 600; font-size: 16px; }
+.toast.out { opacity: 0; transition: opacity 0.5s; }
+@keyframes tin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* 房间横幅 */
+#banner { position: absolute; left: 50%; top: 26%; transform: translateX(-50%);
+  font-size: 34px; letter-spacing: 10px; font-weight: 700; color: #fff;
+  text-shadow: 0 0 24px rgba(255,255,255,0.5), 0 2px 8px #000; opacity: 0; transition: opacity 0.8s; white-space: nowrap; }
+#banner.show { opacity: 1; }
+
+/* 红光滤镜 */
+#redlight { position: absolute; inset: 0; display: none;
+  background: radial-gradient(ellipse at center, rgba(255,40,20,0.06) 40%, rgba(140,0,0,0.32)); }
+#redlight.on { display: block; }
+
+#hint { position: absolute; right: 14px; bottom: 12px; font-size: 12px; color: rgba(255,255,255,0.45); }
+
+/* 密码锁 */
+.modal { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.45); pointer-events: auto; }
+.hidden { display: none !important; }
+.pad { width: 250px; padding: 18px; border-radius: 14px; background: #161b24;
+  border: 1px solid #3a4356; box-shadow: 0 20px 60px rgba(0,0,0,0.7); text-align: center; }
+.pad.shake { animation: shake 0.4s; }
+@keyframes shake { 0%,100% { transform: none; } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+.pad-title { font-size: 13px; letter-spacing: 6px; color: #8fa0bb; margin-bottom: 10px; }
+#kpDisplay { font-family: Consolas, monospace; font-size: 30px; letter-spacing: 6px;
+  background: #0a0e14; border: 1px solid #3a4356; border-radius: 8px; padding: 8px; margin-bottom: 12px;
+  color: #7ae0c3; min-height: 52px; }
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.keys button { padding: 12px 0; font-size: 18px; border-radius: 8px; border: 1px solid #3a4356;
+  background: #202836; color: #e8ecf2; cursor: pointer; }
+.keys button:hover { background: #2b3648; }
+.keys button.warn { color: #ff8a7e; }
+.keys button.ok { color: #7ae0c3; font-weight: 700; font-size: 15px; }
+#kpClose { margin-top: 12px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #3a4356;
+  background: transparent; color: #8fa0bb; cursor: pointer; font-size: 13px; }
+#kpClose:hover { color: #fff; }
+
+/* 开场 / 通关 */
+.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(10,12,20,0.82), rgba(0,0,0,0.96)); pointer-events: auto; }
+.overlay .card { width: min(560px, 92vw); padding: 40px 44px; border-radius: 18px; text-align: center;
+  background: rgba(13,17,26,0.92); border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.8); }
+.overlay h1 { font-size: 40px; letter-spacing: 14px; margin-bottom: 8px; color: #ffd166; text-shadow: 0 0 30px rgba(255,209,102,0.35); }
+.overlay .sub { color: #8fa0bb; margin-bottom: 22px; letter-spacing: 2px; }
+.overlay .rules { text-align: left; font-size: 15px; line-height: 1.9; color: #cfd8e6;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; }
+.overlay button { padding: 13px 46px; font-size: 18px; letter-spacing: 6px; border-radius: 12px;
+  border: 1px solid #ffd166; background: linear-gradient(180deg, #2a2415, #1a160c);
+  color: #ffd166; cursor: pointer; font-weight: 700; }
+.overlay button:hover { background: #ffd166; color: #14100a; }
+.overlay .tiny { margin-top: 16px; font-size: 12px; color: rgba(255,255,255,0.4); }
+.bigtime { font-size: 44px; font-weight: 700; color: #7ae0c3; margin: 10px 0 4px; font-variant-numeric: tabular-nums; }

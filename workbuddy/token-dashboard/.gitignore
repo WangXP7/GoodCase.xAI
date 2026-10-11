@@ -1,0 +1,21 @@
+# 构建中间产物（dist/ 里的 exe 是交付物，不忽略）
+build/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 由脚本产出的看板 HTML
+token-dashboard.html
+
+# 本地环境
+.env
+.env.local
+.token-dashboard/
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

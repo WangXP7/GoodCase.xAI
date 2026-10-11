@@ -1,0 +1,27 @@
+══ 失败归因契约核验（S6 / P2）══
+
+  码                 时刻    量名/单位       证据数     无NaN   建议非空
+  DESTRUCT_AERO      ✅      ✅           ✅4      ✅      ✅  
+      code=DESTRUCT_AERO  T+21.7s
+      「你在 T+21.7s / 高度 1.68 km 承受了 30.0 kPa 动压，超过结构极限 30 kPa 达 0.0 kPa。」
+  TUMBLE             ✅      ✅           ✅3      ✅      ✅  
+      code=TUMBLE  T+32.8s
+      「你在 T+32.8s 失去姿态控制，箭体以 63° 攻角翻滚了 1.0 s。」
+  INSUFFICIENT_DV    ✅      ✅           ✅4      ✅      ✅  ⚠️ 主因报出负近地点（亚轨道语义），对玩家不可解读
+      code=INSUFFICIENT_DV  T+81.0s
+      「燃料耗尽于 T+81.0s，近地点只有 -91.3 km，距入轨门槛 13.5 km 还差 104.78 km。Δv 总损失 2635 m/s（基准弹道 548 m/s）。」
+  ESCAPE_TRAJ        ✅      ✅           ✅2      ✅      ✅  ⚠️ 文案称 2032 > 2138，但数值不成立
+      code=ESCAPE_TRAJ  T+81.0s
+      「你在 T+81.0s / 高度 65.13 km 以关机速度 2032 m/s 超过了逃逸速度 2138 m/s —— 你把自己甩出了引力场。」
+  SEP_HIGHQ          ✅      ✅           ✅3      ✅      ✅  
+      code=SEP_HIGHQ  T+14.0s
+      「你在 T+14.0s / 动压 14.0 kPa 时分离——上级撞上了自己的一级。安全分离需低于 5 kPa。」
+
+  A6-1「全部 9 码可触发」：可达 5/9 · DESTRUCT_AERO, TUMBLE, INSUFFICIENT_DV, ESCAPE_TRAJ, SEP_HIGHQ
+
+  ── A6-6 gap 文案退化抽样 ──
+    hTurn=20000: 近地点 -3.57km → 文案「还差 17.07 km」
+    hTurn=40000: 近地点 -91.28km → 文案「还差 104.78 km」
+    hTurn=70000: 近地点 -192.24km → 文案「还差 205.74 km」
+
+  ⚠️ 存在未达标项（见上）

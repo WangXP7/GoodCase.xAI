@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<!-- 内联空图标：避免浏览器自动请求 /favicon.ico 而在控制台留下 404 红字。
+     本作零外部资产，不引入任何图标文件。 -->
+<link rel="icon" href="data:,">
+<title>潮线 TIDELINE · 测试版 v0.1.0</title>
+<style>
+/* =====================================================================
+ * TIDELINE · 样式
+ * HUD 与全部菜单走 DOM（ADR-001 §2.3）：屏幕阅读器可读、浏览器缩放可用、
+ * 中文子集化免费。CRT 观感由 #crtOverlay 的 CSS 扫描线 + 暗角补偿。
+ * ===================================================================== */
+:root{
+  --black:#0A0E17; --deep:#16213A; --deep2:#1B2E52; --slate:#2E3E54;
+  --pale:#C7CFD8; --white:#F2F5F8; --amber:#FF8A3D; --blood:#FF3B3B;
+  --magenta:#FF2E88; --cyan:#00C2FF;
+  --accent:var(--white);
+  --hud-font: ui-monospace, "SFMono-Regular", Menlo, Consolas, "PingFang SC", "Microsoft YaHei", monospace;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%; background:var(--black); overflow:hidden;}
+body{font-family:var(--hud-font); color:var(--white); -webkit-font-smoothing:none;}
+
+#fit{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:var(--black);}
+#stage{position:relative; width:1440px; height:864px; flex:0 0 auto;
+  transform-origin:50% 50%; background:#000; overflow:hidden;}
+#gl{position:absolute; inset:0; width:1440px; height:864px; display:block;
+  image-rendering:pixelated; image-rendering:crisp-edges;}
+
+/* ---- CRT 补偿层（盖在 canvas 与 DOM 之上，ADR-001 §2.3） ---- */
+#crtOverlay{position:absolute; inset:0; pointer-events:none; z-index:60;
+  background:
+    repeating-linear-gradient(to bottom, rgba(0,0,0,.20) 0 1px, rgba(0,0,0,0) 1px 2px),
+    radial-gradient(ellipse at center, rgba(0,0,0,0) 52%, rgba(0,0,0,.42) 100%);
+  mix-blend-mode:multiply;}
+html.no-crt #crtOverlay{background:none;}
+
+/* ============================ HUD ============================ */
+#hud{position:absolute; inset:0; z-index:20; pointer-events:none;
+  padding:26px 40px; font-size:16px; letter-spacing:.02em;}
+.hud-top{display:flex; align-items:flex-start; justify-content:space-between; gap:24px;}
+.label{font-size:12px; color:var(--pale); opacity:.75; letter-spacing:.14em;}
+.big{font-size:40px; line-height:1.05; font-weight:700; color:var(--accent);}
+.sub{font-size:14px; color:var(--amber);}
+
+.score-box{min-width:240px;}
+.score-box .big{text-shadow:0 0 0 transparent;}
+
+.alarm-box{flex:1; max-width:520px;}
+.alarm-head{display:flex; align-items:baseline; gap:12px; margin-bottom:6px;}
+#tierName{font-size:14px; color:var(--accent); border:2px solid var(--accent); padding:1px 8px;}
+#alarmNum{font-size:20px; font-weight:700; margin-left:auto; color:var(--accent);}
+.bar{position:relative; height:22px; border:2px solid var(--pale); background:rgba(10,14,23,.72); overflow:hidden;}
+.fill{position:absolute; left:0; top:0; bottom:0; width:0%; background:var(--accent);}
+/* 刻度形状 = ALARM 等级的第二通道（去色后仍可辨） */
+.tick{position:absolute; top:0; bottom:0; width:3px; background:var(--black);}
+.tick.mini{height:9px; bottom:auto; opacity:.7;}
+
+.right-box{min-width:200px; text-align:right;}
+.pips{display:flex; gap:6px; justify-content:flex-end; margin:4px 0 12px;}
+.pip{width:30px; height:18px; border:2px solid var(--pale); background:transparent;}
+.pip.on{background:var(--accent);}
+.pip.low{animation:none;}
+
+/* COMBO / 区域 / 提示 */
+#comboBox{position:absolute; left:40px; top:190px; font-size:22px; font-weight:700; color:var(--cyan);}
+#comboBox small{display:block; font-size:12px; font-weight:400; color:var(--pale); opacity:.7;}
+#zoneBox{position:absolute; left:40px; bottom:34px; font-size:14px; color:var(--pale); opacity:.8;}
+#hintBox{position:absolute; left:40px; bottom:60px; font-size:13px; color:var(--pale); opacity:.55; max-width:520px; line-height:1.6;}
+#toasts{position:absolute; left:50%; top:96px; transform:translateX(-50%);
+  display:flex; flex-direction:column; align-items:center; gap:5px;}
+.toast{font-size:15px; padding:3px 12px; background:rgba(10,14,23,.82); border-left:4px solid var(--amber); color:var(--white);}
+#prompt{position:absolute; left:50%; top:118px; transform:translateX(-50%);
+  font-size:30px; font-weight:700; color:var(--amber); text-align:center; letter-spacing:.06em;}
+#prompt small{display:block; font-size:15px; font-weight:400; color:var(--white); margin-top:4px;}
+#bankBar{position:absolute; left:50%; top:200px; transform:translateX(-50%);
+  width:260px; height:12px; border:2px solid var(--cyan); display:none;}
+#bankBar i{display:block; height:100%; width:0%; background:var(--cyan);}
+
+/* ============================ 屏幕 ============================ */
+#screens{position:absolute; inset:0; z-index:50; display:none;
+  align-items:center; justify-content:center; background:rgba(10,14,23,.88);}
+#screens.show{display:flex;}
+.panel{width:900px; max-width:92%; border:4px solid var(--pale); background:var(--black);
+  padding:34px 40px; pointer-events:auto;}
+.panel h1{font-size:56px; letter-spacing:.10em; margin-bottom:6px; color:var(--white);}
+.panel h2{font-size:30px; margin-bottom:14px; color:var(--amber);}
+.panel .tag{font-size:14px; color:var(--pale); opacity:.7; margin-bottom:22px; letter-spacing:.18em;}
+.panel p{font-size:15px; line-height:1.9; color:var(--pale);}
+.panel .rows{margin:18px 0; font-size:16px; line-height:2.0;}
+.panel .rows div{display:flex; justify-content:space-between; border-bottom:1px solid rgba(199,207,216,.22); padding:2px 0;}
+.panel .rows b{color:var(--white);}
+.panel .rows .loss{color:var(--blood);}
+.keys{display:grid; grid-template-columns:130px 1fr; gap:6px 16px; font-size:15px; margin:16px 0 22px; color:var(--pale);}
+.keys b{color:var(--white);}
+.btnrow{display:flex; gap:14px; margin-top:22px; flex-wrap:wrap;}
+button{font-family:var(--hud-font); font-size:17px; font-weight:700; letter-spacing:.08em;
+  padding:12px 26px; background:transparent; color:var(--white);
+  border:3px solid var(--pale); cursor:pointer; pointer-events:auto;}
+button:hover,button:focus-visible{background:var(--pale); color:var(--black); outline:none;}
+button.primary{border-color:var(--amber); color:var(--amber);}
+button.primary:hover,button.primary:focus-visible{background:var(--amber); color:var(--black);}
+
+/* 选项 */
+.opts{display:grid; grid-template-columns:repeat(2,1fr); gap:8px 26px; margin:8px 0 4px;}
+.opt{display:flex; align-items:center; gap:10px; font-size:15px; color:var(--pale); cursor:pointer;
+  padding:5px 0; user-select:none;}
+.opt input{width:20px; height:20px; accent-color:var(--amber); cursor:pointer;}
+.opt select{font-family:var(--hud-font); font-size:14px; background:var(--black); color:var(--white);
+  border:2px solid var(--pale); padding:3px 6px;}
+.note{font-size:12px; color:var(--pale); opacity:.6; margin-top:12px; line-height:1.7;}
+
+/* 色盲模式：血红→电光蓝，琥珀→金。两条路径灰度化后均为单调亮度序列 */
+html.cb{ --blood:#00C2FF; --amber:#FFD23F; }
+/* 关闭「闪烁」→ 所有脉动改常亮（不应出现无反馈死区） */
+html.no-flash .pip.low{opacity:1;}
+html.no-flash #prompt{animation:none !important;}
+/* prefers-reduced-motion：自动降级 */
+html.rm #prompt{animation:none !important;}
+html.rm .toast{transition:none;}
+
+/* 危险状态提示（形态 + 文字，颜色只是第三通道） */
+#dangerEdge{position:absolute; inset:0; pointer-events:none; z-index:40; display:none;
+  box-shadow:inset 0 0 0 6px var(--blood); opacity:.55;}
+#dangerEdge.on{display:block;}
+
+#rotate{position:fixed; inset:0; z-index:99; display:none; align-items:center; justify-content:center;
+  background:var(--black); color:var(--white); font-size:20px; text-align:center; padding:40px;}
+@media (orientation:portrait) and (max-width:900px){ #rotate{display:flex;} }
+</style>
+</head>
+<body>
+<div id="fit">
+  <div id="stage">
+    <canvas id="gl" width="1440" height="864"></canvas>
+
+    <div id="hud">
+      <div class="hud-top">
+        <div class="score-box">
+          <div class="label">SCORE 已入账</div>
+          <div id="scoreVal" class="big">0</div>
+          <div id="pendingVal" class="sub">未兑现 0</div>
+        </div>
+
+        <div class="alarm-box">
+          <div class="alarm-head">
+            <span class="label">ALARM 通缉度</span>
+            <span id="tierName">平静 T0</span>
+            <span id="alarmNum">0</span>
+          </div>
+          <div id="alarmBar" class="bar">
+            <div id="alarmFill" class="fill"></div>
+            <div class="tick" style="left:25%"></div>
+            <div class="tick" style="left:50%"></div>
+            <div class="tick" style="left:75%"></div>
+            <div class="tick mini" style="left:12.5%"></div>
+            <div class="tick mini" style="left:37.5%"></div>
+            <div class="tick mini" style="left:62.5%"></div>
+            <div class="tick mini" style="left:87.5%"></div>
+          </div>
+          <div id="alarmA11y" class="label" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);"></div>
+        </div>
+
+        <div class="right-box">
+          <div class="label">体力 STAMINA</div>
+          <div id="stamina" class="pips"></div>
+          <div class="label">战利品 CARRY</div>
+          <div id="carry" class="pips"></div>
+        </div>
+      </div>
+
+      <div id="comboBox">COMBO ×1.0<small>0 连击</small></div>
+      <div id="bankBar"><i></i></div>
+      <div id="toasts"></div>
+      <div id="prompt"></div>
+      <div id="hintBox">
+        方向键 / WASD 或单指拖拽 = 转向　·　空格 / J 或第二指点按 = 冲刺（咬合唯一载体）　·　ESC / P 暂停　·　M 静音
+      </div>
+      <div id="zoneBox">深海</div>
+      <div id="dangerEdge"></div>
+    </div>
+
+    <div id="screens" class="show">
+      <div class="panel" id="panel"></div>
+    </div>
+
+    <div id="crtOverlay"></div>
+  </div>
+</div>
+
+<div id="rotate">请横屏游玩<br><span style="font-size:14px;opacity:.7">《潮线 TIDELINE》按 5:3 横屏构图（ADR-002）</span></div>
+
+<script src="src/core/constants.js"></script>
+<script src="src/core/util.js"></script>
+<script src="src/core/input.js"></script>
+<script src="src/core/audio.js"></script>
+<script src="src/renderer/gl.js"></script>
+<script src="src/renderer/atlas.js"></script>
+<script src="src/renderer/batcher.js"></script>
+<script src="src/renderer/post.js"></script>
+<script src="src/game/world.js"></script>
+<script src="src/game/particles.js"></script>
+<script src="src/game/shark.js"></script>
+<script src="src/game/entities.js"></script>
+<script src="src/game/game.js"></script>
+<script src="src/ui/hud.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# 角色图像
+
+`dealer-face.png` 使用内置 image_gen 工具为本项目生成，带透明通道，原始图像未经像素修改。材质色调、比例与光照由游戏渲染器控制。
+
+原始生成文件：`~/.codex/generated_images/01a072d2-9987-7001-baf3-5b45a834cb1c/exec-19106925-2a78-4429-af50-738c2443182d.png`。
+
+最终提示词：
+
+Use case: stylized-concept. Asset type: transparent cutout sprite of a floating dealer's head, to integrate into an actual first-person 3D tabletop horror game inspired by Buckshot Roulette. Produce a SINGLE straight-on, front-facing, full bald male head and jaw ONLY, with absolutely no neck, body, hands, props, typography or backdrop. Genuinely transparent alpha background. Center the entire head in a square composition with 10% transparent margin. Subject: a nightmarish pallid, corpse-gray waxy human death-mask face, broadly rounded bulbous cranium, flat temples, hollow deep BLACK EMPTY eye sockets with tiny almost invisible reflective glints, no eyeballs. Crumpled gaunt cheeks; small crooked flattened human nose; a very wide unnerving open grin filled with TWO irregular rows of many short, old yellowed individual human teeth across the entire width of the mouth. Deep black inside mouth; broad, squat jaw. The appearance should be genuinely disturbing and humanlike with worn mottled skin, grime, dark pores, very subtle abrasions, lumpy natural asymmetry. Low-poly early-2000s / PSX survival horror 3D game render, crunchy low-resolution material shading, desaturated dirty gray and khaki palette, NOT a digital painting. Harsh dim overhead warm-white lighting modeling the forehead and teeth with deep shadows under the eye sockets. Keep whole head visible; edges softly fall toward dark gray, compatible with a pitch-dark industrial room. Strong readable silhouette. Avoid comedy, cute mascot, smiling emoji, cartoon eyebrows, giant teeth, big pupils, candy colors, hair, facial hair, ears that stick out, bloody gore, skull without skin, text, watermark, cast shadow on the background, mock checkerboard transparency.

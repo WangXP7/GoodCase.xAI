@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>3D 透明水箱交互模拟</title>
+<style>
+  :root {
+    --ink: #1e2b23;
+    --green: #2f5d3f;
+    --green-deep: #1f3d2b;
+    --green-soft: #e2ead9;
+    --paper: #f5f2e9;
+    --panel: rgba(253, 252, 247, 0.92);
+    --line: rgba(31, 61, 43, 0.14);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  #scene { position: fixed; inset: 0; display: block; touch-action: none; }
+
+  .panel {
+    position: fixed;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(30, 43, 35, 0.14);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* ---------- 左侧控制台 ---------- */
+  #controls { top: 18px; left: 18px; width: 302px; padding: 16px 18px 14px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--green-soft); color: var(--green-deep);
+    border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 700;
+    letter-spacing: .12em;
+  }
+  .tag small { font-weight: 500; opacity: .65; letter-spacing: .28em; font-size: 10px; }
+  h1 {
+    margin: 10px 0 2px;
+    font-family: Georgia, "Songti SC", "STSong", "SimSun", serif;
+    font-size: 23px; line-height: 1.25; color: var(--green-deep); font-weight: 700;
+  }
+  .subtitle { margin: 0 0 12px; font-size: 11.5px; color: rgba(31,61,43,.62); letter-spacing: .06em; }
+  .divider { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+
+  .row { margin: 10px 0; }
+  .row-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; }
+  .row-label output { font-weight: 700; color: var(--green); font-variant-numeric: tabular-nums; }
+
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1; border: 1px solid var(--line); background: #fff; color: var(--ink);
+    border-radius: 9px; padding: 7px 4px; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; transition: all .15s; line-height: 1.2;
+  }
+  .seg button small { display: block; font-size: 10px; font-weight: 400; opacity: .55; }
+  .seg button:hover { border-color: var(--green); }
+  .seg button.active { background: var(--green); border-color: var(--green); color: #fff; }
+  .seg button.active small { opacity: .8; }
+
+  input[type="range"] { width: 100%; accent-color: var(--green); cursor: pointer; margin: 2px 0 0; }
+
+  .btns { display: flex; gap: 8px; margin-top: 14px; }
+  .btns button {
+    flex: 1; border: 0; border-radius: 10px; padding: 9px 0; font-size: 13.5px; font-weight: 700;
+    cursor: pointer; transition: filter .15s; color: #fff; background: var(--green);
+  }
+  #btn-reset { background: #fff; color: var(--green-deep); border: 1px solid var(--line); }
+  .btns button:hover { filter: brightness(1.06); }
+  .btns button:active { filter: brightness(.94); }
+
+  /* ---------- 右侧实时状态 ---------- */
+  #status { top: 18px; right: 18px; width: 272px; padding: 16px 18px; }
+  #status h2 {
+    margin: 0 0 10px; font-size: 13px; letter-spacing: .18em; color: var(--green-deep);
+    display: flex; align-items: center; gap: 8px;
+  }
+  #status h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat {
+    background: rgba(47, 93, 63, .07); border-radius: 10px; padding: 8px 10px;
+  }
+  .stat b { display: block; font-size: 19px; font-variant-numeric: tabular-nums; color: var(--green-deep); line-height: 1.2; }
+  .stat b small { font-size: 11px; font-weight: 600; opacity: .6; margin-left: 2px; }
+  .stat span { font-size: 10.5px; color: rgba(31,61,43,.6); letter-spacing: .05em; }
+  #fps.hot b { color: #c0392b; }
+
+  .obj-head { font-size: 11px; font-weight: 700; letter-spacing: .15em; color: rgba(31,61,43,.55); margin: 13px 0 7px; }
+  #obj-list { display: flex; flex-direction: column; gap: 7px; max-height: 42vh; overflow: auto; padding-right: 2px; }
+  .obj { font-size: 12px; }
+  .obj .l1 { display: flex; align-items: center; gap: 6px; }
+  .obj .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+  .obj .oname { font-weight: 700; width: 58px; flex: none; }
+  .obj .osub { color: rgba(31,61,43,.62); font-variant-numeric: tabular-nums; font-size: 11px; }
+  .obj .obar { height: 4px; border-radius: 2px; background: rgba(31,61,43,.1); margin-top: 3px; overflow: hidden; }
+  .obj .obar-fill { height: 100%; width: 0%; background: var(--green); border-radius: 2px; transition: width .2s; }
+
+  /* ---------- 暂停徽标 / 底部提示 ---------- */
+  #chip {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    display: none; align-items: center; gap: 8px;
+    background: var(--green-deep); color: #fff; font-size: 13px; font-weight: 700;
+    padding: 8px 16px; border-radius: 999px; box-shadow: 0 8px 22px rgba(31,61,43,.3);
+    letter-spacing: .08em;
+  }
+  #hint {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: rgba(31,61,43,.66); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 999px; padding: 7px 16px;
+    backdrop-filter: blur(8px); white-space: nowrap;
+  }
+  #err {
+    position: fixed; inset: 0; display: none; place-items: center; background: var(--paper);
+    font-size: 15px; color: var(--green-deep); text-align: center; padding: 30px; line-height: 1.8;
+  }
+
+  @media (max-width: 900px) {
+    #controls { width: 258px; padding: 12px 14px; }
+    #status { width: 226px; padding: 12px 14px; }
+    h1 { font-size: 19px; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<aside id="controls" class="panel">
+  <span class="tag">· 提示词 <small>PROMPT</small></span>
+  <h1>3D 透明水箱交互模拟</h1>
+  <p class="subtitle">3D 交互模拟 · Three.js · 高度场水面 + 浮力物理</p>
+
+  <hr class="divider">
+  <div class="row">
+    <div class="row-label"><span>重力模式</span><output id="grav-o">9.81 m/s²</output></div>
+    <div class="seg" id="grav-seg">
+      <button data-g="earth" class="active">🌍 地球<small>9.81</small></button>
+      <button data-g="moon">🌕 月球<small>1.62</small></button>
+      <button data-g="mars">🔴 火星<small>3.71</small></button>
+    </div>
+  </div>
+  <div class="row">
+    <div class="row-label"><span>波浪强度</span><output id="wave-o">1.00</output></div>
+    <input type="range" id="wave" min="0" max="2" step="0.05" value="1">
+  </div>
+  <div class="row">
+    <div class="row-label"><span>阻尼</span><output id="damp-o">35%</output></div>
+    <input type="range" id="damp" min="0" max="1" step="0.01" value="0.35">
+  </div>
+  <div class="row">
+    <div class="row-label"><span>物体数量（小球）</span><output id="count-o">6 个</output></div>
+    <input type="range" id="count" min="1" max="12" step="1" value="5">
+  </div>
+  <div class="btns">
+    <button id="btn-pause">⏸ 暂停</button>
+    <button id="btn-reset">↺ 重置</button>
+  </div>
+</aside>
+
+<aside id="status" class="panel">
+  <h2>实时状态</h2>
+  <div class="stat-grid">
+    <div class="stat" id="fps"><b id="fps-v">--</b><span>帧率 FPS</span></div>
+    <div class="stat"><b id="grav-v">--<small>m/s²</small></b><span>当前重力</span></div>
+    <div class="stat"><b id="cnt-v">--</b><span>物体总数</span></div>
+    <div class="stat"><b id="time-v">--<small>s</small></b><span>模拟时间</span></div>
+  </div>
+  <div class="obj-head">物体状态 OBJECTS</div>
+  <div id="obj-list"></div>
+</aside>
+
+<div id="chip">⏸ 模拟已暂停</div>
+<div id="hint">点击 / 拖动水面产生波纹 · 拖动空白处旋转视角 · 滚轮缩放</div>
+<div id="err">当前浏览器不支持 WebGL，无法运行 3D 模拟。<br>请使用最新版 Chrome / Edge / Firefox 打开。</div>
+
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+
+/* ================= 常量与参数 ================= */
+const TANK = { w: 10, d: 7, depth: 3.8, wallH: 2.7, glass: 0.16 }; // 内部尺寸：水面静止于 y=0
+const GRID = 128;                    // 水面高度场分辨率
+const BALL_DEFS = [                  // 小球密度（水=1.0）与颜色，循环取用
+  { rho: 0.15, color: 0xe4572e }, { rho: 0.35, color: 0x2e86de },
+  { rho: 0.55, color: 0x10ac84 }, { rho: 0.70, color: 0x8e44ad },
+  { rho: 0.85, color: 0xf5b40a }, { rho: 0.95, color: 0xd6336c },
+  { rho: 0.25, color: 0x0b7285 }, { rho: 0.45, color: 0x5f3dc4 },
+  { rho: 0.62, color: 0xff922b }, { rho: 0.78, color: 0x2f9e44 },
+  { rho: 0.90, color: 0x1c7ed6 }, { rho: 0.40, color: 0x862e9c },
+];
+const GRAV = {
+  earth: { g: 9.81, name: '地球' },
+  moon:  { g: 1.62, name: '月球' },
+  mars:  { g: 3.71, name: '火星' },
+};
+const G_SCALE = 0.5;                 // 全局时间尺度，让运动更优雅
+const params = { gravity: 'earth', waveStrength: 1.0, damping: 0.35, ballCount: 5, paused: false };
+
+/* ================= 渲染器 / 场景 / 相机 ================= */
+const $ = id => document.getElementById(id);
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas: $('scene'), antialias: true });
+} catch (e) {
+  $('err').style.display = 'grid';
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xece8dc);
+scene.fog = new THREE.Fog(0xece8dc, 34, 78);
+
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(12, 8, 13.5);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+pmrem.dispose();
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0xcfc9b6, 0.55);
+const sun = new THREE.DirectionalLight(0xfff3dd, 2.1);
+sun.position.set(8, 14, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 2, far: 42 });
+sun.shadow.bias = -0.0004;
+scene.add(hemi, sun);
+
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(38, 64),
+  new THREE.MeshStandardMaterial({ color: 0xd9d2bd, roughness: 0.95 })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -TANK.depth - TANK.glass;
+floor.receiveShadow = true;
+scene.add(floor);
+
+/* ================= 水箱：玻璃 + 边框 + 水体 ================= */
+const glassMat = new THREE.MeshPhysicalMaterial({
+  color: 0xeef7f5, metalness: 0, roughness: 0.04,
+  transparent: true, opacity: 0.12, clearcoat: 1, clearcoatRoughness: 0.06,
+  envMapIntensity: 0.9, side: THREE.DoubleSide, depthWrite: false,
+}); // 经典透明玻璃：transmission 材质的折射缓冲不含透明物体，会令水体从侧面"隐身"
+const frameMat = new THREE.MeshStandardMaterial({ color: 0x274434, roughness: 0.45, metalness: 0.35 });
+const tank = new THREE.Group();
+{
+  const g = TANK.glass, W = TANK.w, D = TANK.d, H = TANK.depth + TANK.wallH, yC = (TANK.wallH - TANK.depth) / 2;
+  const mk = (sx, sy, sz, x, y, z, mat) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
+    m.position.set(x, y, z); tank.add(m); return m;
+  };
+  // 四面玻璃壁 + 底
+  mk(W + 2 * g, H, g, 0, yC, (D + g) / 2, glassMat);
+  mk(W + 2 * g, H, g, 0, yC, -(D + g) / 2, glassMat);
+  mk(g, H, D, (W + g) / 2, yC, 0, glassMat);
+  mk(g, H, D, -(W + g) / 2, yC, 0, glassMat);
+  mk(W + 2 * g, g, D + 2 * g, 0, -TANK.depth - g / 2, 0, glassMat);
+  // 深绿色边框（12 条棱）
+  const fy = yC, fT = 0.14, topY = TANK.wallH, botY = -TANK.depth - g;
+  const bars = [
+    [fT, H, fT, -W/2, fy, -D/2], [fT, H, fT, -W/2, fy, D/2], [fT, H, fT, W/2, fy, -D/2], [fT, H, fT, W/2, fy, D/2],
+    [W + 2*g, fT, fT, 0, topY, -D/2], [W + 2*g, fT, fT, 0, topY, D/2],
+    [fT, fT, D + 2*g, -W/2, topY, 0], [fT, fT, D + 2*g, W/2, topY, 0],
+    [W + 2*g, fT, fT, 0, botY, -D/2], [W + 2*g, fT, fT, 0, botY, D/2],
+    [fT, fT, D + 2*g, -W/2, botY, 0], [fT, fT, D + 2*g, W/2, botY, 0],
+  ];
+  for (const [sx, sy, sz, x, y, z] of bars) mk(sx, sy, sz, x, y, z, frameMat);
+  // 水箱内底（接收阴影）
+  const inner = mk(W, 0.05, D, 0, -TANK.depth + 0.025, 0,
+    new THREE.MeshStandardMaterial({ color: 0xbfe0d6, roughness: 0.6 }));
+  inner.receiveShadow = true;
+}
+scene.add(tank);
+
+// 水体颜色（渲染水面以下的远侧内壁，形成水色）
+const waterTint = new THREE.Mesh(
+  new THREE.BoxGeometry(TANK.w - 0.02, TANK.depth - 0.04, TANK.d - 0.02),
+  new THREE.MeshBasicMaterial({ color: 0x1f7f9e, transparent: true, opacity: 0.38, side: THREE.DoubleSide, depthWrite: false })
+);
+waterTint.position.y = -TANK.depth / 2 - 0.02; // 略低于水面，避免与水面网格共面闪烁
+waterTint.position.y = -TANK.depth / 2;
+waterTint.renderOrder = 1;
+scene.add(waterTint);
+
+/* ================= 水面高度场模拟 ================= */
+const H = new Float32Array(GRID * GRID);   // 波高
+const V = new Float32Array(GRID * GRID);   // 波速（每帧 @60Hz）
+let simTime = 0;
+
+function stepWater() {
+  const tension = 0.16 * Math.sqrt(GRAV[params.gravity].g / 9.81); // 波速随重力变化
+  const damp = 0.9985 - params.damping * 0.018;
+  for (let z = 0; z < GRID; z++) {
+    const row = z * GRID;
+    const up = (z > 0 ? z - 1 : 0) * GRID, dn = (z < GRID - 1 ? z + 1 : GRID - 1) * GRID;
+    for (let x = 0; x < GRID; x++) {
+      const i = row + x;
+      const xl = row + (x > 0 ? x - 1 : 0), xr = row + (x < GRID - 1 ? x + 1 : GRID - 1);
+      const avg = (H[xl] + H[xr] + H[up + x] + H[dn + x]) * 0.25;
+      const v = (V[i] + (avg - H[i]) * tension) * damp;   // 全场镜像边界：体积严格守恒
+      V[i] = v > 0.5 ? 0.5 : (v < -0.5 ? -0.5 : v);
+    }
+  }
+  let sum = 0;
+  for (let i = 0; i < GRID * GRID; i++) {
+    let h = H[i] + V[i];
+    const lim = 1.15; // 波幅软限幅：连续猛点时平滑压缩波峰，不会削平钉死
+    if (h > lim) h = lim + (h - lim) / (1 + (h - lim) * 2);
+    else if (h < -lim) h = -lim + (h + lim) / (1 + (-h - lim) * 2);
+    H[i] = h;
+    sum += h;
+  }
+  // 水位安全归零：抵消极端削幅等引入的微小整体漂移
+  const mean = sum / (GRID * GRID);
+  if (mean > 0.02 || mean < -0.02) {
+    const c = mean * 0.08;
+    for (let i = 0; i < GRID * GRID; i++) H[i] -= c;
+  }
+}
+function fieldSample(arr, wx, wz) {
+  const fx = THREE.MathUtils.clamp(((wx + TANK.w / 2) / TANK.w) * (GRID - 1), 0, GRID - 1.001);
+  const fz = THREE.MathUtils.clamp(((wz + TANK.d / 2) / TANK.d) * (GRID - 1), 0, GRID - 1.001);
+  const x0 = Math.floor(fx), z0 = Math.floor(fz), tx = fx - x0, tz = fz - z0;
+  const i = z0 * GRID + x0;
+  const a = arr[i], b = arr[i + 1], c = arr[i + GRID], d = arr[i + GRID + 1];
+  return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * tz;
+}
+function ambientAt(x, z) { // 环境微波（受波浪强度控制）
+  const s = params.waveStrength, t = simTime;
+  return s * (0.05 * Math.sin(x * 0.6 + t * 1.2) * Math.sin(z * 0.8 - t * 0.9)
+            + 0.025 * Math.sin(x * 1.7 - t * 1.7 + z * 0.4));
+}
+const waterHeightAt = (x, z) => fieldSample(H, x, z) + ambientAt(x, z);
+const waterVelAt    = (x, z) => THREE.MathUtils.clamp(fieldSample(V, x, z) * 60, -3, 3); // 钳制波速，防止物体被猛烈弹飞
+function waterGradAt(x, z) {
+  const e = 0.12;
+  return [
+    (waterHeightAt(x + e, z) - waterHeightAt(x - e, z)) / (2 * e),
+    (waterHeightAt(x, z + e) - waterHeightAt(x, z - e)) / (2 * e),
+  ];
+}
+function disturb(wx, wz, radius, strength) { // 注入波纹：零均值高斯速度脉冲（体积守恒，不抬高水位）
+  const gx = ((wx + TANK.w / 2) / TANK.w) * GRID, gz = ((wz + TANK.d / 2) / TANK.d) * GRID;
+  const rc = (radius / TANK.w) * GRID;
+  const x0 = Math.max(0, Math.floor(gx - rc * 2)), x1 = Math.min(GRID - 1, Math.ceil(gx + rc * 2));
+  const z0 = Math.max(0, Math.floor(gz - rc * 2)), z1 = Math.min(GRID - 1, Math.ceil(gz + rc * 2));
+  const s = strength * params.waveStrength;
+  const idx = [], wts = [];
+  let sum = 0;
+  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
+    const dx = x - gx, dz = z - gz;
+    const w = Math.exp(-(dx * dx + dz * dz) / (rc * rc));
+    idx.push(z * GRID + x); wts.push(w); sum += w;
+  }
+  const mean = sum / wts.length; // 扣除均值：波峰隆起由周围微量下凹抵消，总水量不变
+  for (let k = 0; k < idx.length; k++) V[idx[k]] += s * (wts[k] - mean);
+}
+
+// 水面网格
+const surfGeo = new THREE.PlaneGeometry(TANK.w, TANK.d, GRID - 1, GRID - 1);
+surfGeo.rotateX(-Math.PI / 2);
+const surfMat = new THREE.MeshPhysicalMaterial({
+  color: 0x3aa8c9, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.82,
+  envMapIntensity: 1.0, side: THREE.DoubleSide,
+});
+const surf = new THREE.Mesh(surfGeo, surfMat);
+surf.receiveShadow = true;
+surf.frustumCulled = false;
+surf.renderOrder = 2;
+scene.add(surf);
+
+function updateSurfaceGeometry() {
+  const pos = surfGeo.attributes.position, nrm = surfGeo.attributes.normal;
+  const cw = TANK.w / (GRID - 1), cd = TANK.d / (GRID - 1);
+  for (let z = 0; z < GRID; z++) {
+    for (let x = 0; x < GRID; x++) {
+      const i = z * GRID + x;
+      pos.setY(i, H[i] + ambientAt(-TANK.w / 2 + x * cw, -TANK.d / 2 + z * cd));
+      const xl = Math.max(x - 1, 0), xr = Math.min(x + 1, GRID - 1);
+      const zl = Math.max(z - 1, 0), zr = Math.min(z + 1, GRID - 1);
+      const gx = (H[z * GRID + xr] - H[z * GRID + xl]) / ((xr - xl) * cw);
+      const gz = (H[zr * GRID + x] - H[zl * GRID + x]) / ((zr - zl) * cd);
+      const inv = 1 / Math.hypot(gx, 1, gz);
+      nrm.setXYZ(i, -gx * inv, inv, -gz * inv);
+    }
+  }
+  pos.needsUpdate = true; nrm.needsUpdate = true;
+}
+
+/* ================= 物体：橡皮鸭 + 不同密度小球 ================= */
+const bodies = [];
+const ballGeo = new THREE.SphereGeometry(1, 30, 22);
+let ballSeq = 0;
+
+function makeDuck() {
+  const g = new THREE.Group();
+  const yellow = new THREE.MeshStandardMaterial({ color: 0xffcf1f, roughness: 0.38 });
+  const orange = new THREE.MeshStandardMaterial({ color: 0xff8a1e, roughness: 0.5 });
+  const black  = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.35 });
+  const mk = (geo, mat, x, y, z, sx = 1, sy = 1, sz = 1) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; g.add(m); return m;
+  };
+  mk(new THREE.SphereGeometry(0.52, 32, 24), yellow, 0, 0, -0.05, 1, 0.82, 1.25); // 身体
+  mk(new THREE.SphereGeometry(0.3, 28, 20), yellow, 0, 0.42, 0.38);               // 头
+  mk(new THREE.SphereGeometry(0.13, 18, 12), orange, 0, 0.36, 0.68, 1.2, 0.5, 1.5); // 嘴
+  mk(new THREE.SphereGeometry(0.045, 10, 8), black, 0.14, 0.52, 0.55);            // 眼
+  mk(new THREE.SphereGeometry(0.045, 10, 8), black, -0.14, 0.52, 0.55);
+  mk(new THREE.ConeGeometry(0.16, 0.34, 16), yellow, 0, 0.28, -0.62, 1, 1, 1).rotation.x = -2.1; // 尾巴
+  return g;
+}
+function addDuck() {
+  const mesh = makeDuck();
+  scene.add(mesh);
+  bodies.push({
+    mesh, isDuck: true, name: '橡皮鸭', color: '#ffcf1f',
+    r: 0.62, rho: 0.30, sub: 0, yaw: Math.PI * 0.25,
+    pos: new THREE.Vector3(0.2, 0.1, -0.6), vel: new THREE.Vector3(),
+    tiltX: 0, tiltZ: 0, phase: Math.random() * 6.28,
+  });
+}
+function addBall() {
+  const def = BALL_DEFS[ballSeq % BALL_DEFS.length];
+  const r = 0.34 + Math.random() * 0.16;
+  const mesh = new THREE.Mesh(ballGeo, new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.32 }));
+  mesh.scale.setScalar(r); mesh.castShadow = true;
+  let x, z, ok = false;
+  for (let t = 0; t < 40 && !ok; t++) {
+    x = (Math.random() * 2 - 1) * (TANK.w / 2 - 0.9);
+    z = (Math.random() * 2 - 1) * (TANK.d / 2 - 0.9);
+    ok = bodies.every(b => Math.hypot(b.pos.x - x, b.pos.z - z) > b.r + r + 0.25);
+  }
+  scene.add(mesh);
+  ballSeq++;
+  bodies.push({
+    mesh, isDuck: false, name: '球 ' + ballSeq, color: '#' + def.color.toString(16).padStart(6, '0'),
+    r, rho: def.rho, sub: 0,
+    pos: new THREE.Vector3(x, -0.3 + Math.random() * 0.8, z), vel: new THREE.Vector3(),
+    phase: Math.random() * 6.28,
+  });
+}
+function removeBall() {
+  const b = bodies.pop();
+  if (!b) return;
+  scene.remove(b.mesh);
+  if (!b.isDuck) b.mesh.material.dispose();
+}
+function spawnAll() {
+  while (bodies.length) removeBall();
+  ballSeq = 0;
+  addDuck();
+  for (let i = 0; i < params.ballCount; i++) addBall();
+}
+
+/* ================= 物理步进 ================= */
+function stepBodies(dt) {
+  const G = GRAV[params.gravity].g * G_SCALE;
+  const extraDrag = 1 + params.damping * 1.2;
+  for (const b of bodies) {
+    const p = b.pos, v = b.vel;
+    const h = waterHeightAt(p.x, p.z);
+    const sub = THREE.MathUtils.clamp((h - (p.y - b.r)) / (2 * b.r), 0, 1);
+    b.sub = sub;
+    const wv = waterVelAt(p.x, p.z);
+    // 竖直：重力 + 浮力（净加速度 = g·(浸没占比/密度 − 1)）+ 与水体垂直速度的拖曳
+    let ay = -G * (1 - sub / b.rho);
+    ay += (wv - v.y) * Math.min(1.6 / Math.max(b.rho, 0.12), 6) * sub;
+    // 水平：沿波面斜坡下滑 + 线性阻尼
+    const [gx, gz] = waterGradAt(p.x, p.z);
+    let ax = -gx * G * 0.9 * sub - v.x * (0.42 * sub + 0.02) * extraDrag;
+    let az = -gz * G * 0.9 * sub - v.z * (0.42 * sub + 0.02) * extraDrag;
+    v.x += ax * dt; v.y += ay * dt; v.z += az * dt;
+    p.addScaledVector(v, dt);
+    // 边界
+    const X = TANK.w / 2 - b.r - 0.03, Z = TANK.d / 2 - b.r - 0.03;
+    const BOT = -TANK.depth + b.r + 0.05, TOP = TANK.wallH * 0.62;
+    if (p.x < -X) { p.x = -X; v.x *= -0.45; } if (p.x > X) { p.x = X; v.x *= -0.45; }
+    if (p.z < -Z) { p.z = -Z; v.z *= -0.45; } if (p.z > Z) { p.z = Z; v.z *= -0.45; }
+    if (p.y < BOT) { p.y = BOT; v.y *= -0.35; v.x *= 0.92; v.z *= 0.92; }
+    if (p.y > TOP) { p.y = TOP; v.y = Math.min(v.y, 0) * 0.3; }
+  }
+  // 球-球碰撞（含橡皮鸭），冲量按质量分配
+  const e = 0.55;
+  for (let i = 0; i < bodies.length; i++) {
+    for (let j = i + 1; j < bodies.length; j++) {
+      const A = bodies[i], B = bodies[j];
+      const n = new THREE.Vector3().subVectors(B.pos, A.pos);
+      const dist = n.length(), minD = A.r + B.r;
+      if (dist < minD && dist > 1e-6) {
+        n.divideScalar(dist);
+        const m1 = A.rho * A.r ** 3, m2 = B.rho * B.r ** 3;
+        const inv1 = 1 / m1, inv2 = 1 / m2, invSum = inv1 + inv2;
+        const overlap = minD - dist;
+        A.pos.addScaledVector(n, -overlap * inv1 / invSum);
+        B.pos.addScaledVector(n,  overlap * inv2 / invSum);
+        const rv = new THREE.Vector3().subVectors(B.vel, A.vel).dot(n);
+        if (rv < 0) {
+          const jImp = -(1 + e) * rv / invSum;
+          A.vel.addScaledVector(n, -jImp * inv1);
+          B.vel.addScaledVector(n,  jImp * inv2);
+        }
+      }
+    }
+  }
+}
+
+function updateVisuals(dt) {
+  const [gx0, gz0] = [0, 0];
+  for (const b of bodies) {
+    b.mesh.position.copy(b.pos);
+    if (b.isDuck) {
+      const [gx, gz] = waterGradAt(b.pos.x, b.pos.z);
+      b.tiltX += ((-Math.atan(gz) * 0.9 + Math.sin(simTime * 1.8 + b.phase) * 0.05) - b.tiltX) * Math.min(1, dt * 6);
+      b.tiltZ += (( Math.atan(gx) * 0.9 + Math.cos(simTime * 1.5 + b.phase) * 0.05) - b.tiltZ) * Math.min(1, dt * 6);
+      b.yaw += b.vel.x * 0.35 * dt;
+      b.mesh.rotation.set(b.tiltX, b.yaw, b.tiltZ);
+    }
+  }
+}
+
+/* ================= 指针交互：点击/拖动水面产生波纹 ================= */
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+let waterDrag = null; // { last: Vector3, moved: bool, downX, downY }
+
+function pickWater(e) {
+  ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const o = raycaster.ray.origin, d = raycaster.ray.direction;
+  // ① 自上而下（或自下而上）且视线穿过水面范围 → 精确命中水面点
+  if (Math.abs(d.y) > 1e-9) {
+    const tp = -o.y / d.y;
+    if (tp > 0) {
+      const px = o.x + d.x * tp, pz = o.z + d.z * tp;
+      if (Math.abs(px) <= TANK.w / 2 && Math.abs(pz) <= TANK.d / 2) return new THREE.Vector3(px, 0, pz);
+    }
+  }
+  // ② 侧向视线：与水箱内部包围盒求交，取穿透水体中点所在的水柱（任意视角都可点水）
+  const mn = [-TANK.w / 2, -TANK.depth, -TANK.d / 2];
+  const mx = [TANK.w / 2, TANK.wallH, TANK.d / 2];
+  const oo = [o.x, o.y, o.z], dd = [d.x, d.y, d.z];
+  let tmin = 0, tmax = Infinity;
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(dd[i]) < 1e-9) {
+      if (oo[i] < mn[i] || oo[i] > mx[i]) return null;
+      continue;
+    }
+    let t1 = (mn[i] - oo[i]) / dd[i], t2 = (mx[i] - oo[i]) / dd[i];
+    if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+    tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+    if (tmin > tmax) return null;
+  }
+  const tm = (tmin + tmax) / 2;
+  const px = THREE.MathUtils.clamp(o.x + d.x * tm, -TANK.w / 2 + 0.05, TANK.w / 2 - 0.05);
+  const pz = THREE.MathUtils.clamp(o.z + d.z * tm, -TANK.d / 2 + 0.05, TANK.d / 2 - 0.05);
+  return new THREE.Vector3(px, 0, pz);
+}
+const canvas = renderer.domElement;
+function pump() { stepFrame(performance.now()); } // rAF 被环境暂停时，靠输入事件直接出帧
+canvas.addEventListener('pointerdown', e => {
+  const p = pickWater(e);
+  if (!p) return;                       // 落在水面 → 阻止轨道控制，进入泼水模式
+  e.stopImmediatePropagation();
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 指针可能已失效，不影响泼水 */ }
+  waterDrag = { last: p, moved: false, downX: e.clientX, downY: e.clientY, cur: p };
+  disturb(p.x, p.z, 0.55, 0.06);
+  canvas.style.cursor = 'grabbing';
+  pump();
+});
+canvas.addEventListener('pointermove', e => {
+  pump();                               // 任何指针移动都出帧，降级状态下轨道旋转也流畅
+  if (waterDrag) {
+    const p = pickWater(e);
+    if (!p) return;
+    const seg = p.distanceTo(waterDrag.last);
+    const n = Math.max(1, Math.ceil(seg / 0.22));
+    for (let k = 1; k <= n; k++) {
+      const q = waterDrag.last.clone().lerp(p, k / n);
+      disturb(q.x, q.z, 0.4, 0.022);
+    }
+    waterDrag.last = p; waterDrag.cur = p;
+    if (Math.hypot(e.clientX - waterDrag.downX, e.clientY - waterDrag.downY) > 6) waterDrag.moved = true;
+  } else {
+    canvas.style.cursor = pickWater(e) ? 'crosshair' : '';
+  }
+});
+canvas.addEventListener('pointerup', e => {
+  if (!waterDrag) return;
+  if (!waterDrag.moved) {               // 单击 → 一记更大的水花
+    const p = pickWater(e) || waterDrag.cur;
+    disturb(p.x, p.z, 0.85, 0.16);
+  }
+  waterDrag = null;
+  canvas.style.cursor = pickWater(e) ? 'crosshair' : '';
+  pump();
+});
+canvas.addEventListener('pointercancel', () => { waterDrag = null; });
+
+// 轨道控制（在水面事件之后注册，水面交互用 stopImmediatePropagation 拦截）
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0, 1.1, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 7; controls.maxDistance = 34;
+controls.maxPolarAngle = Math.PI * 0.52;
+controls.update();
+
+/* ================= UI 绑定 ================= */
+const GRAV_LABEL = { earth: '地球', moon: '月球', mars: '火星' };
+$('grav-seg').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  params.gravity = btn.dataset.g;
+  [...$('grav-seg').children].forEach(b => b.classList.toggle('active', b === btn));
+  const g = GRAV[params.gravity];
+  $('grav-o').textContent = g.g.toFixed(2) + ' m/s²';
+  $('grav-v').innerHTML = GRAV_LABEL[params.gravity] + ' ' + g.g.toFixed(2) + '<small>m/s²</small>';
+});
+$('grav-v').innerHTML = '地球 9.81<small>m/s²</small>';
+
+$('wave').addEventListener('input', e => {
+  params.waveStrength = +e.target.value;
+  $('wave-o').textContent = params.waveStrength.toFixed(2);
+});
+$('damp').addEventListener('input', e => {
+  params.damping = +e.target.value;
+  $('damp-o').textContent = Math.round(params.damping * 100) + '%';
+});
+$('count').addEventListener('input', e => {
+  params.ballCount = +e.target.value;
+  $('count-o').textContent = (params.ballCount + 1) + ' 个';
+  syncBalls();
+});
+$('btn-pause').addEventListener('click', () => {
+  params.paused = !params.paused;
+  $('btn-pause').textContent = params.paused ? '▶ 继续' : '⏸ 暂停';
+  $('chip').style.display = params.paused ? 'flex' : 'none';
+});
+$('btn-reset').addEventListener('click', () => {
+  H.fill(0); V.fill(0); simTime = 0;
+  spawnAll(); rebuildObjList();
+});
+function syncBalls() {
+  const target = params.ballCount + 1; // + 橡皮鸭
+  while (bodies.length < target) addBall();
+  while (bodies.length > target) removeBall();
+  rebuildObjList();
+}
+
+/* ================= 状态面板 ================= */
+const objList = $('obj-list');
+let objRows = [];
+function rebuildObjList() {
+  objList.innerHTML = '';
+  objRows = bodies.map(b => {
+    const div = document.createElement('div');
+    div.className = 'obj';
+    div.innerHTML = `
+      <div class="l1">
+        <i class="dot" style="background:${b.color}"></i>
+        <span class="oname">${b.name}</span>
+        <span class="osub"></span>
+      </div>
+      <div class="obar"><div class="obar-fill"></div></div>`;
+    objList.appendChild(div);
+    return { sub: div.querySelector('.osub'), fill: div.querySelector('.obar-fill') };
+  });
+  $('cnt-v').textContent = bodies.length;
+}
+function updateStatus() {
+  for (let i = 0; i < bodies.length; i++) {
+    const b = bodies[i], r = objRows[i];
+    const spd = Math.hypot(b.vel.x, b.vel.y, b.vel.z);
+    r.sub.textContent = `ρ ${b.rho.toFixed(2)} · 浸没 ${Math.round(b.sub * 100)}% · v ${spd.toFixed(2)}`;
+    r.fill.style.width = Math.round(b.sub * 100) + '%';
+  }
+}
+
+/* ================= 主循环 ================= */
+let last = performance.now();
+let physAcc = 0, waterAcc = 0, lastFrameAt = performance.now();
+let statFrames = 0, statAt = performance.now();
+const PHYS_DT = 1 / 120;
+
+function stepFrame(now) {
+  const dtRaw = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  lastFrameAt = performance.now();
+  statFrames++;
+  controls.update();
+
+  if (!params.paused) {
+    // 按住水面拖动 → 每帧持续注入波纹（连续波纹）
+    if (waterDrag && waterDrag.cur) disturb(waterDrag.cur.x, waterDrag.cur.z, 0.42, 0.012);
+    // 水面波动：固定 60Hz
+    waterAcc += dtRaw;
+    let n = 0;
+    while (waterAcc > 1 / 60 && n < 4) { stepWater(); waterAcc -= 1 / 60; n++; simTime += 1 / 60; }
+    // 刚体物理：固定 120Hz 子步
+    physAcc += dtRaw;
+    let m = 0;
+    while (physAcc > PHYS_DT && m < 6) { stepBodies(PHYS_DT); physAcc -= PHYS_DT; m++; }
+    updateVisuals(dtRaw);
+    updateSurfaceGeometry();
+  }
+
+  const nowMs = performance.now();
+  if (nowMs - statAt > 300) {   // 帧率按真实墙钟帧数统计（兼容输入驱动的补帧）
+    const fps = Math.min(999, Math.round(statFrames * 1000 / (nowMs - statAt)));
+    $('fps-v').textContent = fps;
+    $('fps').classList.toggle('hot', fps < 30);
+    statFrames = 0; statAt = nowMs;
+    $('time-v').innerHTML = simTime.toFixed(1) + '<small>s</small>';
+    updateStatus();
+  }
+  renderer.render(scene, camera);
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function loop(now) {          // rAF 主循环：仅在浏览器正常出帧时驱动
+  requestAnimationFrame(loop);
+  stepFrame(now);
+}
+
+/* ================= 启动 ================= */
+spawnAll();
+rebuildObjList();
+requestAnimationFrame(loop);
+// 兜底泵帧：窗口被遮挡等情况下 rAF 会被暂停（输入事件仍在派发但画面冻结，
+// 表现为"点了没反应"）；此时用定时器继续渲染，保证交互始终有画面响应。
+setInterval(() => {
+  if (performance.now() - lastFrameAt > 250) stepFrame(performance.now());
+}, 60);
+</script>
+</body>
+</html>

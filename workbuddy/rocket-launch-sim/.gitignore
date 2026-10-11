@@ -1,0 +1,10 @@
+# 依赖
+node_modules/
+
+# 浏览器冒烟测试临时产物（脚本已改到系统 temp，这里兜底）
+.browser-profile/
+*.browser-profile/
+
+# 截图/临时
+tests/prototype/_dbg.mjs
+*.log

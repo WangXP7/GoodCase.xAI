@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>极光海洋 · WebGL2 原生 GLSL</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+  #gl { display: block; width: 100vw; height: 100vh; cursor: grab; touch-action: none; }
+  #gl:active { cursor: grabbing; }
+  #hud {
+    position: fixed; top: 14px; left: 16px; pointer-events: none;
+    color: #cfe8dd; font: 12px/1.7 system-ui, "Microsoft YaHei", sans-serif;
+    text-shadow: 0 1px 4px rgba(0,0,0,.85);
+  }
+  #hud b { font-size: 15px; letter-spacing: 1px; color: #eafff4; }
+  #panel {
+    position: fixed; left: 16px; bottom: 16px; min-width: 330px;
+    display: flex; flex-direction: column; gap: 7px; padding: 12px 14px;
+    background: rgba(8, 14, 16, .55); border: 1px solid rgba(120,255,190,.16);
+    border-radius: 12px; backdrop-filter: blur(10px);
+    color: #d7efe4; font: 12px/1.4 system-ui, "Microsoft YaHei", sans-serif;
+  }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row label { flex: 0 0 5em; }
+  .row output { flex: 0 0 auto; min-width: 3.4em; text-align: right; font-variant-numeric: tabular-nums; color: #7dffc4; }
+  .row output.res { min-width: 10.5em; }
+  input[type=range] { flex: 1; accent-color: #35e79f; height: 16px; margin: 0; }
+  .check { display: flex; align-items: center; gap: 6px; color: #9fc4b4; }
+  .check input { accent-color: #35e79f; }
+  #fps {
+    position: fixed; right: 16px; bottom: 16px; pointer-events: none;
+    color: #9fd8bf; font: 11px/1.5 ui-monospace, Consolas, monospace;
+    text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,.85);
+  }
+  #err {
+    display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    max-width: 82vw; padding: 16px 20px; background: #2a1114; color: #ffb4ae;
+    border: 1px solid #7a2e2e; border-radius: 10px;
+    font: 12px/1.6 Consolas, monospace; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud"><b>极光海洋</b> · WebGL2 原生 GLSL（FBM 体积极光 + 程序化海面 + 月光）<br>按住鼠标拖动可环视海面</div>
+<div id="panel">
+  <div class="row"><label>分辨率</label><input id="res" type="range" min="30" max="100" step="5" value="75"><output id="resVal" class="res"></output></div>
+  <div class="row check"><input id="auto" type="checkbox" checked><label for="auto">自动适配</label></div>
+  <div class="row"><label>GPU上限</label><input id="gpu" type="range" min="40" max="100" step="5" value="80"><output id="gpuVal"></output></div>
+  <div class="row"><label>极光强度</label><input id="aur" type="range" min="0" max="3" step="0.01" value="1.70"><output id="aurVal"></output></div>
+  <div class="row"><label>海浪高度</label><input id="wav" type="range" min="0" max="3" step="0.01" value="1.60"><output id="wavVal"></output></div>
+  <div class="row"><label>时间速度</label><input id="spd" type="range" min="0" max="4" step="0.05" value="1.00"><output id="spdVal"></output></div>
+</div>
+<div id="fps"></div>
+<div id="err"></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const canvas = $('gl'), fpsEl = $('fps'), errEl = $('err');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+function fail(msg) { errEl.style.display = 'block'; errEl.textContent = msg; throw new Error(msg); }
+if (!gl) fail('当前浏览器不支持 WebGL2，请使用较新的 Chrome / Edge / Firefox 打开。');
+
+const VS = `#version 300 es
+void main(){
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+const FS = `#version 300 es
+precision highp float;
+uniform vec2  uRes;
+uniform float uT;
+uniform float uAurora;
+uniform float uWave;
+uniform vec2  uLook;
+out vec4 outColor;
+
+const vec3 MOON_DIR = normalize(vec3(0.42, 0.40, -0.92));
+
+float hash21(vec2 p){
+  p = fract(p * vec2(123.34, 345.45));
+  p += dot(p, p + 34.345);
+  return fract(p.x * p.y);
+}
+
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i);
+  float b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0));
+  float d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float fbm5(vec2 p){
+  float v = 0.0, a = 0.5;
+  mat2 m = mat2(1.62, 1.2, -1.2, 1.62);
+  for (int i = 0; i < 5; i++){ v += a * vnoise(p); p = m * p; a *= 0.52; }
+  return v;
+}
+
+float fbm3(vec2 p){
+  float v = 0.0, a = 0.5;
+  mat2 m = mat2(1.62, 1.2, -1.2, 1.62);
+  for (int i = 0; i < 3; i++){ v += a * vnoise(p); p = m * p; a *= 0.52; }
+  return v;
+}
+
+vec3 skyGradient(vec3 rd){
+  float t = clamp(rd.y, 0.0, 1.0);
+  return mix(vec3(0.008, 0.050, 0.058), vec3(0.001, 0.006, 0.018), pow(t, 0.55));
+}
+
+vec3 starField(vec3 rd){
+  float el = asin(clamp(rd.y, -1.0, 1.0));
+  float az = atan(rd.x, rd.z);
+  vec2 uv = vec2(az * 14.0, el * 34.0);
+  vec2 id = floor(uv), f = fract(uv);
+  float h = hash21(id);
+  vec2 sp = vec2(hash21(id + 17.31), hash21(id + 91.77)) * 0.6 + 0.2;
+  float d = length(f - sp);
+  float tw = 0.55 + 0.45 * sin(uT * (1.0 + 3.0 * h) + h * 43.0);
+  float b = smoothstep(0.10, 0.02, d) * tw * step(0.94, h);
+  return vec3(0.85, 0.95, 1.0) * b * (0.3 + 7.0 * (h - 0.90)) * 0.55;
+}
+
+vec3 moonLayer(vec3 rd){
+  float c = max(dot(rd, MOON_DIR), 0.0);
+  float disc = smoothstep(0.99900, 0.99960, c);
+  float glow = pow(c, 6000.0) * 0.7 + pow(c, 600.0) * 0.15 + pow(c, 60.0) * 0.02;
+  return vec3(1.0, 0.98, 0.92) * disc * 1.2 + vec3(0.72, 0.85, 1.0) * glow;
+}
+
+// 海天交界统一色：两侧在地平线处收敛到同一颜色，避免接缝
+vec3 horizonColor(vec2 dirxz){
+  vec3 rd = normalize(vec3(dirxz.x, 0.004, dirxz.y));
+  vec3 c = skyGradient(rd) + vec3(0.0, 0.045, 0.030) * uAurora;
+  c += moonLayer(rd) * 0.55;
+  return c;
+}
+
+// 体积极光：沿视线在 y∈[0.5,9.5] 光带内步进采样域扭曲 FBM 帘状密度
+vec3 auroraMarch(vec3 ro, vec3 rd, int steps, float jitter){
+  if (rd.y < 0.02) return vec3(0.0);
+  float tFar = clamp((11.0 - ro.y) / rd.y, 3.0, 50.0);
+  float dt = tFar / float(steps);
+  vec3 acc = vec3(0.0);
+  float t = dt * jitter;
+  for (int i = 0; i < steps; i++){
+    vec3 p = ro + rd * t;
+    t += dt;
+    if (p.y < 1.0 || p.y > 11.0) continue;
+    vec2 q = p.xz;
+    vec2 w = vec2(fbm3(q * 0.10 + vec2(uT * 0.05, 0.0)),
+                  fbm3(q * 0.10 + vec2(0.0, uT * 0.04) + 4.7));
+    vec2 qw = q + (w - 0.5) * 7.0;
+    float lobes  = fbm5(qw * 0.13 + vec2(uT * 0.06, uT * 0.015));
+    float streak = fbm3(qw * vec2(0.90, 0.45) + vec2(-uT * 0.10, uT * 0.03));
+    float env = smoothstep(1.0, 2.4, p.y) * (1.0 - smoothstep(5.0, 10.5, p.y));
+    float d = env * pow(max(lobes - 0.50, 0.0) * 2.0, 2.4) * (0.15 + 1.05 * streak);
+    float hf = clamp((p.y - 1.0) / 9.5, 0.0, 1.0);
+    vec3 c = mix(vec3(0.02, 1.25, 0.45), vec3(0.00, 0.65, 0.45), hf);
+    c = mix(c, vec3(0.38, 0.22, 0.85), smoothstep(0.66, 1.0, hf) * 0.5);
+    acc += c * (d * dt * 0.13 * uAurora);
+  }
+  acc *= smoothstep(0.008, 0.06, rd.y);
+  return acc;
+}
+
+float waveH(vec2 p, float t){
+  float h = 0.0;
+  h += 0.60 * vnoise(p * 0.30 + vec2(t * 0.20,  t * 0.07));
+  h += 0.30 * fbm3(p * vec2(0.75, 1.35) + vec2(t * 0.32, -t * 0.14));
+  h += 0.12 * vnoise(p * 2.40 + vec2(-t * 0.38, t * 0.30));
+  return h;
+}
+
+vec3 waterNormal(vec2 p, float t, float dist){
+  float e = max(0.020, dist * 0.0045);
+  float h  = waveH(p, t);
+  float hx = waveH(p + vec2(e, 0.0), t);
+  float hz = waveH(p + vec2(0.0, e), t);
+  vec2 g = vec2(hx - h, hz - h) * (0.28 * uWave / e);
+  return normalize(vec3(-g.x, 1.0, -g.y));
+}
+
+vec3 aces(vec3 x){
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
+
+void main(){
+  vec2 uv = (2.0 * gl_FragCoord.xy - uRes) / uRes.y;
+  float yaw = uLook.x, pitch = uLook.y;
+  float cp = cos(pitch);
+  vec3 fw = normalize(vec3(sin(yaw) * cp, sin(pitch), -cos(yaw) * cp));
+  vec3 rt = normalize(cross(fw, vec3(0.0, 1.0, 0.0)));
+  vec3 up = cross(rt, fw);
+  vec3 rd = normalize(uv.x * rt + uv.y * up + 1.35 * fw);
+  vec3 ro = vec3(0.0, 1.6, 0.0);
+  float jitter = hash21(gl_FragCoord.xy + 0.7);
+
+  vec3 col;
+  if (rd.y < -0.0015){
+    // 海面：平面求交 + FBM 法线扰动 + 天空/极光/月亮反射
+    float tw = -ro.y / rd.y;
+    vec3 pos = ro + rd * tw;
+    vec3 n = waterNormal(pos.xz, uT, tw);
+    vec3 rr = reflect(rd, n);
+    rr.y = abs(rr.y) + 0.02;
+    rr = normalize(rr);
+    vec3 refl = skyGradient(rr) + moonLayer(rr) * 0.85;
+    refl += auroraMarch(ro, rr, 12, jitter) * 0.9;
+    float fres = 0.025 + 0.975 * pow(1.0 + dot(rd, n), 5.0);
+    vec3 body = vec3(0.002, 0.014, 0.018) * (0.7 + 0.6 * fbm3(pos.xz * 0.6 + vec2(uT * 0.04, 0.0)));
+    body += vec3(0.0, 0.010, 0.007) * uAurora;
+    col = mix(body, refl, clamp(fres, 0.0, 1.0));
+    float mc = max(dot(rr, MOON_DIR), 0.0);
+    col += vec3(1.0, 0.98, 0.92) * (pow(mc, 1200.0) * 1.6 + pow(mc, 80.0) * 0.08) * (0.35 + 0.65 * fres);
+    float fog = 1.0 - exp(-tw * 0.011);
+    col = mix(col, horizonColor(rd.xz), fog);
+  } else {
+    // 天空：夜空渐变 + 星星 + 月亮 + 体积极光
+    col = skyGradient(rd);
+    col += starField(rd);
+    col += moonLayer(rd);
+    col += auroraMarch(ro, rd, 28, jitter);
+    col = mix(col, horizonColor(rd.xz), smoothstep(0.16, 0.004, rd.y));
+  }
+
+  col = aces(col * 1.05);
+  col = mix(vec3(dot(col, vec3(0.299, 0.587, 0.114))), col, 1.12);
+  col = pow(col, vec3(1.0 / 2.2));
+  vec2 vg = gl_FragCoord.xy / uRes;
+  col *= 0.72 + 0.28 * pow(16.0 * vg.x * vg.y * (1.0 - vg.x) * (1.0 - vg.y), 0.25);
+  col += (hash21(gl_FragCoord.xy + fract(uT * 13.7)) - 0.5) / 255.0;
+  outColor = vec4(col, 1.0);
+}`;
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    fail((type === gl.VERTEX_SHADER ? '顶点' : '片段') + '着色器编译失败:\n' + gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) fail('程序链接失败:\n' + gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+gl.bindVertexArray(gl.createVertexArray());
+
+const U = {};
+for (const n of ['uRes', 'uT', 'uAurora', 'uWave', 'uLook']) U[n] = gl.getUniformLocation(prog, n);
+
+// GPU 占用估算（浏览器拿不到真实占用率，此值为估算）：
+// 1) 支持 GPU 定时器查询且数值合理 → 用真实 GPU 执行毫秒
+// 2) 桩回读：帧末往 1×1 RGBA8 桩 FBO 提交 clear 再 readPixels，GPU 队列按序执行，
+//    必须等本帧全部绘制完成才能返回，耗时≈真实单帧 GPU 时间（rbFloor 为启动时标定的回读固定开销）
+// 3) 都不可用时按帧间隔推断：帧间隔超过 18ms 说明 GPU 是瓶颈（间隔≈GPU 耗时）；满帧率时保持上次读数
+const gpuTimerExt = (() => { try { return gl.getExtension('EXT_disjoint_timer_query_webgl2'); } catch (e) { return null; } })();
+const pendingQ = [];
+function gpuPoll() {
+  if (!gpuTimerExt) return;
+  let disjoint = false;
+  try { disjoint = gpuTimerExt.getParameter(gpuTimerExt.GPU_DISJOINT_EXT); } catch (e) { return; }
+  while (pendingQ.length) {
+    const q = pendingQ[0];
+    let avail = false;
+    try { avail = gpuTimerExt.getQueryParameter(q, gpuTimerExt.QUERY_RESULT_AVAILABLE); } catch (e) { break; }
+    if (!avail) break;
+    pendingQ.shift();
+    if (!disjoint) {
+      const ns = gpuTimerExt.getQueryParameter(q, gpuTimerExt.QUERY_RESULT);
+      if (ns > 5e3 && ns < 5e7) {           // 合理区间 5µs–50ms，异常值丢弃
+        P.gpuMs += (ns / 1e6 - P.gpuMs) * 0.25;
+        P.gpuTimerOK = true;
+      }
+    }
+    gpuTimerExt.deleteQuery(q);
+  }
+}
+const stubPx = new Uint8Array(4);
+const stubFb = (() => {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.clearColor(0, 0, 0, 1);
+  return fb;
+})();
+function stubSync() {
+  // 保存/恢复现场：探针切换绘制目标后必须还原，否则后续帧会画进桩缓冲（黑屏）
+  const prevFb = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+  const vp = gl.getParameter(gl.VIEWPORT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, stubFb);
+  gl.viewport(0, 0, 1, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, stubPx);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, prevFb);
+  gl.viewport(vp[0], vp[1], vp[2], vp[3]);
+}
+let rbFloor = 0.4;
+(function calibrateRB() {          // 启动时队列空闲：四次取最小值 = 纯回读开销
+  let m = 1e9;
+  for (let i = 0; i < 4; i++) {
+    const t0 = performance.now();
+    stubSync();
+    m = Math.min(m, performance.now() - t0);
+  }
+  rbFloor = m;
+})();
+
+const P = { scale: 0.75, aurora: 1.70, wave: 1.60, speed: 1.00, yaw: 0, pitch: -0.12, gpuCap: 80, gpuMs: 0, gpuLoad: 0, frameN: 0, gpuTimerOK: false, gpuTimerBroken: false, rbOK: false };
+
+function bind(id, key, fmt) {
+  const el = $(id), out = $(id + 'Val');
+  const sync = () => { out.textContent = fmt(parseFloat(el.value)); };
+  el.addEventListener('input', () => { P[key] = parseFloat(el.value); sync(); });
+  sync();
+}
+bind('aur', 'aurora', v => v.toFixed(2));
+bind('wav', 'wave',   v => v.toFixed(2));
+bind('spd', 'speed',  v => v.toFixed(2));
+bind('gpu', 'gpuCap', v => v.toFixed(0) + '%');
+
+const resEl = $('res'), autoEl = $('auto');
+function resLabel() {
+  $('resVal').textContent = Math.round(P.scale * 100) + '% (' + canvas.width + '×' + canvas.height + ')';
+}
+resEl.addEventListener('input', () => {
+  P.scale = parseInt(resEl.value, 10) / 100;
+  autoEl.checked = false;
+  resize();
+});
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(2, Math.round(canvas.clientWidth * dpr * P.scale));
+  const h = Math.max(2, Math.round(canvas.clientHeight * dpr * P.scale));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+    gl.viewport(0, 0, w, h);
+  }
+  resLabel();
+}
+window.addEventListener('resize', resize);
+
+let drag = null;
+canvas.addEventListener('pointerdown', e => {
+  drag = { x: e.clientX, y: e.clientY, yaw: P.yaw, pitch: P.pitch };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drag) return;
+  P.yaw   = Math.max(-0.7,  Math.min(0.7,  drag.yaw   + (e.clientX - drag.x) * 0.0022));
+  P.pitch = Math.max(-0.25, Math.min(0.10, drag.pitch - (e.clientY - drag.y) * 0.0016));
+});
+addEventListener('pointerup', () => drag = null);
+addEventListener('pointercancel', () => drag = null);
+
+let simT = 0, last = performance.now(), fps = 60, lastUi = 0, lastFrame = 0, prevNow = performance.now();
+function render(now) {
+  const dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  lastFrame = now;
+  simT += dt * P.speed;
+  fps += (1 / Math.max(dt, 1e-4) - fps) * 0.07;
+  if (now - lastUi > 500) {
+    lastUi = now;
+    fpsEl.textContent = fps.toFixed(0) + ' FPS · GPU≈' + Math.round(P.gpuLoad) + '% · ' + Math.round(P.scale * 100) + '% (' + canvas.width + '×' + canvas.height + ')';
+    $('gpuVal').textContent = Math.round(P.gpuLoad) + '% / ' + P.gpuCap + '%';
+  }
+  // 防御性重绑：探针/校准可能切换过绘制目标与视口，每帧显式回到画布
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform1f(U.uT, simT);
+  gl.uniform1f(U.uAurora, P.aurora);
+  gl.uniform1f(U.uWave, P.wave);
+  gl.uniform2f(U.uLook, P.yaw, P.pitch);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  // GPU 占用估算：定时器查询优先（本机 ANGLE 上不可用会自动落到桩回读）；桩回读每 15 帧一次（高负载降频）
+  P.frameN++;
+  const frameMs = Math.min(now - prevNow, 60);
+  prevNow = now;
+  let q = null;
+  if (gpuTimerExt && !P.gpuTimerBroken) {
+    try {
+      q = gpuTimerExt.createQuery();
+      gpuTimerExt.beginQuery(gpuTimerExt.TIME_ELAPSED_EXT, q);
+    } catch (e) { P.gpuTimerBroken = true; q = null; }
+  }
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  if (q) {
+    try {
+      gpuTimerExt.endQuery(gpuTimerExt.TIME_ELAPSED_EXT);
+      pendingQ.push(q);
+    } catch (e) { P.gpuTimerBroken = true; }
+    gpuPoll();
+  }
+  if (P.gpuTimerOK) {
+    P.gpuLoad = Math.min(100, P.gpuMs / 16.667 * 100);
+  } else {
+    if (P.frameN % (P.gpuLoad > 70 ? 30 : 15) === 7) {
+      const t0 = performance.now();
+      stubSync();
+      const sample = performance.now() - t0;
+      if (sample < rbFloor) rbFloor = sample;
+      P.gpuMs += (Math.max(0, sample - rbFloor) - P.gpuMs) * 0.25;
+      P.rbOK = true;
+    }
+    if (P.rbOK) {
+      P.gpuLoad = Math.min(100, P.gpuMs / 16.667 * 100);
+    } else if (frameMs >= 18 || fps < 57) {
+      // 兜底：帧间隔超过 18ms 说明 GPU 是瓶颈，间隔≈GPU 耗时；满帧率时保持上次读数
+      P.gpuMs += (frameMs - P.gpuMs) * 0.08;
+      P.gpuLoad = Math.min(100, P.gpuMs / 16.667 * 100);
+    }
+  }
+}
+function rafLoop(now) { render(now); requestAnimationFrame(rafLoop); }
+resize();
+requestAnimationFrame(rafLoop);
+// 面板被遮挡或页面隐藏时 requestAnimationFrame 会被浏览器暂停，用定时器兜底保持画面更新
+setInterval(() => {
+  const n = performance.now();
+  if (n - lastFrame > 120) render(n);
+}, 40);
+
+setInterval(() => {
+  if (!autoEl.checked) return;
+  if (fps < 45 && P.scale > 0.30) {
+    P.scale = Math.max(0.30, P.scale - 0.05);
+    resEl.value = String(Math.round(P.scale * 100));
+    resize();
+  } else if (fps > 57 && P.scale < 1.0 && P.gpuLoad < P.gpuCap - 4) {
+    P.scale = Math.min(1.0, P.scale + 0.05);
+    resEl.value = String(Math.round(P.scale * 100));
+    resize();
+  }
+}, 1000);
+</script>
+</body>
+</html>

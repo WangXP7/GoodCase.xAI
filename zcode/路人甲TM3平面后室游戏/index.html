@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>档案层 B4 · 2D 俯视角恐怖逃生</title>
+<style>
+  /* ============ 全局 ============ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0a08; }
+  body {
+    font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+    color: #cfc4a8;
+    -webkit-user-select: none; user-select: none;
+  }
+  .hidden { display: none !important; }
+  #app { position: fixed; inset: 0; }
+  #game { position: absolute; inset: 0; display: block; }
+
+  button {
+    font-family: inherit; color: #cfc4a8; cursor: pointer;
+    background: rgba(30, 26, 20, 0.85);
+    border: 1px solid #4a4234;
+    padding: 10px 26px; font-size: 15px; letter-spacing: 2px;
+    transition: background .15s, border-color .15s;
+  }
+  button:hover { background: rgba(64, 54, 38, 0.9); border-color: #8a7a58; }
+  input {
+    font-family: inherit; color: #e8dcbf; background: rgba(0,0,0,.5);
+    border: 1px solid #4a4234; padding: 9px 12px; font-size: 15px; letter-spacing: 2px; outline: none;
+  }
+  input:focus { border-color: #8a7a58; }
+
+  /* ============ 覆盖屏通用 ============ */
+  .screen {
+    position: absolute; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(5, 4, 3, 0.72); backdrop-filter: blur(2px);
+    text-align: center;
+  }
+  .screen .panel {
+    background: rgba(16, 13, 10, 0.92);
+    border: 1px solid #3a3226;
+    padding: 34px 46px; min-width: 340px; max-width: 86vw;
+    box-shadow: 0 0 60px rgba(0,0,0,.8);
+  }
+  .title {
+    font-size: 44px; font-weight: 700; letter-spacing: 10px; color: #d8c9a3;
+    text-shadow: 0 0 22px rgba(216, 179, 106, 0.18);
+    margin-bottom: 6px;
+  }
+  .subtitle { font-size: 13px; color: #6f6754; letter-spacing: 5px; margin-bottom: 30px; }
+  .btn-col { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+  .story {
+    font-size: 13px; color: #8a8171; line-height: 1.9; max-width: 420px;
+    margin: 0 auto 26px; text-align: justify;
+  }
+  .hint-line { margin-top: 18px; font-size: 12px; color: #5f5849; letter-spacing: 1px; }
+
+  /* ============ HUD ============ */
+  #hud { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+  #hud .clickable { pointer-events: auto; }
+  #hud-tl {
+    position: absolute; top: 14px; left: 14px;
+    background: rgba(10, 8, 6, 0.62); border: 1px solid rgba(90, 78, 56, 0.5);
+    padding: 10px 14px; min-width: 230px;
+  }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .bar-label { font-size: 11px; width: 34px; color: #9a8f74; letter-spacing: 2px; }
+  .bar { flex: 1; height: 7px; background: rgba(255,255,255,0.07); position: relative; }
+  .bar > div { height: 100%; transition: width .12s linear; }
+  #bar-stamina { background: #a89567; }
+  #bar-stamina.low { background: #b04a38; animation: blink 0.7s infinite; }
+  #bar-sanity { background: #7d8a96; }
+  #bar-sanity.low { background: #8a4a68; animation: blink 0.5s infinite; }
+  @keyframes blink { 50% { opacity: 0.45; } }
+  #objective { margin-top: 8px; font-size: 13px; color: #d8c9a3; letter-spacing: 1px; }
+  #hud-clue-row { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
+  .clue-label { font-size: 11px; color: #9a8f74; letter-spacing: 2px; }
+  .clue-chip {
+    display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center;
+    border: 1px solid #6a5c40; color: #e8dcbf; font-size: 13px; font-weight: 700;
+    background: rgba(216,179,106,0.08);
+  }
+  .clue-chip.empty { color: #55503f; border-color: #3c3628; }
+  #tape-count { margin-top: 7px; font-size: 11px; color: #9a8f74; letter-spacing: 2px; }
+
+  #hud-tr {
+    position: absolute; top: 14px; right: 14px; text-align: right;
+    background: rgba(10, 8, 6, 0.62); border: 1px solid rgba(90, 78, 56, 0.5);
+    padding: 9px 14px; font-size: 12px; color: #9a8f74; letter-spacing: 1px;
+  }
+  #hud-time { font-size: 17px; color: #d8c9a3; letter-spacing: 3px; }
+  #hud-seed { margin-top: 3px; }
+  #hud-sound { margin-top: 5px; cursor: pointer; }
+  #hud-pause {
+    margin-top: 6px; display: inline-block; font-size: 11px; padding: 3px 12px;
+    border: 1px solid #4a4234; cursor: pointer; letter-spacing: 2px;
+  }
+  #hud-pause:hover { border-color: #8a7a58; }
+
+  #hud-prompt {
+    position: absolute; bottom: 12%; left: 50%; transform: translateX(-50%);
+    background: rgba(10, 8, 6, 0.72); border: 1px solid rgba(138, 122, 88, 0.55);
+    padding: 8px 20px; font-size: 14px; letter-spacing: 2px; color: #e8dcbf;
+  }
+  #hud-toasts {
+    position: absolute; bottom: 24px; left: 16px; display: flex; flex-direction: column; gap: 6px;
+    max-width: 44vw;
+  }
+  .toast {
+    background: rgba(10, 8, 6, 0.78); border-left: 2px solid #8a7a58;
+    padding: 7px 12px; font-size: 12.5px; color: #cfc4a8; letter-spacing: 0.5px;
+    transition: opacity .7s;
+  }
+  .toast.fade { opacity: 0; }
+
+  /* 录像带回放闪现 */
+  #tape-flash {
+    position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+    z-index: 15; background: rgba(8, 10, 8, 0.88); border: 1px solid #4a5a4a;
+    color: #b8d0bc; padding: 14px 26px; font-size: 14px; letter-spacing: 1px;
+    max-width: 60vw; animation: tv-in .25s;
+  }
+  @keyframes tv-in { from { opacity: 0; transform: translateX(-50%) scale(0.96); } }
+
+  /* ============ 密码终端 ============ */
+  #terminal-panel {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 25; width: 330px;
+    background: rgba(12, 16, 13, 0.94); border: 1px solid #3e5544;
+    box-shadow: 0 0 50px rgba(0,0,0,.85), inset 0 0 40px rgba(60,120,80,0.05);
+    padding: 20px 22px;
+  }
+  #terminal-panel h3 { font-size: 15px; letter-spacing: 4px; color: #9fc4a8; margin-bottom: 12px; font-weight: 600; }
+  #term-slots { display: flex; gap: 12px; justify-content: center; margin: 10px 0; }
+  #term-slots .slot {
+    width: 46px; height: 56px; line-height: 56px; font-size: 26px; font-weight: 700; text-align: center;
+    border: 1px solid #4e6a56; color: #b8e0c2; background: rgba(60,120,80,0.07);
+    font-family: monospace;
+  }
+  #term-slots .slot.empty { color: #3e5544; }
+  #term-clue { font-size: 11.5px; color: #7e9484; margin: 6px 0 12px; text-align: center; }
+  #term-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  #term-keypad .key { padding: 9px 0; font-size: 15px; background: rgba(34,44,37,0.9); border-color: #3e5544; }
+  #term-keypad .key:hover { background: rgba(58,78,64,0.9); }
+  #term-actions { display: flex; gap: 8px; margin-top: 10px; }
+  #term-actions button { flex: 1; padding: 9px 0; font-size: 13px; }
+  #btn-term-submit { border-color: #4e6a56; color: #b8e0c2; }
+  #term-msg { min-height: 18px; margin-top: 10px; font-size: 12.5px; text-align: center; color: #7e9484; }
+  #term-msg.err { color: #c97a5e; }
+  #term-msg.ok { color: #8fce9d; }
+  .term-close-hint { margin-top: 8px; font-size: 11px; color: #56685c; text-align: center; }
+
+  /* ============ 帮助 ============ */
+  .help-grid { display: grid; grid-template-columns: auto auto; gap: 7px 18px; text-align: left; margin: 18px 0; font-size: 13.5px; }
+  .help-grid b { color: #d8c9a3; font-weight: 600; letter-spacing: 1px; white-space: nowrap; }
+  .help-goal { text-align: left; font-size: 12.5px; color: #8a8171; line-height: 1.9; margin-bottom: 16px; max-width: 430px; }
+
+  /* ============ 音效设置 ============ */
+  .sound-row { display: flex; align-items: center; gap: 14px; margin: 20px 0; justify-content: center; }
+  #volume-slider { width: 190px; accent-color: #a89567; }
+  #volume-val { width: 44px; font-size: 13px; color: #9a8f74; text-align: left; }
+  #sound-toggle { min-width: 160px; }
+  #sound-toggle.off { color: #7a6f5c; }
+
+  /* ============ 结算 ============ */
+  .stat-row {
+    display: flex; justify-content: space-between; gap: 40px;
+    font-size: 13.5px; padding: 6px 2px; border-bottom: 1px dashed rgba(90,78,56,0.35);
+  }
+  .stat-row span { color: #8a8171; letter-spacing: 1px; }
+  .stat-row b { color: #d8c9a3; font-weight: 600; }
+  #death-reason { color: #c97a5e; font-size: 15px; margin: 14px 0 20px; letter-spacing: 1px; }
+  #win-stats, #death-stats { margin: 16px 0 22px; min-width: 300px; }
+  .win-title { color: #9fc4a8 !important; text-shadow: 0 0 24px rgba(120,235,150,.2); }
+
+  /* ============ 调试面板 ============ */
+  #debug-panel {
+    position: absolute; bottom: 14px; right: 14px; z-index: 40;
+    background: rgba(0, 10, 4, 0.82); border: 1px solid rgba(80,160,100,0.4);
+    color: #9fd0aa; font: 11.5px/1.7 Consolas, monospace;
+    padding: 8px 12px; max-width: 380px; pointer-events: none;
+    text-align: left; white-space: nowrap;
+  }
+
+  @media (max-width: 760px) {
+    .title { font-size: 30px; letter-spacing: 6px; }
+    .screen .panel { padding: 24px 22px; }
+    #debug-panel { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="hud-tl">
+      <div class="bar-row"><span class="bar-label">体力</span><div class="bar"><div id="bar-stamina" style="width:100%"></div></div></div>
+      <div class="bar-row"><span class="bar-label">理智</span><div class="bar"><div id="bar-sanity" style="width:100%"></div></div></div>
+      <div id="objective">寻找第一盘录像带</div>
+      <div id="hud-clue-row"><span class="clue-label">密码线索</span><span id="clues"></span></div>
+      <div id="tape-count">录像带 0/3</div>
+    </div>
+    <div id="hud-tr">
+      <div id="hud-time">00:00</div>
+      <div id="hud-seed">Seed --</div>
+      <div id="hud-sound" class="clickable">🔊 80%</div>
+      <div id="hud-pause" class="clickable">暂停 (Esc)</div>
+    </div>
+    <div id="hud-prompt" class="hidden"></div>
+    <div id="hud-toasts"></div>
+    <div id="tape-flash" class="hidden"></div>
+  </div>
+
+  <!-- 密码终端 -->
+  <div id="terminal-panel" class="hidden">
+    <h3>档案主机房 · 密码终端</h3>
+    <div id="term-slots"><span class="slot empty">·</span><span class="slot empty">·</span><span class="slot empty">·</span></div>
+    <div id="term-clue">已获线索：--</div>
+    <div id="term-keypad"></div>
+    <div id="term-actions">
+      <button id="btn-term-submit">确认</button>
+      <button id="btn-term-close">离开</button>
+    </div>
+    <div id="term-msg"></div>
+    <div class="term-close-hint">键盘 0-9 输入 / Enter 确认 / Esc 离开 —— 世界仍在继续，小心身后的脚步声</div>
+  </div>
+
+  <!-- 主菜单 -->
+  <div id="screen-menu" class="screen">
+    <div class="panel">
+      <div class="title">档案层 B4</div>
+      <div class="subtitle">ARCHIVE FLOOR B4 · 2D 俯视角恐怖逃生</div>
+      <div class="story">你是写字楼的夜班保安。今夜，地下四层档案库的监控里出现了一个不属于任何摄像头的黑影——闸门全部锁死，电梯断电。收集三盘监控录像带，找出三位密码，在「巡影」抓住你之前，从东侧闸门逃出去。</div>
+      <div class="btn-col">
+        <button id="btn-start">开 始 游 戏</button>
+        <button id="btn-help">操 作 说 明</button>
+        <button id="btn-sound">音 效 开 关</button>
+      </div>
+      <div class="hint-line">戴耳机体验更佳 · 全程键盘操作</div>
+    </div>
+  </div>
+
+  <!-- 种子输入 -->
+  <div id="menu-seed" class="screen hidden">
+    <div class="panel">
+      <div class="title" style="font-size:26px;">选择 Seed</div>
+      <div class="story">相同 Seed 会生成完全相同的地图，方便复现与挑战。留空则随机生成。</div>
+      <input id="seed-input" placeholder="例如 1998 / 灰岭 / B4TEST" maxlength="24" style="width:260px; text-align:center;">
+      <div class="btn-col" style="margin-top:20px;">
+        <button id="btn-seed-go">进 入 档 案 层</button>
+        <button id="btn-seed-back">返 回</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 操作说明 -->
+  <div id="screen-help" class="screen hidden">
+    <div class="panel">
+      <div class="title" style="font-size:26px;">操作说明</div>
+      <div class="help-grid">
+        <b>W A S D / 方向键</b><span>移动</span>
+        <b>Shift（按住）</b><span>冲刺（消耗体力，声音大，容易引来它）</span>
+        <b>E</b><span>拾取录像带 / 使用密码终端 / 开闸门 / 休息</span>
+        <b>Esc</b><span>暂停（继续 / 重新开始 / 返回主菜单）</span>
+        <b>M</b><span>静音切换</span>
+      </div>
+      <div class="help-goal">
+        目标：找到 3 盘录像带 → 每盘记录一位密码数字与其顺序 → 到「档案主机房」输入三位密码 → 解锁闸门撤离。<br>
+        提示：黑暗会消磨理智；荧光灯下更安全。「值班安全屋」内它无法进入。奔跑声、撞墙声与开终端的声响都会吸引它。
+      </div>
+      <button id="btn-help-back">返 回</button>
+    </div>
+  </div>
+
+  <!-- 音效设置 -->
+  <div id="screen-sound" class="screen hidden">
+    <div class="panel">
+      <div class="title" style="font-size:26px;">音效设置</div>
+      <div class="sound-row">
+        <button id="sound-toggle">🔊 音效已开启</button>
+        <input id="volume-slider" type="range" min="0" max="100" value="80">
+        <span id="volume-val">80%</span>
+      </div>
+      <div class="hint-line">环境电流声 / 脚步 / 追逐心跳 / 交互反馈均为 Web Audio 实时合成</div>
+      <button id="btn-sound-back" style="margin-top:22px;">返 回</button>
+    </div>
+  </div>
+
+  <!-- 暂停 -->
+  <div id="screen-pause" class="screen hidden">
+    <div class="panel">
+      <div class="title" style="font-size:28px;">已暂停</div>
+      <div class="btn-col" style="margin-top:18px;">
+        <button id="btn-pause-resume">继 续 游 戏</button>
+        <button id="btn-pause-restart">重新开始本层（相同 Seed）</button>
+        <button id="btn-pause-sound">音 效 设 置</button>
+        <button id="btn-pause-menu">返 回 主 菜 单</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 失败 -->
+  <div id="screen-death" class="screen hidden">
+    <div class="panel">
+      <div class="title" style="font-size:30px; color:#c97a5e; text-shadow:0 0 24px rgba(200,80,50,.25);">你 失 败 了</div>
+      <div id="death-reason">--</div>
+      <div id="death-stats"></div>
+      <div class="btn-col">
+        <button id="btn-death-retry">相同 Seed 重新开始</button>
+        <button id="btn-death-new">生成新地图重新开始</button>
+        <button id="btn-death-menu">返 回 主 菜 单</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 成功结算 -->
+  <div id="screen-win" class="screen hidden">
+    <div class="panel">
+      <div class="title win-title" style="font-size:30px;">逃 离 成 功</div>
+      <div class="hint-line" style="margin-top:4px;">闸门在你身后合拢……这次，它没有追出来。</div>
+      <div id="win-stats"></div>
+      <div class="btn-col">
+        <button id="btn-win-retry">相同 Seed 再来一局</button>
+        <button id="btn-win-new">生成新地图重新开始</button>
+        <button id="btn-win-menu">返 回 主 菜 单</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 调试面板（仅 ?debug=1） -->
+  <div id="debug-panel" class="hidden"></div>
+</div>
+
+<script src="js/config.js?v=3"></script>
+<script src="js/rng.js?v=3"></script>
+<script src="js/audio.js?v=3"></script>
+<script src="js/mapgen.js?v=3"></script>
+<script src="js/player.js?v=3"></script>
+<script src="js/enemy.js?v=3"></script>
+<script src="js/items.js?v=3"></script>
+<script src="js/lighting.js?v=3"></script>
+<script src="js/ui.js?v=3"></script>
+<script src="js/game.js?v=3"></script>
+<script>
+  window.addEventListener('DOMContentLoaded', function () {
+    var game = new B4.Game(document.getElementById('game'));
+    window.__game = game; // 非调试模式也保留实例引用（不含调试 API）
+    game.boot();
+  });
+</script>
+</body>
+</html>

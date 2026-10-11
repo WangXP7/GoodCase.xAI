@@ -1,0 +1,619 @@
+Nobel Prize ® and the Nobel Prize ® medal design mark 
+are registrated trademarks of the Nobel Foundation
+7 OCTOBER 2026
+Scientific Background to the Nobel Prize in Chemistry 2026
+NO N- LI  NEAR  EFFECTS  AND  AUTO  CATA L YSIS  
+I  N  ASYMMETRIC  ORGANIC  SYNTH  ESIS
+The Nobel Committee for Chemistry
+THE ROYAL SWEDISH ACADEMY OF SCIENCES  has as its aim to promote the sciences and strengthen their influence in society.
+BOX 50005 (LILLA FRESCATIVÄGEN 4 A), SE-104 05 STOCKHOLM, SWEDEN 
+TEL +46 8 673 95 00   WWW.KVA.SE
+ 
+ 2 
+Non-linear effects and autocatalysis in asymmetric organic synthesis 
+ 
+The Royal Swedish Academy of Sciences has decided to award Henri B. Kagan and Kenso Soai the 
+Nobel Prize in Chemistry 2026, for discovering non-linear effects in asymmetric catalysis and 
+asymmetric autocatalysis. 
+Introduction 
+The discovery and theoretical explanation by Henri B. Kagan of non-linear effects (NLE) in 
+asymmetric catalysis, one of the most important classes of transformations in organic synthesis, has 
+shown that the enantiomeric excess (ee)1 of the product can exceed that of the auxiliary used in the 
+process, a situation that was previously unthinkable. The most powerful manifestation to date of NLE 
+in asymmetric catalysis was discovered by Kenso Soai, and the reaction now bears his name: the 
+Soai reaction. In this autocatalytic reaction, a dialkylzinc reagent is added to an aldehyde, and the 
+product acts as the catalyst in the process. When starting from achiral reagents and in the absence of 
+added catalysts, the product is formed in considerable ee in an absolute asymmetric transformation. 
+These discoveries have deepened our understanding of chirality and how it is generated and 
+transmitted, with significance far beyond chemistry. As an example, the central molecules of life – 
+amino acids and sugars – are homochiral.2 They are used to build proteins and enzymes, which 
+underpin structure and catalysis of a cell, and DNA and RNA, which are essential for containing and 
+transferring genetic information. The uniform chirality of these building blocks is crucial for their 
+function; without it, our current life forms could not exist.3 
+For this homochirality to evolve requires a pool of amino acids and sugars that is enantiomerically 
+pure or at least has an ee. However, abiotic synthesis of amino acids without the influence of an 
+external chiral force invariably results in the formation of a racemate, i.e. an equal amount of the two 
+enantiomers,4 and similar arguments apply for the synthesis of sugars. Thus, understanding how 
+biological homochirality came about starting from racemic or achiral precursors is one of the most 
+fundamental questions in chemistry, as well as in other areas, and central to understanding prebiotic 
+chemistry that eventually resulted in the evolution of life on Earth. 
+The origin of homochirality in biological systems is a conundrum that has received considerable 
+attention. Today, the prevailing argument is that homochirality came about through a progressive 
+process, perhaps coupled to abiotic chemical evolution, that ultimately favoured D-sugars and L-
+amino acids.5-13 Such a scenario requires an initial imbalance between enantiomers, and assuming 
+3 
+this scenario, the question is: what chemical processes could have been responsible for such an initial 
+imbalance?14 
+The discussion thus leads to a fundamental question that is of general relevance to all of chemistry: 
+are there any chemical mechanisms that could lead to an increase of ee or even to homochirality when 
+starting from a pool of substrate that is achiral or has only a small ee? This fundamental question is 
+the topic of this year’s Nobel Prize in Chemistry. 
+In 1953, Sir Frederick Charles Frank, a theoretical physicist at the University of Bristol with broad 
+research interests, proposed a mathematical model describing how homochirality can be generated 
+from an initial minuscule imbalance between R and S enantiomers.15,16 The aim was to provide a 
+model for the creation of homochirality in biological systems, but the results can be applied to all 
+closed systems. From the introductory part of Frank's paper, it is clear that he judged the problem to 
+be trivial, at least from a theoretical aspect. 
+The presumption in the Frank model "is a chemical substance which is a catalyst for its own 
+production and an anti-catalyst for the production of its optical antimer", which boils down to three 
+discrete criteria for such processes: (i) autocatalysis, (ii) enantioselective catalysis, and (iii) inhibition 
+("mutual antagonism"). Frank concluded his report by laconically noting that "A laboratory 
+demonstration may not be impossible." 
+The first of the three requirements, namely autocatalysis, is a well-known phenomenon in organic 
+chemistry.17 For example, acetic acid catalyses the hydrolysis of ethyl acetate into acetic acid and 
+ethanol; in other words, acetic acid catalyses its own formation from ethyl acetate. In more advanced 
+settings, it has been shown that oligonucleotides18 and peptides19 can catalyse their own formation. 
+The second requirement, enantioselective or asymmetric catalysis, is also well documented, and 
+aspects of it were awarded the Nobel Prize in Chemistry in 2001 (asymmetric catalysis) and 2021 
+(asymmetric organocatalysis). However, neither the third requirement, mutual antagonism, nor the 
+combination of autocatalysis and asymmetric catalysis, asymmetric autocatalysis, had been described 
+prior to the discoveries of Kagan and Soai. 
+Mutual inhibition, or NLE in asymmetric catalysis, was described in 1986 by Kagan, who showed 
+that the product from an asymmetric epoxidation had higher enantiomeric excess (eeprod) than that of 
+the catalyst (eecat) used for the transformation.20-22 A mechanistic rationale for the phenomenon was 
+also provided. Since then, NLE has become an important tool for understanding asymmetric catalysis 
+and has been used for designing new effective asymmetric catalytic processes. Today it is a 
+fundamental concept in organic chemistry that has expanded our appreciation of chirality. 
+4 
+In 1990, Soai showed that the addition of dialkylzinc reagents to pyridine-3-carbaldehyde in the 
+presence of a chiral catalyst, the product, is both autocatalytic and enantioselective, but the product 
+is obtained in lower ee compared to that of the catalyst (eeprod 35%, eecat 86%).23 In this experiment, 
+two of the three criteria in the Frank model were fulfilled. 
+Five years later, Soai and colleagues reported an asymmetric autocatalytic reaction in which the 
+product had a higher ee than the catalyst;24, 25 i.e. all three criteria in the Frank model were fulfilled. 
+A successful experiment had demonstrated how homochirality can be created in a chemical 
+laboratory. 
+It is important to stress that the Frank model is not an answer to the origin of biological homochirality. 
+It provides one possible solution, of which there are several, to an event that occurred about 3.5–
+4 billion years ago and to which we will probably never have a definitive answer. Instead, the 
+experimental validation provided by Kagan and Soai to the Frank model has deepened our 
+fundamental understanding of how chirality is generated, transmitted and amplified in asymmetric 
+catalysis and thus of intrinsic molecular properties that are central to organic chemistry and related 
+disciplines. 
+Non-linear effects in asymmetric catalysis 
+For NLE, the output of a system is not directly proportional to a specific variable. Interactions between 
+enantiomers have long been known to result in homochiral (R–R and S–S for dimers) and heterochiral 
+(R–S, for dimers) aggregates, usually with different physical properties. 
+Milan Uskokovic  showed that  at a high concentration , the 1H NMR spectra of racemic and 
+enantiomerically pure dihydroquinine are not identical; he and colleagues observed doubling of some 
+lines in the spectra when analysing non-racemic mixtures, and they ascribed the effect to 
+diastereomeric solute-solute interactions.26 Similarly, when studying the optical rotation, []D, of 2-
+ethyl-2-methylsuccinic acid, Alain Horeau found a deviation from the expected linear correlation 
+between ee of the measured solution and the optical rotation ,27 and several related examples have 
+been described in the literature.28, 29 The non-linearity observed in these examples relates to aggregate 
+formations, both homochiral and heterochiral, that have different physical properties. However, it had 
+not been shown that such interactions could affect chemical reactivity. 
+Hans Wynberg and Ben Feringa discussed the situation where an R-isomer reacts with a reagent to 
+form a product compared to that of a racemate reacting with the same reagent  (Fig. 1a).30, 31 In the 
+first case, the R-isomer is surrounded by and has non-bonding interactions with other R-isomers, 
+while in the second, it interacts with both R- and S-isomers. They argued that different intermolecular 
+ 5 
+non-bonding interactions are involved that could affect the activation energies for the two reactions, 
+and thus the reaction rates, and affect the product ratios for the two cases; this was referred to as the 
+antipodal interaction. 
+The antipodal effect was clearly manifested in the oxidative dimerization of tetrahydronaphthalene 
+derivative 1 into dimer 2 (Fig. 1b). When dimerizing a racemic sample, a clear preference was evident 
+for coupling of monomers with the same configuration compared to coupling of monomers with 
+different configurations (73.9% RR, SS and 26.1% RS); this is a consequence of the enantiomeric 
+recognition effect, which refers to what extent an isomer recognises an identical or antipodal isomer.32 
+In addition, the coupling of the S-monomer was stereospecific, affording only the (S,S)-trans product, 
+while in the coupling of the racemate, the (RR,SS)-cis isomer was also obtained in 7.9%. The presence 
+of the (RR,SS)-cis isomer in the latter reaction was inferred to be the influence of the R-monomer on 
+the coupling reaction of the S-monomer, and an example of the antipodal interaction. From this study, 
+it was clear that diastereomeric interactions not only can affect physical properties of a system , but 
+also can affect chemical reactivity. The same authors also noted that antipodal effects can be of 
+significance in asymmetric synthesis for cases when (reactant)n-metal complexes are formed.30 
+ 
+Figure 1. a) Reaction of R- and R/S-isomers with a reagent. b) Oxidative dimerization of tetrahydronaphthalene 
+derivative 1 into dimer 2. 
+Prior to 1986 , it was an accepted fact that the enantiomeric excess of the product ( eeprod) in 
+asymmetric catalytic reactions should correlate linearly with the ee of the ligand (eeligand), according 
+to Eq. 1: 
+ eeprod = eemax x eeligand (1) 
+where eemax is the enantiomeric excess of the product when using an enantiomerically pure reagent 
+(eeligand = 100%, Fig. 2a, line a). That year, the field was transformed by a study by Kagan and co-
+workers that redefined chemists’ perception of chirality and catalysis.20 
+
+ 6 
+They noted that the above relationship should hold true for catalysts of the type ML*, where M is a 
+metal and L* a chiral ligand. To break the linear relationship between eeprod and eeligand, Kagan and 
+colleagues realised that higher order species must be involved , e.g. ML* 2. For such systems , the 
+situation is more complex ; it is interest ing to note that Kagan had already contemplated this 
+possibility in the late 1960s.21 
+The groundbreaking work described in 1986 analysed the ML* 2 system in detail. For the case when 
+the ligand is not enantiomerically pure ( eeligand < 100%), in addition to the homochiral complexes 
+MLRLR and MLSLS, a diastereomeric heterochiral complex MLRLS may form. If the reactivity of the 
+heterochiral catalyst MLRLS is larger than that of the homochiral species, then the enantiomeric excess 
+of the product (eeprod) from such reactions will be lower than expected from a linear relationship (Eq. 
+1), i.e. a negative NLE33 (–NLE, Fig. 2 a, line b). Convers ely, if the reactivity of the homochiral 
+catalyst complexes is higher than that of MLRLS, then the eeprod is expected to be higher than that 
+predicted from Eq. 1  (+NLE, Fig. 2a, curve c) . Thus, by invoking higher order catalyst species , a 
+conceptual mechanism is established by which stereochemical purity of the product is higher than 
+that of the auxiliary used to create it; i.e. the stereochemistry can be amplified. 
+Three asymmetric transformations, for which it was believed that more than one unit of the chiral 
+ligand would be involved in the enantiodetermining  step, were initially investigated in detail: 
+asymmetric oxidation of a sulfide into the corresponding sulfoxide (Ti(O -i-Pr)4/(+)-DET/H2O, t-
+BuOOH, both stoichiometric and catalytic amounts of the catalyst), Sharpless epoxidation of geraniol 
+(Fig. 2b), and the L -proline–catalysed Hajos-Parrish reaction. In none of the se reactions was a 
+linearity observed between eeligand and eeprod. Instead, for the first and last reactions , a –NLE was 
+observed, while for the Sharpless epoxidation, a +NLE was obtained; i.e. the eeprod was higher than 
+expected when using scalemic34 (+)-DET (Fig. 2b). 
+ 
+Figure 2. a) eeprod as a function of eeligand. a: linear relation, b: –NLE, c: +NLE. b) Sharpless epoxidation of geraniol 
+showing +NLE (diagram taken from ref. 20). x-axis: eeligand, y-axis: eeproduct. 
+Kagan and his colleagues used a simplified reaction scheme to discuss the possible reaction outcomes 
+(Fig. 3). When a chiral reagent is used in stoichiometric amounts and is completely consumed, there 
+will be a linear relationship between eeprod and eeligand, as in Eq. 1. For catalytic asymmetric reactions, 
+
+ 7 
+the reactivity of the various species must also be considered, and calculations showed that the results 
+could be correlated with: 
+ eeprod = eemax x eeligand x ƒ (2) 
+where ƒ is a correction factor defined as: 
+ ƒ = (1 + ) / (1 + g) (3) 
+where  is the ratio between the meso and homochiral catalysts and g is the relative reactivity of the 
+diastereomeric catalysts. Using Eq. 2 , curves similar to those in Fig. 2a w ere obtained, showing, 
+depending on the values of  and g, positive or negative NLE. 
+An interesting corollary was noted by the researchers for the case when the  unreactive meso-type 
+catalyst is formed irreversibly. For such cases, the eeprod will always be equal to eemax, irrespective of 
+the value of eeligand. This work made it clear  that NLE provide a simple tool to obtain insight into 
+reaction mechanisms. 
+ 
+Figure 3. A simplified reaction scheme for discussing NLE. LR, LS = chiral ligand or chiral reagent, A = reactant, M = 
+metallic complex. 
+In a subsequent study , Kagan and colleagues expanded the ML*2 catalyst system to include ML *3 
+and ML *4 complexes, as well as the reservoir effect .35 The latter describes the situation where 
+catalytically inactive ML RLS complexes are formed , which would alter the ratio between the 
+remaining LR and LS ligands that are available for catalysis.36, 37 
+Such a reservoir system has been described in detail in work led by Ryoji Noyori.38, 28, 39 Nobuki Oguni 
+and colleagues had shown  previously that there is a strong +NLE in the asymmetric addition of 
+diethylzinc to benzaldehyde catalysed by sterically constrained chiral tertiary -aminoalcohols, and 
+this stimulated research.40 In a subsequent study, Noyori and co-authors found that (–)-DAIB ((–)-3-
+exo-(dimethylamino)isoborneol ) is an excellent ligand for the reaction , showing a considerable  
++NLE: when eeligand is 15%, the product is obtained in eeprod 98% (Fig. 4a).38 Investigations of the 
+reaction mechanism revealed that DAIB react with diethylzinc to form DAIB-ZnEt complexes, which 
+dimerize to form three different dinuclear zinc complexes, two homochiral (1 and 2, Fig. 4b) and one 
+heterochiral (3). However, it is the monomeric metal-ligand species (–)-4 and (+)-4 that are the active 
+catalysts in the addition reaction ; the dimers are reservoirs for the monomers. The NLE is then due 
+
+ 8 
+to the greater thermodynamic stability of dimer 3 compared to that of complexes 1 and 2, with the 
+result that the minor enantiomer of the scalemic DAIB ligand is not available for catalysis. 
+ 
+Figure 4. a) The catalytic asymmetric addition of diethylzinc to benzaldehyde in the presence of scalemic DAIB. b) 
+Mechanistic rationale for the +NLE observed in the reaction. 
+Another early example of the importance of NLE for elucidating the intricate details of catalytic 
+reaction mechanisms was provided by Eric N. Jacobsen  and co -workers in their studies of the 
+(salen)Cr(III)-catalysed nucleophilic ring-opening of meso epoxides.41 In this reaction, a significant 
+NLE was observed, and the stereochemical outcome could not be accommodated with a monomeric 
+catalyst species. Instead, detailed mechanistic investigations revealed a dual activation of the 
+electrophile and nucleophile by two different metal centres in the enantio-determining step. This work 
+established key concepts, such as cooperative catalysis, and assisted in incorporating NLE as an 
+integrated part of mechanistic investigations. 
+A common denominator in the ML*2 system discussed by Kagan is that the heterochiral dimer is less 
+reactive than the homochiral , in order to provide a +NLE or, as in the addition of diethylzin c to 
+benzaldehyde, a non-reactive reservoir. In both cases, eeprod cannot exceed eemax, which follows from 
+Eq. 2 and is also intuitively appreciated. A detailed analysis by Kagan of the ML*3 system revealed 
+that if the heterochiral metal ligand complex (MLRLRLS) is much more reactive than the homochiral 
+(large g values, see Eq. 2), then the eeprod can indeed exceed eemax, but only at relatively high values 
+of eeligand; the phenomenon was referred to as a hyperpositive NLE.35 
+Stéphane Bellemin -Laponnaz and colleagues reported the first, and as yet only, example of  
+hyperpositive NLE in the asymmetric addition of dimethylzin c to benzaldehyde using (–)-NBE 
+((1R,2S)-N-Benzylephedrine) as a chiral ligand and affording 1-phenylethanol (Fig. 5a).42, 43 For this 
+case, however, eeprod reached a maximum (53%) at a low ee of the ligand (eeligand 5%) and then tapered 
+off to reach eeprod 16% when eeligand was 100%, clearly indicating a different mechanism compared 
+to the ML*3 system. When using a scalemic ligand in the reaction , a precipitate was formed, which, 
+upon hydrolysis, returned the racemic ligand . Based on a detailed mechanistic investigation , it was 
+
+ 9 
+proposed that both monomeric (ML*) and dimeric catalysts (ML*•ML*) are active in this reaction. 
+At low eeligand, when a dimeric heterochiral (meso, ML R•MLS) complex precipitates out from the 
+reaction mixture, the concentration of the ligand will be low, and the reaction will be catalysed by a 
+monomeric catalyst. Conversely, as the eeligand increases, the concentration of the available ligand 
+will increase, and the reaction will be catalysed by both monomeric and dimeric catalysts. In this 
+reaction, the monomeric catalyst is more enantioselective than the dimeric one. 
+ 
+Figure 5. Asymmetric catalytic addition of dimethylzinc to benzaldehyde using ( –)-NBE as chiral ligand.  
+In a series of studies , Donna G. Blackmond  has expanded the mathematical models developed by 
+Kagan and co-workers, showing that the reaction rate can be expressed as a function of eecat in 
+asymmetric catalytic reactions,37 and that the reaction rate and eeprod may vary with conversion.44, 45 
+Her work has clearly demonstrated that the analysis of NLE can be a powerful diagnostic tool for 
+gaining mechanistic insight and information about the active catalytic species.44 
+Blackmond and colleagues also showed that asymmetric amplification can operate in asymmetric 
+reactions without invoking ML*n systems. They observed an NLE in an aldol reaction catalysed by 
+L-proline in a mixed phase system. 46 They showed that when scalemic proline is used at 
+concentrations above the solubility limit, a racemic compound will precipitate, and the resulting 
+eutectic composition will correspond to an ee of about 50% of the proline remaining in solution. As 
+a consequence, in the proline-catalysed aldol reaction investigated, a +NLE was observed at eeproline 
+<50% and a (–)-NLE at higher ee. Similar observations were also reported independently by Yujiro 
+Hayashi.47 In a later investigation of an organocatalytic cascade reaction, Blackmond and Jordi Burés 
+suggested that the observed NLE could be explained by a disruption of pre -equilibria in reversible 
+steps occurring before an irreversible product forming step, and they stressed that understanding the 
+origin of NLE can be of importance when designing new such reactions.48, 49 
+A fundamental aspect of the ML *2-system when adding scalemic chiral ligands is that the 
+stereoisomer in excess is used to deactivate the minor stereoisomer  by forming the less reactive 
+heterochiral dimers. An alternative strategy , referred to as chiral poisoning, is to use a readily 
+available chiral additive to selectively deactivate one of the stereoisomers of a racemic or scalemic 
+catalyst; such a strategy is particularly attractive when the enantiomerically pure catalyst is difficult 
+to obtain. The concept was developed by John W. Faller, who applied it to a Rh-catalysed asymmetric 
+hydrogenation reaction with racemic chiraphos50 as a chiral ligand, and using readily available (S)-
+
+ 10 
+methophos51 as the chiral poison, and to a Ti-racemic BINOL -catalysed asymmetric allylation 
+reaction, in which diisopropyl D-tartrate was used as the chiral poison.52, 53 Instead of deactivating a 
+specific stereoisomer of a catalyst , it can be activated by an additive, and this approach was 
+demonstrated by Koichi Mikami  in the Ti -racemic BINOL -catalysed glyoxalate ene reaction .54 
+Similar strategies have also been used with great success by Oliver Trapp to enrich one stereoisomer 
+of configurationally flexible biphenyl catalysts.55 
+A striking example of the power of +NLE was provided by researchers at Merck in the synthesis of 
+L-699,392, a leukotriene antagonist.56-58 A key step in this process is a reduction of a prochiral ketone 
+to the corresponding secondary alcohol using stoichiometric amounts of -
+chlorodiisopinocampheylborane. The reducing agent is prepared from -pinene and chloroborane-
+methylsulfide complex, and when using -pinene of 70% optical purity, the product was obtained in 
+95% ee. 
+Since the discovery of the NLE in asymmetric catalysis , several additional examples have been 
+documented, indicating the generality of the phenomenon.36 
+Asymmetric autocatalysis – the Soai reaction 
+In an asymmetric autocatalytic process, the chiral product serves as a catalyst for its own formation. 
+For example, in a reaction in which an ( R) catalyst is used , the (R) catalyst will be preferentially 
+formed (Fig. 6a), and such reactions have been considered important for the formation of biological 
+homochirality on Earth.36 
+However, such processes are not sufficient for attaining amplification of the (R) isomer.59, 60 If the ee 
+of the catalyst (eeligand) is 100% and it generates a product with an ee of 90% (eemax), then eeprod will 
+be 90%. When this product is used as a catalyst, the product will be eeprod = 81%, and this erosion of 
+the ee will continue in subsequent reactions. To reach an increased ratio of the (R) stereoisomer, the 
+catalyst must not only promote the formation of itself but also be "an anti-catalyst for the production 
+of its optical antimer".15 
+ 11 
+ 
+Figure 6. a) Asymmetric autocatalysis. In this example , a catalyst with (R) configuration produces more of itself, with a 
+preference for the (R) configuration. b) Asymmetric autocatalytic addition of i-Pr2Zn to pyridine-3-carbaldehyde. 
+In 1989, Albert Alberts and Wynberg showed that the addition of diethylzinc to benzaldehyde, 
+catalysed by an orthotitanate prepared from TiCl 4 and scalemic (R)-1-phenyl-1-propanol-d1 (eeligand 
+70%), yielded ( R)-1-phenyl-1-propanol with eeprod 32%, a process that was referred to as 
+enantioselective autoinduction.61 In this process, the chiral non-deuterated ligand is obtained as the 
+product, but not the chiral catalyst, which is a criteri on for autocatalysis. A year earlier, Oguni and 
+colleagues had reported a significant +NLE in the addition of diethylzinc to benzaldehyde catalysed 
+by scalemic sterically constrained , chiral tertiary aminoalcohols  (vide supra ),40 and Wynberg  
+speculated that this reaction, if a suitable substrate can be identified, might be a strong candidate for 
+developing an asymmetric autocatalytic process.62 
+Indeed, in 1990, Soai, who had been investigating the asymmetric addition of dialkylzinc to aromatic 
+and aliphatic aldehydes in the presence of chiral aminoalcohols ,63, 64 discovered that the addition of 
+diisopropylzinc to pyridine -3-carbaldehyde, using a catalyst prepared from alcohol 1 (eeligand 86%) 
+and i-Pr2Zn, afforded alcohol 1 (eeprod 35%) with the same absolute configuration as that used for 
+preparing the catalyst ( Fig. 6b).23 A similar autocatalytic behaviour was also observed when using 
+ferrocenyl aldehyde and an aromatic dialdehyde, together with their corresponding alcohols, as 
+coupling partners.65, 66 An asymmetric autocatalytic process had indeed been discovered, and the next 
+step was to investigate if it was possible to attain amplification of the stereochemistry, a +NLE. 
+Five years later , Soai showed that alcohol ( S)-4, of only a small ee, catalyse s the addition of 
+diisopropylzinc to pyrimidine-5-carbaldehyde to promote the formation of ( S)-4 with an impressive 
++NLE (Fig. 7).24 For example, when a catalyst was prepared from (S)-4 with eeligand 5% and used in 
+the addition of diisopropylzin c to pyrimidine -5-carbaldehyde ( 2), alcohol ( S)-4 was obtained in 
+eeprod 55% – a considerable amplification compared to the stereochemical purity of that of the original 
+catalyst (Entry 1).24 When the product from this reaction, the newly formed alcohol (S)-4, as well as 
+
+ 12 
+the ligand used for preparing the catalyst, was used as a catalyst for the addition of i-Pr2Zn to aldehyde 
+2, the product was again obtained with an increased enantiomeric excess ( eeprod 87%, Entry 2). This 
+sequence was then repeated until a plateau was reached at eeprod 90% (Entries 3–5). Thus, through a 
+series of five consecutive runs, the ee of alcohol (S)-4 could be amplified from 5% to 90%. 
+The autocatalytic asymmetric addition of dialkylzin c to pyrimidine -5-carbaldehyde and similar 
+derivatives with amplification of the stereochemical information is now referred to as the Soai 
+reaction.67-70 An even more spectacular example was identified when it was shown that addition of i-
+Pr2Zn to aldehyde 3 using alkynyl derivate 5 of extremely low enantiomeric excess ( eeligand 
+0.00005%) provided alcohol 5 with eeprod >99.5% after three consecutive runs (Entries 6 –8), which 
+corresponds to an amplification of the stereoisomeric ratio by a factor of 630,000.71 In addition to the 
+pyrimidyl derivatives shown in Fig. 7, similar amplifying asymmetric autocatalysis has been shown 
+in only a few other systems.72-75 
+ 
+Figure 7. The Soai reaction. The amplifying asymmetric autocatalysis in the addition of i -Pr2Zn to pyrimidyl 
+carbaldehydes. 
+It has also been shown that racemates of organic molecules, when treated with circular polarised light, 
+can induce high eeprod in the Soai reaction.76 Other instances include the chirality of minerals, organic 
+crystals and surfaces,77 as well as isotope chirality78.69 
+The Soai reaction is a good platform for testing the possibility of symmetry breaking: i.e. if there can 
+be a prefe rential formation of one stereoisomer without any stereochemical informational input, a 
+process referred to as absolute asymmetric synthesis .79 Such model systems are  of considerable 
+significance when discussing the origin of biological homochirality.80 Such symmetry breaking had 
+previously only been documented in spontaneous deracemization processes.81 
+
+ 13 
+Both Soai and Daniel Singleton, independently of each other, showed that this is indeed possible with 
+the Soai reaction (Fig. 8, R = t-BuCC in Soai’s experiment,82 and R = Me in Singleton’s83, 84).85 When 
+diisopropylzinc is added to aldehyde 3, the zin c alkoxide 6 is formed as a racemate. In such a 
+molecular aggregate that is macroscopically characteri sed as an equal mixture of the two 
+stereoisomers, however, there will be a statistical fluctuation over time that might favour a stochastic 
+miniscule preference for either of the two stereoisomers , a phenomenon referred to by Kurt Mislow 
+as cryptochirality .86 The discriminating power, the +NLE, of the Soai reaction is then powerful 
+enough to sense the imbalance between the stereoisomers of 6, which will be manifested in the 
+stereochemical outcome from the reaction. Indeed, during a series of 37 experiments, 18 resulted in 
+a preferential formation of (R)-6, and 19 gave (S)-6, the eeprod varying from 15% to 91%.82 
+The discovery of the Soai reaction was also the first successful laboratory experiment to verify the 
+Frank model for generation of biological homochirality in the absence of external chiral influence. It 
+is indeed a significant accomplishment , showing that enantiomerically enriched or homochiral 
+products can be generated from non-chiral starting materials. The Soai reaction is an important proof 
+of concept , though it  is not relevant f or the emergence of biological homochirality in aqueous 
+systems. Contemporary efforts to resolve this issue instead focus on network processes and kinetic 
+resolution.7, 87 
+  
+Figure 8. Absolute asymmetric synthesis in the Soai reaction.  The outlined reaction mechanism  and intermediates are 
+schematic. 
+Developing an understanding of reaction mechanisms is a fundamental part of organic chemistry, and 
+the rationale that emerges from such activities is used for prediction, control and, perhaps most 
+intellectually rewarding, design of new and as-yet untested reactions that can address currently 
+unattainable problems. The Soai reaction is the only example so far of an asymmetric autocatalytic 
+reaction with amplification of stereochemistry and that is also applicable to absolute asymmetric 
+synthesis. 
+
+ 14 
+Erick Carreira and colleagues have developed an asymmetric autocatalytic process for the efficient 
+synthesis of a key intermediate used for the preparation of Efavirenz, an antiretroviral drug used for 
+the treatment of HIV-infection.88 For this case, however, no details of NLE were reported. 
+For the past three decades, the elucidation of a detailed reaction mechanism  for NLE has been a 
+challenging quest that has received considerable interest and has involved several research groups . 
+These efforts have been summarised in an excellent review.67 Here, only a brief summary is outlined 
+of the timeline leading up to our current understanding of the reaction mechanism of the Soai reaction. 
+In the original work led by Soai from 1990, which included discussion of autocatalysis with erosion 
+of the stereochemical information , the reaction was proposed to involve a catalytically active zinc 
+monoalkoxide.23 Five years later, the asymmetric autocatalysis with amplification of the 
+stereochemistry was described; however , it was concluded that detailed understanding of the 
+mechanism remained to be clarified, particularly the underlying reason for the +NLE.24 
+After half a decade, Blackmond, John Brown and collaborators investigated the reaction heat in the 
+Soai reaction and concluded that the data were most consistent with a dimeric catalyst ; i.e. the 
+mechanism previously proposed by Noyori for the addition of dialkylzinc to aldehydes is not 
+applicable in that case.89 In a kinetic modelling of the reaction, Blackmond provided evidence for a 
+tetrameric transition state and reported that the reaction rate and +NLE could be accurately predicted 
+over a wide range of reaction conditions.90 
+In 2007, based on density functional theory (DFT) calculations, Jürgen Klankermayer, Ilya Gridnev 
+and Brown suggested a square -macrocycle-square (SMS) as a most likely end product in a 
+mechanistic pathway , thus superseding the previous dimeric model. 91 Observation of an unusual 
+inverse temperature dependence on the reaction rate in the Soai reaction, together with kinetic studies 
+and NMR investigation, led Brown and Blackmond to propose in 2010 that the active catalyst is 
+derived from the SMS tetrameric species .92 Two years later , Gridnev proposed a catalytic cycle 
+involving the SMS zinc alkoxide, based on DFT calculations.93 
+In 2015, by mixing diisopropyllzinc and 2-alkynylpyrimidylalkanols, Arimasa Matsumoto, Tsuneomi 
+Kawasaki and Soai were able to isolate crystals of the alkoxides, the structures of which were 
+determined by X-ray crystallography: when using an excess of i-Pr2Zn, homochiral and heterochiral 
+tetramers were obtained, the structures of which resemble the SMS complex. In these structures, two 
+zinc alkoxides form Zn2O2 square dimers, and two of these coordinate with each other via an aromatic 
+nitrogen atom of one dimer and a zinc atom of the other dimer, resulting in a 12 -membered 
+macrocycle. Both tetramers contain two unsaturated zinc atoms with the potential to function as 
+ 15 
+Lewis acids and activate an aldehyde, which is required for catalysis. 94 When instead using 1 -2 
+equivalents Et2Zn, oligomeric structures were obtained. 
+The discussion above is complicated by the fact that different mechanisms have been proposed for 
+different substrates (pyridyl -, pyrimidyl -, and 2 -alkynylpyrimidyl carbaldehydes) and different 
+reagents (Et2Zn and i-Pr2Zn). Further weaknesses are that the mechanisms do not explain (i) how the 
+SMS complex, if it is the active catalyst, functions and binds the substrate, (ii) the enantioselectivity 
+and +NLE, (iii) the narrow substrate scope of the Soai reaction, and (iv) the cause of the inverse 
+temperature dependence. 
+Responding to this challenge, Scott Denmark and colleagues proposed a detailed mechanism for the 
+Soai reaction .95-97 Based on kinetic studies, including surrogate substrates, spectroscopic 
+investigations of zinc alkoxides, and DFT calculations, they proposed a mechanism involving the 
+Soai SMS complex in which the substrate coordinates to the homochiral tetramer catalyst through a 
+floor-to-floor arrangement involving two coordinatively unsaturated zinc atoms. In this scenario, 
+transfer of an alkyl moiety to the activated aldehyde then delivers the correct stereoisomeric product. 
+Such floor -to-floor coordination of the substrate is, for geometrical reasons, disfavoured in the 
+heterochiral tetramer, which was clearly indicated in the DFT calculation. This then accounts for the 
+amplification of stereochemistry  in the autocatalytic reaction  and is in line with both the Kagan 
+principle for asymmetric amplification and the Frank model for generation of homochirality. 
+At about the same time, Oliver Trapp and colleagues investigated the Soai reaction mechanism using 
+in situ  HRMS spectrosc opic methods, kinetic simulations and DFT calculations , and proposed a 
+mechanism involving transient hemiacetal zinc complexes  (product-substrate dimer) .98-100 In this 
+mechanism, a diisopropyl zinc alkoxide monomer is in equilibrium with its homo - and heterochiral 
+dimers, with the homochiral structure being the most favoured thermodynamically. Reaction of the 
+monomer with the substrate aldehyde forms a zinc hemiacetal complex and is the slowest step in the 
+catalytic cycle. Addition of the substrate and i-Pr2Zn to this intermediate, followed by intramolecular 
+alkyl transfer and coordination of an additional substrate aldehyde, results in a complex that can now 
+be cleaved into two identical zinc hemiacetal catalysts. 
+In this model , the asymmetric amplification is due to the slow and unfavourable formation of the 
+hemiacetal, but once it is formed, the much faster autocatalytic reaction can proceed. The homo- and 
+heterochiral dimers are not responsible for entrapment of the minor enantiomer and instead provide 
+a kinetic barrier between the monomers and the catalytic cycle. Here, the asymmetric amplification 
+is due to a kinetic ally controlled nonequilibrium stationary state, which is different from the 
+ 16 
+mechanism put forward by Kagan and Frank. The insights gained from this investigation can provide 
+an impetus for developing new asymmetric autocatalytic processes, as argued by the authors. 
+It can be noted that  zinc acetals had previously be en detected as intermediates in the Soai reaction 
+using 1H NMR spectroscopy.101 However, they were later judged not to be involved in the catalytic 
+cycle based on results from DFT calculations.102  
+In addition to this, Jean-Claude Micheau and Thomas Buhse have used XRD data, DFT calculations 
+and selected experimental kinetic data  to build a kinetic and thermodynamic model of the Soai 
+reaction.103 
+Two detailed mechanisms have been put forward for the Soai reaction, differing among other things 
+in the structure of the active catalyst , the rate determining steps  and the cause of the asymmetric 
+amplification. Both models have been argued to be accommodated , considering that different 
+substrates were used in the investigations by Denmark and Trapp, respectively.104 
+Consequences and applications 
+Chirality is a fundamental aspect of molecular structure. The discoveries by Kagan and Soai are 
+groundbreaking and have reshaped our understanding of how chirality can be generated and amplified 
+in a closed system. The concepts are now integrated with our current understanding of asymmetric 
+catalytic processes. NLE in asymmetric catalysis offer a tool for determining reaction mechanisms 
+but have also opened new perspectives in the search for alternative amplification mechanisms. The 
+most illustrious example of this effect is the asymmetric autocatalysis – the Soai reaction – which 
+results in homochirality without assistance of an external chiral factor. The discovery of the Soai 
+reaction has vitalised the search for the origin of biological homochirality. 
+The discoveries awarded with the 2026 Nobel Prize in chemistry have deepened our appreciation of 
+molecular chirality, with implications that extend well beyond the realms of organic chemistry. 
+Peter Somfai 
+Professor of Organic Chemistry, Lund University 
+Member of the Nobel Committee for Chemistry 
+ 17 
+  
+ 18 
+References and footnotes 
+(1) ee (enantiomeric excess) = |R–S| / R+S x100 
+(2) Homochiral: Isometric molecules having the same sense of chirality. All L -amino acids and D -
+sugars are homochiral. (Eliel, E. L.; Wilen, S. H. Stereochemistry of Organic Compounds; Wiley, 
+1994.) 
+(3) Feringa, B. L.; van Delden, R. A. Angew. Chem. Int. Ed. 1999, 38, 3418–3438.  
+(4) One of a pair of molecular species that are mirror images of each other and not superposable. 
+(Eliel, E. L.; Wilen, S. H. Stereochemistry of Organic Compounds; Wiley, 1994.) 
+(5) Breslow, R.; Cheng, Z. L. Proc. Natl. Acad. Sci. U.S.A. 2009, 106, 9144–9146.  
+(6) Hein, J. E.; Blackmond, D. G. Acc. Chem. Res. 2012, 45, 2045–2054.  
+(7) Ribó, J. M.; Hochberg, D.; Crusats, J.; El -Hachemi, Z.; Moyano, A. J. R. Soc. Interface 2017, 14, 
+20170699.  
+(8) Blackmond, D. G. Cold Spring Harbor Perspectives in Biology 2019, 11, a032540.  
+(9) Toxvaerd, S. BioSystems 2025, 253, 105479.  
+(10) Coveney, P. V.; Swadling, J. B.; Wattis, J. A. D.; Greenwell, H. C. Chem. Soc. Rev. 2012, 41, 5430–
+5446.  
+(11) Cruz-Rosas, H. I.; Riquelme, F.; Ramírez-Padrón, A.; Buhse, T.; Cocho, G.; Miramontes, P. Journal 
+of Theoretical Biology 2020, 499, 110316.  
+(12) Brewer, A.; Davis, A. P. Nature chemistry 2014, 6, 569–574.  
+(13) Weller, M. G. The Mystery of Homochirality on Earth. In Life, 2024; Vol. 14, p 341. 
+(14) Brazil, R. Are we closer to understanding the origins of biological homochirality? Chem. Eng. 
+News, May 21, 2026. https://cen.acs.org/articles/104/web/2026/05/closer-understanding-origins-
+biological-homochirality.html 
+(15) Frank, F. C. Biochimica et Biophysica Acta 1953, 11, 459–463.  
+(16) The R and S designations are used to describe the absolute configuration at a four -coordinate 
+stereogenic centre. (Prelog, V. and Helmchen, G. Angew. Chem. Int. Ed. Eng. 1982, 21, 567-583.) 
+(17) Bissette, A. J.; Fletcher, S. P. Angew. Chem. Int. Ed. 2013, 52, 12800–12826.  
+(18) von Kiedrowski, G. Angewandte Chemie International Edition in English 1986, 25, 932–935.  
+(19) Lee, D. H.; Granja, J. R.; Martinez, J. A.; Severin, K.; Ghadiri, M. R. Nature 1996, 382, 525–528.  
+(20) Puchot, C.; Samuel, O.; Dunach, E.; Zhao, S.; Agami, C.; Kagan, H. B. J. Am. Chem. Soc. 1986, 108, 
+2353–2357.  
+(21) Kagan, H. B. SYNLETT 2001, 888–899.  
+(22) Chusov, D.; Molander, G. A.; Ratovelomanana-Vidal, V.; Riant, O.; Schulz, E. ACS Catalysis 2023, 
+13, 11494–11508.  
+(23) Soai, K.; Niwa, S.; Hori, H. Chem. Commun. 1990, 982–983.  
+(24) Soai, K.; Shibata, T.; Morioka, H.; Choji, K. Nature 1995, 378, 767–768.  
+(25) Soai, K. Tetrahedron 2022, 124, 133017.  
+(26) Williams, T.; Pitcher, R. G.; Bommer, P.; Gutzwiller, J.; Uskokovic, M. J. Am. Chem. Soc. 1969, 
+91, 1871–1872.  
+(27) Horeau, A. Tetrahedron Lett. 1969, 10, 3121–3124.  
+(28) Noyori, R.; Kitamura, M. Angew. Chem. Int. Ed. 1991, 30, 49–69.  
+(29) Horeau, A.; Guetté, J. P. Tetrahedron 1974, 30, 1923–1931.  
+(30) Wynberg, H.; Feringa, B. Tetrahedron 1976, 32, 2831–2834.  
+(31) Wynberg, H. Chimia 1976, 30, 445–451.  
+(32) Paquette, L. A.; Itoh, I.; Farnham, W. B. J. Am. Chem. Soc. 1975, 97, 7280–7285.  
+(33) The nomenclature was introduced independently by Kagan and Mikami (Guillaneux, D.; Zhao, 
+S.-H.; Samuel, O.; Rainford, D.; Kagan, H. B. J. Am. Chem. Soc. 1994, 116, 9430 –9439; Mikami, K.; 
+Terada, M. Tetrahedron 1992, 48 (27), 5671–5680). 
+ 19 
+(34) Scalemic: a non-racemic chiral compound. (Eliel, E. L. Chirality 1997, 9, 428–430.)  
+(35) Guillaneux, D.; Zhao, S. -H.; Samuel, O.; Rainford, D.; Kagan, H. B. J. Am. Chem. Soc. 1994, 116, 
+9430–9439.  
+(36) Satyanarayana, T.; Abraham, S.; Kagan, H. B. Angew. Chem. Int. Ed. 2009, 48, 456–494.  
+(37) Blackmond, D. G. J. Am. Chem. Soc. 1997, 119, 12934–12939.  
+(38) Kitamura, M.; Okada, S.; Suga, S.; Noyori, R. J. Am. Chem. Soc. 1989, 111, 4028–4036.  
+(39) Kitamura, M.; Suga, S.; Oka, H.; Noyori, R. J. Am. Chem. Soc. 1998, 120, 9800–9809.  
+(40) Oguni, N.; Matsuda, Y.; Kaneko, T. J. Am. Chem. Soc. 1988, 110, 7877–7878.  
+(41) Hansen, K. B.; Leighton, J. L.; Jacobsen, E. N. J. Am. Chem. Soc. 1996, 118, 10924–10925.  
+(42) Geiger, Y.; Achard, T.; Maisse -François, A.; Bellemin-Laponnaz, S. Chem. Sci. 2020, 11, 12453–
+12463.  
+(43) Geiger, Y.; Achard, T.; Maisse-François, A.; Bellemin-Laponnaz, S. Nature Catalysis 2020, 3, 422–
+426.  
+(44) Blackmond, D. G. Acc. Chem. Res. 2000, 33, 402–411.  
+(45) Blackmond, D. G. J. Am. Chem. Soc. 1998, 120, 13349–13353.  
+(46) Klussmann, M.; Iwamura, H.; Mathew, S. P.; Wells, D. H.; Pandya, U.; Armstrong, A.; Blackmond, 
+D. G. Nature 2006, 441, 621–623.  
+(47) Hayashi, Y.; Matsuzawa, M.; Yamaguchi, J.; Yonehara, S.; Matsumoto, Y.; Shoji, M.; Hashizume, 
+D.; Koshino, H. Angew. Chem. Int. Ed. 2006, 45, 4593–4597.  
+(48) Ali, C.; Blackmond, D. G.; Burés, J. ACS Catalysis 2022, 12, 5776–5785.  
+(49) Yu, J. H.; Blackmond, D. G. Acs Catalysis 2025, 15, 3890–3897.  
+(50) Chiraphos = Ph2P(CHMe)2PPh2. 
+(51) S-Methophos = (S)-[Ph2POCH2CH(NMe2)CH2CH2SMe]; it is readily prepared from methionine. 
+(52) Faller, J. W.; Parr, J. J. Am. Chem. Soc. 1993, 115, 804–805.  
+(53) Faller, J. W.; Sams, D. W. I.; Liu, X. J. Am. Chem. Soc. 1996, 118, 1217–1218.  
+(54) Mikami, K.; Matsukawa, S. Nature 1997, 385, 613–615.  
+(55) Mayer, L. C.; Heitsch, S.; Trapp, O. Acc. Chem. Res. 2022, 55, 3345–3361.  
+(56) Zhao, M.; King, A. O.; Larsen, R. D.; Verhoeven, T. R.; Reider, P. J. Tetrahedron Lett. 1997, 38, 
+2641–2644.  
+(57) Shinkai, I.; King, A. O.; Larsen, R. D. Pure Appl Chem 1994, 66, 1551–1556.  
+(58) King, A. O.; Corley, E. G.; Anderson, R. K.; Larsen, R. D.; Verhoeven, T. R.; Reider, P. J.; Xiang, Y. 
+B.; Belley, M.; Leblanc, Y. J. Org. Chem. 1993, 58, 3731–3735.  
+(59) Girard, C.; Kagan, H. B. Angew. Chem. Int. Ed. 1998, 37, 2922–2959.  
+(60) Blackmond, D. G. Advanced Synthesis & Catalysis 2002, 344, 156–158.  
+(61) Alberts, A. H.; Wynberg, H. J. Am. Chem. Soc. 1989, 111, 7265–7266.  
+(62) Wynberg, H. J. Macromol. Sci. A 1989, 26, 1033–1041.  
+(63) Soai, K.; Yokoyama, S.; Ebihara, K.; Hayasaka, T. Chem. Commun. 1987, 1690–1691.  
+(64) Soai, K.; Hori, H.; Niwa, S. Heterocycles 1989, 29, 2065–2067.  
+(65) Soai, K.; Hayase, T.; Shimada, C.; Isobe, K. Tetrahedron: Asymmetry 1994, 5, 789–792.  
+(66) Soai, K.; Hayase, T.; Takai, K. Tetrahedron: Asymmetry 1995, 6, 637–638.  
+(67) Asymmetric Autocatalysis: The Soai Reaction. Soai, K., Kawasaki, T., Matsumoto, A., Eds.; The 
+Royal Society of Chemistry: 2022. 
+(68) Soai, K. Proceedings of the Japan Academy, Series B 2019, 95, 89–110.  
+(69) Soai, K.; Kawasaki, T.; Matsumoto, A. Acc. Chem. Res. 2014, 47, 3643–3654.  
+(70) Soai, K.; Shibata, T.; Sato, I. Acc. Chem. Res. 2000, 33, 382–390.  
+(71) Sato, I.; Urabe, H.; Ishiguro, S.; Shibata, T.; Soai, K. Angew. Chem. Int. Ed. 2003, 42, 315–317.  
+(72) Shibata, T.; Choji, K.; Hayase, T.; Aizu, Y.; Soai, K. Chem. Commun. 1996, 1235–1236.  
+(73) Sato, I.; Yanagi, T.; Soai, K. Chirality 2002, 14, 166–168.  
+ 20 
+(74) Tanji, S.; Kodaka, Y.; Ohno, A.; Shibata, T.; Sato, I.; Soai, K. Tetrahedron: Asymmetry 2000, 11, 
+4249–4253.  
+(75) Sato, I.; Nakao, T.; Sugie, R.; Kawasaki, T.; Soai, K. Synthesis 2004, 2004, 1419–1428.  
+(76) Kawasaki, T.; Matsumoto, A.; Soai, K. Asymmetric Autocatalysis Initiated by Enantioenriched 
+Chiral Organic Compounds: The Link Between Circularly Polarized Light and Nearly Enantiopure 
+Organic Compounds. In Asymmetric Autocatalysis: The Soai Reaction , Soai, K., Kawasaki, T., 
+Matsumoto, A. Eds.; The Royal Society of Chemistry, 2022; pp 33–42. 
+(77) Matsumoto, A.; Kawasaki, T.; Soai, K. Asymmetric Autocatalysis Triggered by the Chirality of 
+Minerals, Organic Crystals, and Surfaces. In Asymmetric Autocatalysis: The Soai Reaction , Soai, K., 
+Kawasaki, T., Matsumoto, A. Eds.; The Royal Society of Chemistry, 2022; pp 43–64. 
+(78) Barabás, B.; Kurdi, R.; Maioli, M.; Pályi, G. Isotope Chirality and Cosmochemistry1. In 
+Asymmetric Autocatalysis: The Soai Reaction, Soai, K., Kawasaki, T., Matsumoto, A. Eds.; The Royal 
+Society of Chemistry, 2022; pp 75–96. 
+(79) Absolute asymmetric synthesis is the formation of enantiomerically enriched products from 
+achiral precursors without the intervention of chiral chemical reagents or products. (Mislow, K. 
+Collect. Czech. Chem. Commun. 2003, 68, 849–864.) 
+(80) Blackmond, D. G. Proceedings of the National Academy of Sciences 2004, 101, 5732–5736.  
+(81) Buhse, T.; Cruz, J. -M.; Noble-Terán, M. E.; Hochberg, D.; Ribó, J. M.; Crusats, J.; Micheau, J. -C. 
+Chem. Rev. 2021, 121, 2147–2229.  
+(82) Soai, K.; Sato, I.; Shibata, T.; Komiya, S.; Hayashi, M.; Matsueda, Y.; Imamura, H.; Hayase, T.; 
+Morioka, H.; Tabira, H.; et al. Tetrahedron: Asymmetry 2003, 14, 185–188.  
+(83) Singleton, D. A.; Vo, L. K. J. Am. Chem. Soc. 2002, 124, 10010–10011.  
+(84) Singleton, D. A.; Vo, L. K. Org. Lett. 2003, 5, 4337–4339.  
+(85) Soai, K.; Kawasaki, T.; Matsumoto, A. Absolute Asymmetric Synthesis in the Soai Reaction. In 
+Asymmetric Autocatalysis: The Soai Reaction, Soai, K., Kawasaki, T., Matsumoto, A. Eds.; The Royal 
+Society of Chemistry, 2022; pp 65–74. 
+(86) Mislow, K. Collect. Czech. Chem. Commun. 2003, 68, 849–864.  
+(87) Deng, M.; Yu, J.; Blackmond, D. G. Acc. Chem. Res. 2024, 57, 2234–2244.  
+(88) Chinkov, N.; Warm, A.; Carreira, E. M. Angew. Chem. Int. Ed. 2011, 50, 2957–2961.  
+(89) Blackmond, D. G.; McMillan, C. R.; Ramdeehul, S.; Schorm, A.; Brown, J. M. J. Am. Chem. Soc. 
+2001, 123, 10103–10104.  
+(90) Buono, F. G.; Blackmond, D. G. J. Am. Chem. Soc. 2003, 125, 8978–8979.  
+(91) Klankermayer, J.; Gridnev, I. D.; Brown, J. M. Chem. Commun. 2007, 3151–3153.  
+(92) Quaranta, M.; Gehring, T.; Odell, B.; Brown, J. M.; Blackmond, D. G. J. Am. Chem. Soc. 2010, 
+132, 15104–15107.  
+(93) Gridnev, I. D.; Vorobiev, A. K. ACS Catalysis 2012, 2, 2137–2149.  
+(94) Matsumoto, A.; Abe, T.; Hara, A.; Tobita, T.; Sasagawa, T.; Kawasaki, T.; Soai, K. Angew. Chem. 
+Int. Ed. 2015, 54, 15218–15221.  
+(95) Athavale, S. V.; Simon, A.; Houk, K. N.; Denmark, S. E. Nature chemistry 2020, 12, 412–423.  
+(96) Athavale, S. V.; Simon, A.; Houk, K. N.; Denmark, S. E. J. Am. Chem. Soc. 2020, 142, 18387–
+18406.  
+(97) Athavale, S. V.; Denmark, S. E. Demystifying the Soai Reaction1. In Asymmetric Autocatalysis: 
+The Soai Reaction, Soai, K., Kawasaki, T., Matsumoto, A. Eds.; The Royal Society of Chemistry, 2022; 
+pp 199–238. 
+(98) Trapp, O.; Lamour, S.; Maier, F.; Siegle, A. F.; Zawatzky, K.; Straub, B. F. Chem. Eur. J. 2020, 26, 
+15871–15880.  
+(99) Trapp, O. Elucidation of Soai's Asymmetric Autocatalysis. In Asymmetric Autocatalysis: The Soai 
+Reaction, Soai, K., Kawasaki, T., Matsumoto, A. Eds.; The Royal Society of Chemistry, 2022; pp 239–
+272. 
+ 21 
+(100) Möhler, P.; Betzenbichler, G.; Huber, L.; Siegle, A. F.; Trapp, O. Nature Communications 2025, 
+16, 7303.  
+(101) Gehring, T.; Quaranta, M.; Odell, B.; Blackmond, D. G.; Brown, J. M. Angew. Chem. Int. Ed. 
+2012, 51, 9539–9542.  
+(102) Gridnev, I. D.; Vorobiev, A. K. Bulletin of the Chemical Society of Japan 2015, 88, 333–340.  
+(103) Noble-Terán, M. E.; Cruz, J.-M.; Micheau, J.-C.; Buhse, T. ChemCatChem 2018, 10, 642–648.  
+(104) Geiger, Y. Chem. Soc. Rev. 2022, 51, 1206–1211.  
+ 

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GoodCase.xAI · AI 编程好案例画廊</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0b0e14; color:#dfe5ee; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; min-height:100vh; }
+  header { padding:52px 6vw 26px; border-bottom:1px solid #1c2230; }
+  h1 { font-size:30px; letter-spacing:.06em; }
+  h1 b { color:#7aa2ff; }
+  header p { margin-top:10px; color:#8b94a7; font-size:14px; line-height:1.7; }
+  nav.tags { padding:18px 6vw 0; display:flex; gap:10px; flex-wrap:wrap; }
+  .tag { font-size:12px; padding:5px 12px; border:1px solid #2a3245; border-radius:999px; color:#9fb0d0; }
+  main { padding:28px 6vw 70px; display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+  .card { display:block; background:#11151f; border:1px solid #1e2534; border-radius:12px; padding:18px 18px 16px;
+          text-decoration:none; color:inherit; transition:all .18s; position:relative; }
+  .card:hover { border-color:#3b5bdb; transform:translateY(-2px); box-shadow:0 8px 24px rgba(59,91,219,.18); }
+  .card .ns { font-size:11px; letter-spacing:.08em; color:#6f7b93; margin-bottom:10px; }
+  .card h2 { font-size:15px; color:#e8edf7; margin-bottom:8px; word-break:break-all; }
+  .card p { font-size:12.5px; color:#8b94a7; line-height:1.6; min-height:38px; }
+  .card .open { position:absolute; right:16px; bottom:12px; font-size:12px; color:#7aa2ff; opacity:0; transition:opacity .18s; }
+  .card:hover .open { opacity:1; }
+  footer { padding:24px 6vw 40px; color:#5c6577; font-size:12px; border-top:1px solid #1c2230; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GoodCase<b>.xAI</b> · AI 编程好案例画廊</h1>
+  <p>同一套工作环境下, 由 AI Agent 独立完成的成品案例集: 3D 展示、小游戏、工具面板、设计文档工程。
+     按 AI 工具命名空间分组, 持续补充中。</p>
+</header>
+<nav class="tags">
+  <span class="tag">共 27 个案例</span>
+  <span class="tag">Trae 2 · WorkBuddy 10 · ZCode 15</span>
+  <span class="tag">GitHub Pages 在线运行</span>
+</nav>
+<main>
+    <a class="card" href="trae/index.html">
+      <div class="ns">Trae · trae/</div>
+      <h2>AURORA-9</h2>
+      <p>AURORA-9 · Orbital Insertion — Pad LC-12</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="trae/glsl-poster/index.html">
+      <div class="ns">Trae · trae/</div>
+      <h2>glsl-poster</h2>
+      <p>ORBITAL CORE · 霓虹轨道海报 — WebGL2 + 原生 GLSL</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/buckshot-roulette/index.html">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>buckshot-roulette +2 页</h2>
+      <p>恶魔轮盘——直面天命！ · BUCKSHOT ROULETTE</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/buckshot-roulette-v2/index.html">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>buckshot-roulette-v2 +2 页</h2>
+      <p>恶魔轮盘——直面天命！ · BUCKSHOT ROULETTE</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/eaves/index.html">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>eaves +21 页</h2>
+      <p>檐下 · UNDER THE EAVES</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/pelican-bicycle/index.html">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>pelican-bicycle</h2>
+      <p>鹈鹕骑自行车 · Pelican on a Bicycle</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/pelican-bicycle-3d/index.html">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>pelican-bicycle-3d +1 页</h2>
+      <p>鹈鹕骑自行车 3D · 正常版</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/pelican-bicycle-3d-standalone.html">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>pelican-bicycle-3d-standalone</h2>
+      <p>鹈鹕骑自行车 3D · 正常版</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/rocket-launch-sim/src/index.html">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>rocket-launch-sim +36 页</h2>
+      <p>火箭发射模拟器 · Rocket Launch Simulator (MVP 原型)</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/tideline/dist/index.html">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>tideline +35 页</h2>
+      <p>潮线 TIDELINE · 测试版 v0.1.0</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/tidewater-fish-site/index.html">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>tidewater-fish-site +5 页</h2>
+      <p>Tidewater</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="workbuddy/token-dashboard/README.md">
+      <div class="ns">WorkBuddy · workbuddy/</div>
+      <h2>token-dashboard +1 页</h2>
+      <p>token-dashboard</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/aurora-ocean.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>aurora-ocean</h2>
+      <p>极光海洋 · WebGL2 原生 GLSL</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/cat-pet-console/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>cat-pet-console +1 页</h2>
+      <p>NEKO PAL · 猫咪掌机</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/neon-hex-physics/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>neon-hex-physics +1 页</h2>
+      <p>NEON HEX · 物理沙盒</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/neon-tetris/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>neon-tetris +1 页</h2>
+      <p>NEON TETRIS — SRS · 7-BAG · T-SPIN</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/rocket-launch-sim/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>rocket-launch-sim +1 页</h2>
+      <p>AURORA-9 · Orbital Insertion · Pad LC-17</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/shark-arcade/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>shark-arcade +1 页</h2>
+      <p>BIG SHARK · 复古街机鲨鱼</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/T1密室3D游戏开发33m-74m-61m/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>T1密室3D游戏开发33m-74m-61m +3 页</h2>
+      <p>三重密室 · 3D 密室逃脱</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/T2最新政策SI京都愿景调查54m-12m-7m17s/调查报告-AI改名SI事实核查.md">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>T2最新政策SI京都愿景调查54m-12m-7m17s</h2>
+      <p>T2最新政策SI京都愿景调查54m-12m-7m17s</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/T3诺奖化学科普GPT5.6Sol-65min-Sonnet5.5-12min-GLM5.3F-55min/00-资料来源与事实核查.md">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>T3诺奖化学科普GPT5.6Sol-65min-Sonnet5.5-12min-GLM5.3F-55min +4 页</h2>
+      <p>T3诺奖化学科普GPT5.6Sol-65min-Sonnet5.5-12min-GLM5.3F-55min</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/WebGL2-原生GLSL技术详解.md">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>WebGL2-原生GLSL技术详解</h2>
+      <p>WebGL2-原生GLSL技术详解</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F +2 页</h2>
+      <p>极光海洋 · WebGL2 原生 GLSL</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F-perf/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F-perf +1 页</h2>
+      <p>极光海洋 · 性能优化版（4 版本可切换）</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/路人甲TM1鹈鹕骑自行车3D版/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>路人甲TM1鹈鹕骑自行车3D版 +1 页</h2>
+      <p>澳洲鹈鹕的海边骑行 · Three.js</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/路人甲TM2星际水族箱/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>路人甲TM2星际水族箱 +1 页</h2>
+      <p>3D 透明水箱交互模拟</p>
+      <span class="open">打开 →</span>
+    </a>
+    <a class="card" href="zcode/路人甲TM3平面后室游戏/index.html">
+      <div class="ns">ZCode · zcode/</div>
+      <h2>路人甲TM3平面后室游戏 +3 页</h2>
+      <p>档案层 B4 · 2D 俯视角恐怖逃生</p>
+      <span class="open">打开 →</span>
+    </a>
+</main>
+<footer>GoodCase.xAI · generated gallery · 由 AI Agent 构建的每个案例均可直接打开运行</footer>
+</body>
+</html>

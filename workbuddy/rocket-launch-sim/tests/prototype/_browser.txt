@@ -1,0 +1,15 @@
+
+═══ 浏览器冒烟测试 ═══
+  ✅ WorldScene 已激活  · [{"k":"WorldScene","a":true},{"k":"HudScene","a":true}]
+  ✅ HudScene 已激活  · [{"k":"WorldScene","a":true},{"k":"HudScene","a":true}]
+  ✅ Phaser 渲染器就绪
+  ✅ 按住 Space 进入倒计时/充能  · CHARGING
+  ✅ 5 动词键位事件无异常  · 0 errors
+  ✅ 浏览器内核跑完并入轨  · {"outcome":"SUCCESS","judgement":"PRECISE","t":81.00833333334387,"periKm":15.08819912089873,"apoKm":8827.124213927702,"omega":100,"maxQkPa":16.46980111792179,"source":"B"}
+  ✅ 浏览器结果与 Node 一致（时长 ±2s / 近地点 ±0.5km）  · t=81.01 peri=15.09
+  ✅ Ω 模态 B 曾激活  · B
+
+  控制台错误：0
+  截图：tests/prototype/browser-screenshot.png
+
+  8/8 通过 · 无控制台报错 ✅

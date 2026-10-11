@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>手性放大实验台 · 2026 诺贝尔化学奖教学演示</title>
+<style>
+  :root{
+    --ink:#17222e; --muted:#5b6b7b; --line:#d8e0e8; --bg:#f4f6f9; --card:#ffffff;
+    --r:#c8452c; --s:#2456a6; --accent:#0e7a5f; --warn-bg:#fff7e0; --warn-line:#e8c35a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI","Noto Sans CJK SC",sans-serif;
+    font-size:15.5px; line-height:1.65;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px 60px}
+  header{padding:26px 0 10px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:.5px}
+  .sub{color:var(--muted);margin:0;font-size:15px}
+  .disclaimer{
+    margin:14px 0 6px;padding:12px 16px;border:1.5px solid var(--warn-line);
+    background:var(--warn-bg);border-radius:10px;font-size:14.5px;
+  }
+  .disclaimer b{color:#8a6100}
+  .tabs{display:flex;gap:8px;margin:18px 0 14px;flex-wrap:wrap}
+  .tabs button{
+    border:1px solid var(--line);background:#fff;color:var(--muted);
+    padding:9px 16px;border-radius:999px;font-size:14.5px;cursor:pointer;font-family:inherit;
+  }
+  .tabs button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px}
+  section{display:none}
+  section.active{display:block}
+  .lab-grid{display:grid;grid-template-columns:330px 1fr;gap:16px}
+  @media (max-width:900px){.lab-grid{grid-template-columns:1fr}}
+  .controls .row{margin:13px 0}
+  .controls label{display:flex;justify-content:space-between;font-size:13.5px;color:var(--muted);margin-bottom:3px}
+  .controls label output{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .presets{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+  .presets button{
+    border:1px solid var(--line);background:#fbfcfe;border-radius:9px;padding:8px 9px;
+    font-size:13px;cursor:pointer;text-align:left;font-family:inherit;color:var(--ink);line-height:1.4;
+  }
+  .presets button:hover{border-color:var(--accent);background:#f0f9f5}
+  .presets button .tag{display:block;color:var(--muted);font-size:11.5px}
+  .btnrow{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .btnrow button{
+    flex:1;border:none;border-radius:9px;padding:10px 12px;font-size:14.5px;cursor:pointer;
+    font-family:inherit;font-weight:600;
+  }
+  #btnRun{background:var(--accent);color:#fff}
+  #btnRun:disabled{background:#9db8af;cursor:wait}
+  #btnReset{background:#eef1f5;color:var(--ink);border:1px solid var(--line)}
+  #btnRoll{background:#eef1f5;color:var(--ink);border:1px solid var(--line)}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:10px}
+  .caption{
+    margin-top:10px;padding:9px 12px;border-radius:9px;background:#eef7f3;
+    border:1px dashed #b7d9cb;font-size:13.5px;
+  }
+  .readouts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0 4px}
+  @media (max-width:640px){.readouts{grid-template-columns:repeat(2,1fr)}}
+  .chip{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+  .chip .k{font-size:12px;color:var(--muted)}
+  .chip .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+  .chip .v.win-r{color:var(--r)} .chip .v.win-s{color:var(--s)}
+  .stackbar{display:flex;height:34px;border-radius:9px;overflow:hidden;border:1px solid var(--line);margin:8px 0 4px}
+  .stackbar .r{background:var(--r);transition:width .5s}
+  .stackbar .s{background:var(--s);transition:width .5s;flex:1}
+  .barlegend{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted)}
+  .barlegend b{font-variant-numeric:tabular-nums}
+  canvas{width:100%;display:block}
+  .check{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--muted);margin-top:8px}
+  h2{font-size:20px;margin:2px 0 10px}
+  h3{font-size:16px;margin:18px 0 6px}
+  p{margin:8px 0}
+  .small{font-size:13px;color:var(--muted)}
+  code,pre{font-family:Consolas,"Courier New",monospace}
+  pre{
+    background:#0f1720;color:#dce6f0;border-radius:10px;padding:13px 15px;overflow-x:auto;
+    font-size:13px;line-height:1.6;
+  }
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:10px 0}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:#f2f5f8}
+  ol,ul{margin:8px 0;padding-left:22px}
+  li{margin:4px 0}
+  a{color:#0b62a4}
+  #nleTip{
+    position:fixed;display:none;pointer-events:none;background:#0f1720;color:#fff;
+    font-size:12.5px;padding:6px 9px;border-radius:7px;z-index:9;white-space:nowrap;
+  }
+  footer{border-top:1px solid var(--line);margin-top:26px;padding-top:14px;font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>手性放大实验台</h1>
+  <p class="sub">2026 年诺贝尔化学奖（Kagan &amp; Soai）互动演示：微小初始偏差如何在自催化过程中被放大</p>
+</header>
+
+<div class="disclaimer">
+  ⚠️ <b>教学模型声明</b>：本页面是一个<b>简化的教学模型</b>（Frank 1953 年模型思路的连续/分批实现），只用于展示
+  "微小初始手性偏差在自催化循环中被正反馈放大"这一概念。
+  它<b>不是对 Soai 反应精确动力学的复现</b>：所有参数（q、ee<sub>max</sub>、σ、前体当量）均为示意性选择，未与任何真实实验数据拟合；
+  真实 Soai 反应的催化物种（锌醇盐低聚体/四聚体）与速率方程远比本模型复杂。定量结论请以官方科学背景文件与原始文献为准（见页脚来源）。
+</div>
+
+<nav class="tabs">
+  <button data-tab="lab" class="active">① 自催化放大实验台</button>
+  <button data-tab="nle">② Kagan 非线性效应曲线</button>
+  <button data-tab="model">③ 模型说明与真实反应的差别</button>
+</nav>
+
+<!-- ============ Tab 1: 实验台 ============ -->
+<section id="tab-lab" class="active">
+  <div class="lab-grid">
+    <aside class="card controls">
+      <h2 style="font-size:17px;margin-top:0">反应参数</h2>
+
+      <div class="row">
+        <label>初始对映体过量 ee₀（R − S）<output id="o-ee0"></output></label>
+        <input type="range" id="s-ee0" min="-5" max="2" step="0.01" value="0.7">
+      </div>
+      <div class="row">
+        <label>拮抗/封存强度 q（异手复合物惰性化）<output id="o-q"></output></label>
+        <input type="range" id="s-q" min="0" max="0.99" step="0.01" value="0.5">
+      </div>
+      <div class="row">
+        <label>固有对映选择性 ee<sub>max</sub><output id="o-eemax"></output></label>
+        <input type="range" id="s-eemax" min="50" max="100" step="0.1" value="95">
+      </div>
+      <div class="row">
+        <label>统计涨落 σ<output id="o-sigma"></output></label>
+        <input type="range" id="s-sigma" min="0" max="0.5" step="0.01" value="0">
+      </div>
+      <div class="row">
+        <label>每批前体当量（相对标准投料）<output id="o-A"></output></label>
+        <input type="range" id="s-A" min="2" max="100" step="1" value="80">
+      </div>
+
+      <h3 style="margin-top:16px">情景预设</h3>
+      <div class="presets">
+        <button data-preset="p1">Soai 1995 型：5% 起步<span class="tag">分批放大到 ~90% 平台（示意）</span></button>
+        <button data-preset="p2">近乎无中生有：0.00005%<span class="tag">接力三批冲到 &gt;99.5%（示意）</span></button>
+        <button data-preset="p3">对照 · 完美复印机<span class="tag">q=0：微小偏差永远保持微小</span></button>
+        <button data-preset="p4">对照 · 复印走样<span class="tag">q=0 且选择性欠佳：ee 反被稀释</span></button>
+        <button data-preset="p5">随机对称破缺<span class="tag">ee₀=0 + 涨落：运气决定左右</span></button>
+      </div>
+
+      <div class="btnrow">
+        <button id="btnRun">▶ 接力：再加一批前体</button>
+        <button id="btnReset">↺ 重置</button>
+        <button id="btnRoll">🎲 重掷涨落</button>
+      </div>
+      <div class="hint">
+        「接力」对应 Soai 实验的真实做法：取上一批产物作为下一批的催化剂（保留它的 ee），按相同浓度标准再加入
+        N 当量新鲜前体。放大不是一次完成的，而是一批一批滚起来的。
+      </div>
+      <div class="caption" id="caption"></div>
+    </aside>
+
+    <div class="card viz">
+      <h2 style="font-size:17px;margin-top:0">对映体过量 ee 随反应批次的演化</h2>
+      <canvas id="eeChart" height="380"></canvas>
+      <label class="check"><input type="checkbox" id="chkContrast" checked>
+        同图显示对照：无放大机制的"完美复印机"（虚线）</label>
+
+      <div class="readouts">
+        <div class="chip"><div class="k">当前批次</div><div class="v" id="rBatch">—</div></div>
+        <div class="chip"><div class="k">当前 ee</div><div class="v" id="rEE">—</div></div>
+        <div class="chip"><div class="k">相对初始的放大</div><div class="v" id="rGain">—</div></div>
+        <div class="chip"><div class="k">领先的对映体</div><div class="v" id="rWin">—</div></div>
+      </div>
+
+      <div class="stackbar"><div class="r" id="barR" style="width:50%"></div><div class="s"></div></div>
+      <div class="barlegend">
+        <span><b style="color:var(--r)">■</b> R 型分子 <b id="cntR">—</b></span>
+        <span id="barEE" style="font-weight:700">—</span>
+        <span><b id="cntS">—</b> S 型分子 <b style="color:var(--s)">■</b></span>
+      </div>
+      <p class="small" style="margin-top:6px">
+        ee（对映体过量）= (R − S)/(R + S) × 100%。ee = 0% 是外消旋（左右各半）；ee = 100% 是纯手性。
+        R/S 只是两种镜像体的标签，与"左旋/右旋"没有必然对应。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Tab 2: Kagan NLE ============ -->
+<section id="tab-nle">
+  <div class="card">
+    <h2 style="margin-top:0">非线性效应：产物的 ee 为什么能超过催化剂的 ee？</h2>
+    <div style="display:grid;grid-template-columns:1.25fr .85fr;gap:18px" class="nle-grid">
+      <div>
+        <canvas id="nleChart" height="430"></canvas>
+        <p class="small">对角虚线 = 1986 年之前人人相信的"线性关系"：产物 ee = 上限 ee × 催化剂 ee。
+        在对角线上方的区域，产物的手性纯度<b>超过</b>投入的手性纯度——这就是 Kagan 在 1986 年发现的
+        正非线性效应（+NLE，也称不对称放大）。图上三个实点均为真实实验数据（来源：官方科学背景文件）。</p>
+      </div>
+      <div>
+        <h3>怎么读这张图</h3>
+        <p>催化剂往往不止含一个手性配体。以两个配体的 ML₂ 型催化剂为例：除了"全 R"和"全 S"
+        两种同手复合物，还会形成"R+S"的异手复合物。Kagan 的关键洞察是：
+        <b>如果异手复合物活性更低（或干脆惰性），少数派配体就会被它们拖住甚至锁进"储库"，</b>
+        真正干活的是被"提纯"过的多数派——产物 ee 因此越过催化剂 ee。</p>
+        <p>蓝色曲线是理想化统计模型（假设只有同手二聚体有活性）：
+        ee<sub>产物</sub> = 2e/(1+e²)。催化剂只有 50% ee 时，产物可达 80% ee；
+        绿色曲线是 ML₃（三配体）情形，放得更狠。</p>
+        <ul>
+          <li><b>红点（15% → 98%）</b>：Noyori 组的 DAIB 体系，"储库效应"的著名实例——异手二聚体把少数派配体封存起来。</li>
+          <li><b>橙点（70% → 95%）</b>：Merck 合成白三烯拮抗剂 L-699,392 时，用只有 70% 光学纯度的 α-蒎烯制备还原剂，产物达到 95% ee。</li>
+          <li><b>紫点（5% → 55%）</b>：Soai 1995 年自催化反应的第一轮——非线性效应在"自我复制"循环里运转起来。</li>
+        </ul>
+        <p class="small">若异手复合物反而更活泼，则出现负非线性效应（−NLE，产物 ee 低于线性预期）——
+        Kagan 1986 年的三个体系里就同时包含 +NLE 与 −NLE，使 NLE 成为推断催化机理的诊断工具。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Tab 3: 模型说明 ============ -->
+<section id="tab-model">
+  <div class="card">
+    <h2 style="margin-top:0">这个演示用的是什么模型？它与真实的 Soai 反应差多远？</h2>
+
+    <h3>一、模型方程（Frank 1953 思路的连续介质版本）</h3>
+    <p>设 R、S 为两种对映体的量，A 为非手性前体，τ 为无量纲时间。每步：</p>
+    <pre>dR/dτ = (A/S)·κ·[ R<sub>act</sub>·(1+ee<sub>max</sub>)/2 + S<sub>act</sub>·(1−ee<sub>max</sub>)/2 ] + (A/S)·k₀/2
+dS/dτ = (A/S)·κ·[ S<sub>act</sub>·(1+ee<sub>max</sub>)/2 + R<sub>act</sub>·(1−ee<sub>max</sub>)/2 ] + (A/S)·k₀/2
+R<sub>act</sub> = R − q·min(R,S)，  S<sub>act</sub> = S − q·min(R,S)
+dA/dτ = −(dR/dτ + dS/dτ)</pre>
+    <p>三项含义：</p>
+    <ul>
+      <li><b>自催化生产</b>（κ 项）：产物的量越多，生产越快——这是"自我复制"。ee<sub>max</sub> 是催化剂"复印"自己时的固有保真度。</li>
+      <li><b>拮抗/封存</b>（q 项）：异手（R+S）复合物没有催化活性，按比例把少数派锁进"储库"——多数派的有效纯度因此被提高。这正是 Kagan 非线性效应的机制思想，也是放大能够发生的根源：放大条件为 q &gt; 1 − ee<sub>max</sub>。</li>
+      <li><b>背景本底</b>（k₀ 项）：不依赖催化剂的慢速非手性生成，保证 ee₀=0 的体系中仍有随机涨落可以起步（对应"统计涨落/对称破缺"情景）。</li>
+    </ul>
+    <p>分批"接力"时，上一批产物按其 ee 转入下一批充当催化剂（投料浓度与第一批相同），并再加入 A₀ 当量的新鲜前体——对应 Soai 实验中"以上一批产物为催化剂、连续分批操作"的做法。</p>
+
+    <h3>二、为什么说它不是对 Soai 反应的精确动力学复现</h3>
+    <ol>
+      <li><b>催化物种被极度简化。</b>真实 Soai 反应是二异丙基锌对嘧啶-5-甲醛（2-炔基取代衍生物效果最佳）的加成，生成嘧啶基醇；活性催化剂是锌醇盐形成的同手/异手<b>四聚体</b>（2015 年已培养出单晶并测定结构，呈 12 元大环"方-大环-方"（SMS）构型），不是本模型里的"两物种 + 一个封存分数"。</li>
+      <li><b>速率方程被简化。</b>真实体系动力学阶数更高、多聚体间存在平衡，且存在反常的逆温度依赖；机理至今仍有两套竞争性解释（Denmark 等的"floor-to-floor"底物配位路径与 Trapp 等的半缩醛锌路径），本模型的单一方程只是定性示意。</li>
+      <li><b>参数未拟合。</b>q、ee<sub>max</sub>、前体当量等只是为了呈现趋势而手选的示意值；预设情景的输出（如 "~90% 平台"、">99.5%"）只在定性上呼应 Soai 1995 与 2003 年论文报告的实验现象，<b>不应被引用为真实数值</b>。</li>
+      <li><b>真实实验远比模型粗糙。</b>需严格无水操作、ee 用手性色谱等方法测定、单批转化率有限等，这些在本模型中都被抽象掉了。</li>
+    </ol>
+    <p><b>本演示可以讲的</b>：Frank 模型的三条判据（自催化、对映选择性催化、相互拮抗）如何协同产生"多数派愈强、少数派愈弱"的正反馈；为什么没有拮抗项（q=0）时 ee 只会保持或被稀释；为什么起点低到 0.00005% 也能被接力放大。这些定性逻辑正是 2026 年诺贝尔化学奖表彰的发现。</p>
+    <p><b>本演示不能讲的</b>：Soai 反应的产率、反应时间、温度效应、真实动力学常数，以及任何定量预测。</p>
+
+    <h3>三、官方材料关键事实备查</h3>
+    <table>
+      <tr><th>事实</th><th>内容</th></tr>
+      <tr><td>获奖人与理由</td><td>Henri B. Kagan（1930 年生于法国 Boulogne-Billancourt）与 Kenso Soai（1950 年生于日本广岛），"for the discovery of non-linear effects and autocatalysis in asymmetric organic synthesis"。2026 年 10 月 7 日宣布，奖金 1200 万瑞典克朗平分。</td></tr>
+      <tr><td>Kagan 1986</td><td>Puchot, Samuel, Duñach, Zhao, Agami &amp; Kagan, <i>J. Am. Chem. Soc.</i> 1986, 108, 2353–2357：在三个不对称反应（硫醚氧化、香叶醇 Sharpless 环氧化、Hajos–Parrish 反应）中发现产物 ee 与配体 ee 的非线性关系。</td></tr>
+      <tr><td>Soai 1990</td><td>二异丙基锌对吡啶-3-甲醛的加成可自催化且对映选择，但产物 ee（35%）低于催化剂 ee（86%）——满足 Frank 三条件中的两条，尚无放大。</td></tr>
+      <tr><td>Soai 1995</td><td><i>Nature</i> 1995, 378, 767–768：嘧啶-5-甲醛体系。5% ee 起步，五轮连续自催化放大至 90% 平台（第一轮即达 55%，第二轮 87%）。</td></tr>
+      <tr><td>Soai 2003</td><td><i>Angew. Chem. Int. Ed.</i> 2003, 42, 315–317：从 ee 低至 0.00005% 的种子出发，三轮连续反应后产物 ee &gt;99.5%，立体异构比放大 63 万倍。</td></tr>
+      <tr><td>绝对不对称合成</td><td>从完全无手性起点出发（Soai 与 Singleton 各自独立），37 次实验中 18 次得 R、19 次得 S，产物 ee 介于 15%–91%——手性可以由统计涨落随机产生并被放大。</td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  来源（访问日期 2026-10-10）：
+  <a href="https://www.nobelprize.org/prizes/chemistry/2026/press-release/">诺贝尔奖新闻公报</a> ·
+  <a href="https://www.nobelprize.org/prizes/chemistry/2026/popular-information/">科普背景 "They solved chemistry's asymmetric mystery"</a> ·
+  <a href="https://www.nobelprize.org/uploads/2026/10/advanced-chemistryprize2026.pdf">科学背景 PDF（Non-linear effects and autocatalysis in asymmetric organic synthesis）</a> ·
+  <a href="https://www.nobelprize.org/prizes/chemistry/2026/summary/">获奖者页</a>。<br>
+  本页为单文件离线演示，无任何外部依赖；模型为教学示意，与真实实验参数无关。沙利度胺等药物案例的讨论见配套文档。
+</footer>
+</div>
+
+<div id="nleTip"></div>
+
+<script>
+"use strict";
+/* ================= 工具 ================= */
+const $ = s => document.querySelector(s);
+const SUP = {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','-':'⁻'};
+const sup = n => String(n).split('').map(c=>SUP[c]||c).join('');
+function fmtEE(x){
+  if (!isFinite(x)) return '—';
+  const a = Math.abs(x);
+  if (a >= 1)    return x.toFixed(1).replace(/\.0$/,'') + '%';
+  if (a >= 0.01) return x.toFixed(3).replace(/\.?0+$/,'') + '%';
+  if (a >= 1e-6) return x.toFixed(7).replace(/0+$/,'').replace(/\.$/,'') + '%';
+  return x.toExponential(1) + '%';
+}
+function fmtCount(x){
+  if (x < 1e6) return Math.round(x).toLocaleString('zh-CN');
+  const e = Math.floor(Math.log10(x));
+  return (x/10**e).toFixed(2) + '×10' + sup(e);
+}
+function trimZ(s){ return s.replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,''); }
+
+/* ================= 模型 ================= */
+const SCALE = 1e5, KAPPA = 0.5, K0 = 0.001, DT = 5e-4, STEPS = 24000, SAMPLE = 50, TAU_END = STEPS*DT;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* 单批积分：world = {R,S,A}；返回轨迹采样 [{t,ee,R,S}] 与末态 */
+function runBatch(w, p, seed){
+  const rng = mulberry32(seed);
+  const randn = () => { let u=0,v=0; while(u===0)u=rng(); while(v===0)v=rng();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+  const traj = [{t:0, ee:100*(w.R-w.S)/(w.R+w.S), R:w.R, S:w.S}];
+  for (let i=1;i<=STEPS;i++){
+    const m = Math.min(w.R, w.S);
+    const Ra = w.R - p.q*m, Sa = w.S - p.q*m;
+    const f = (w.A/SCALE)*KAPPA, base = (w.A/SCALE)*K0/2;
+    const pR = f*(Ra*(1+p.eemax)/2 + Sa*(1-p.eemax)/2) + base;
+    const pS = f*(Sa*(1+p.eemax)/2 + Ra*(1-p.eemax)/2) + base;
+    const nR = p.sigma ? p.sigma*pR*randn() : 0;
+    const nS = p.sigma ? p.sigma*pS*randn() : 0;
+    w.R = Math.max(0, w.R + (pR+nR)*DT);
+    w.S = Math.max(0, w.S + (pS+nS)*DT);
+    w.A -= (pR+pS)*DT;
+    if (i % SAMPLE === 0)
+      traj.push({t:i*DT, ee:100*(w.R-w.S)/(w.R+w.S), R:w.R, S:w.S});
+    if (w.A <= SCALE*1e-6){ w.A = 0; break; }  // 指数衰减不会精确归零，按实用阈值判定前体耗尽
+  }
+  traj.tEnd = traj[traj.length-1].t || DT;
+  return traj;
+}
+
+/* ================= 世界状态 ================= */
+let W = null, SEED = 42, animating = false, animReq = 0, animTimer = 0;
+
+function stopAnim(){
+  if (animReq) cancelAnimationFrame(animReq);
+  if (animTimer) clearTimeout(animTimer);
+  animating = false;
+}
+
+function paramsFromUI(){
+  return {
+    ee0:   Math.pow(10, parseFloat($('#s-ee0').value)),
+    q:     parseFloat($('#s-q').value),
+    eemax: parseFloat($('#s-eemax').value)/100,
+    sigma: parseFloat($('#s-sigma').value),
+    A0eq:  parseFloat($('#s-A').value),
+  };
+}
+function resetWorld(reroll){
+  if (reroll) SEED = (Math.random()*1e9)|0;
+  const p = paramsFromUI();
+  W = { p, R: SCALE/2*(1+p.ee0/100), S: SCALE/2*(1-p.ee0/100),
+        A: p.A0eq*SCALE, batch:0, main:[], ghost:[], ee0:p.ee0 };
+  runNextBatch(true);
+}
+function runNextBatch(animate){
+  stopAnim();   // 动画进行中也不丢点击：先强制收尾上一段动画
+  W.batch++;
+  if (W.batch > 1){
+    // 接力（对应真实分批实验）：取上一批产物作为下一批催化剂（保留其 ee），
+    // 按与第一批相同的浓度标准投料，再加 A0eq 当量新鲜前体
+    const e = (W.R - W.S)/(W.R + W.S);
+    W.R = SCALE/2*(1+e); W.S = SCALE/2*(1-e);
+    W.A = W.p.A0eq*SCALE;
+  }
+  const seed = SEED + W.batch*7919;
+  // 主世界
+  const tMain = runBatch(W, W.p, seed);
+  // 对照世界（无放大：q=0, eemax=1, 无涨落），从同一初始状态出发
+  const g = { R: tMain[0].R, S: tMain[0].S, A: W.p.A0eq*SCALE };
+  const tGhost = runBatch(g, {q:0, eemax:1, sigma:0}, seed+13);
+  W.main.push(tMain); W.ghost.push(tGhost);
+  drawChart(animate ? 0 : 1);
+  updateReadouts();
+}
+
+/* ================= 读数与说明 ================= */
+function updateReadouts(){
+  const cur = W.main[W.main.length-1].slice(-1)[0];
+  const ee = cur.ee, abs0 = Math.abs(W.ee0);
+  $('#rBatch').textContent = '第 ' + W.batch + ' 批';
+  const rEE = $('#rEE'); rEE.textContent = fmtEE(ee);
+  rEE.className = 'v' + (ee > 1e-9 ? ' win-r' : ee < -1e-9 ? ' win-s' : '');
+  $('#rGain').textContent = abs0 > 0 ? '×' + trimZ((Math.abs(ee)/abs0).toPrecision(3)) : '—（从零起步）';
+  const win = $('#rWin');
+  if (Math.abs(ee) < 1e-9){ win.textContent = '未分胜负'; win.className='v'; }
+  else { win.textContent = ee > 0 ? 'R 型' : 'S 型'; win.className = 'v ' + (ee>0?'win-r':'win-s'); }
+  const tot = cur.R + cur.S;
+  $('#barR').style.width = (100*cur.R/tot).toFixed(3) + '%';
+  $('#cntR').textContent = fmtCount(cur.R);
+  $('#cntS').textContent = fmtCount(cur.S);
+  $('#barEE').textContent = 'ee = ' + fmtEE(ee);
+  // 动态解说
+  const p = W.p; let msg;
+  if (p.q <= 0.001 && p.eemax >= 0.999)
+    msg = '复印机模式：产物忠实继承催化剂的手性（q=0、ee_max=100%）。没有拮抗机制，再微小的偏差也只会被原样复制——不会被抹平，也不会被放大。';
+  else if (p.q <= 0.001)
+    msg = '复印走样模式：催化剂的固有选择性不足（ee_max = ' + trimZ((p.eemax*100).toFixed(1)) + '%）且没有封存机制，新产物比催化剂更"混"，手性信号在复制中被稀释。这对应 Soai 1990 年的反应：催化剂 ee 86%，产物只有 35%。';
+  else
+    msg = '封存机制生效（q = ' + trimZ((p.q*100).toFixed(0)) + '%）：异手复合物把少数派锁进"储库"，多数派以更高的有效纯度自我复制——ee 随批次滚动放大。理论上限 ee ≈ 1 − (1−ee_max)/q = ' + fmtEE(100*(1-(1-p.eemax)/p.q)) + '。';
+  $('#caption').textContent = msg;
+}
+
+/* ================= 图表 1：ee 演化 ================= */
+function fitCanvas(cv){
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 800, h = parseInt(cv.getAttribute('height'));
+  cv.width = w*dpr; cv.height = h*dpr;
+  cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx, w, h};
+}
+function drawChart(progress){
+  const {ctx, w, h} = fitCanvas($('#eeChart'));
+  const L = 56, Rp = 14, T = 16, B = 34;
+  const pw = w-L-Rp, ph = h-T-B;
+  const yOf = ee => T + ph/2 - ee/105*(ph/2);
+  // 网格
+  ctx.clearRect(0,0,w,h);
+  ctx.font = '12px sans-serif'; ctx.fillStyle = '#5b6b7b'; ctx.strokeStyle = '#e3e9ef';
+  ctx.lineWidth = 1;
+  for (const gv of [-100,-50,0,50,100]){
+    const y = yOf(gv);
+    ctx.beginPath(); ctx.moveTo(L,y); ctx.lineTo(w-Rp,y);
+    ctx.strokeStyle = gv===0 ? '#c3cdd7' : '#e3e9ef'; ctx.stroke();
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(gv+'%', L-8, y);
+  }
+  ctx.save();
+  ctx.translate(14, T+ph/2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center'; ctx.fillText('ee（对映体过量）', 0, 0);
+  ctx.restore();
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('反应进度（每格 = 一批接力）', L+pw/2, h-B+8);
+  // 批次分隔线与标签
+  const nB = Math.max(W.batch,1), seg = pw/nB;
+  ctx.fillStyle='#5b6b7b'; ctx.textAlign='center';
+  for (let b=0;b<nB;b++) ctx.fillText('第'+(b+1)+'批', L+(b+0.5)*seg, T+2);
+  for (let b=1;b<nB;b++){
+    const x = L + b*seg;
+    ctx.setLineDash([4,4]); ctx.strokeStyle='#b9c4cf';
+    ctx.beginPath(); ctx.moveTo(x,T+16); ctx.lineTo(x,T+ph); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  const drawSeries = (seriesArr, color, dash, progressK) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.setLineDash(dash||[]);
+    let lastPt = null;
+    seriesArr.forEach((traj, bi) => {
+      const tEnd = traj.tEnd || TAU_END;
+      const n = Math.min(traj.length, Math.max(2, Math.floor(traj.length * progressK)));
+      ctx.beginPath();
+      for (let i=0;i<n;i++){
+        const pt = traj[i];
+        const x = L + (bi + Math.min(pt.t/tEnd, 1))*seg, y = yOf(pt.ee);
+        i ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+        lastPt = {x,y,ee:pt.ee};
+      }
+      ctx.stroke();
+    });
+    return lastPt;
+  };
+  const pk = progress>=1 ? 1 : Math.max(0.02, progress);
+  if ($('#chkContrast').checked) drawSeries(W.ghost, '#9aa7b3', [6,5], pk);
+  const last = drawSeries(W.main, '#0f172a', [], pk);
+  // 终点
+  if (last && progress>=1){
+    const winColor = last.ee > 1e-9 ? getCSS('--r') : last.ee < -1e-9 ? getCSS('--s') : '#5b6b7b';
+    ctx.fillStyle = winColor;
+    ctx.beginPath(); ctx.arc(last.x, last.y, 4.5, 0, 7); ctx.fill();
+    ctx.font = 'bold 12.5px sans-serif'; ctx.textAlign = last.x > w-90 ? 'right' : 'left';
+    ctx.fillText(fmtEE(last.ee), last.x + (last.x>w-90?-9:9), last.y-16);
+  }
+}
+function getCSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+/* 动画：progress 0→1（rAF 不可用时由看门狗兜底收尾；期间不禁用按钮，
+   新点击经 runNextBatch/resetWorld 中的 stopAnim 强制收尾旧动画） */
+function animateChart(){
+  stopAnim();
+  animating = true;
+  const t0 = performance.now(), DUR = 900;
+  let done = false;
+  const finish = () => {
+    if (done) return; done = true;
+    animating = false; drawChart(1);
+  };
+  const tick = now => {
+    if (done) return;
+    const k = Math.min(1, (now-t0)/DUR);
+    drawChart(1-Math.pow(1-k, 2));
+    if (k < 1) animReq = requestAnimationFrame(tick);
+    else finish();
+  };
+  animReq = requestAnimationFrame(tick);
+  animTimer = setTimeout(finish, DUR + 400);
+}
+
+/* ================= 图表 2：NLE 曲线 ================= */
+const NLE_PTS = [
+  {x:15, y:98, c:'#c8452c', label:'Noyori DAIB（储库效应）'},
+  {x:70, y:95, c:'#e08a1e', label:'Merck L-699,392（α-蒎烯 70% 光学纯）'},
+  {x:5,  y:55, c:'#7a4fb3', label:'Soai 1995 第一轮（自催化 +NLE）'},
+];
+function drawNLE(){
+  const {ctx, w, h} = fitCanvas($('#nleChart'));
+  const L=56, Rp=16, T=14, B=42, pw=w-L-Rp, ph=h-T-B;
+  const X = e => L + e/100*pw, Y = v => T + ph - v/105*ph;
+  ctx.clearRect(0,0,w,h);
+  ctx.font='12px sans-serif';
+  // 放大区着色
+  ctx.fillStyle='rgba(14,122,95,.07)';
+  ctx.beginPath(); ctx.moveTo(X(0),Y(0));
+  for(let e=0;e<=100;e+=2) ctx.lineTo(X(e), Y(105));
+  ctx.lineTo(X(100),Y(0)); ctx.closePath(); ctx.fill();
+  // 网格与坐标
+  ctx.strokeStyle='#e3e9ef'; ctx.fillStyle='#5b6b7b'; ctx.lineWidth=1;
+  for (const g of [0,25,50,75,100]){
+    ctx.beginPath(); ctx.moveTo(X(g),T); ctx.lineTo(X(g),T+ph); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(L,Y(g)); ctx.lineTo(w-Rp,Y(g)); ctx.stroke();
+    ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText(g+'%', X(g), T+ph+6);
+    ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.fillText(g+'%', L-8, Y(g));
+  }
+  ctx.save(); ctx.translate(14, T+ph/2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center'; ctx.fillText('产物 ee', 0, 0); ctx.restore();
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('催化剂 / 配体的 ee（投入的手性纯度）', L+pw/2, T+ph+24);
+  // 线性基准
+  ctx.strokeStyle='#98a4b0'; ctx.setLineDash([6,5]); ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.moveTo(X(0),Y(0)); ctx.lineTo(X(100),Y(100)); ctx.stroke();
+  ctx.setLineDash([]);
+  // ML2 / ML3
+  const f2 = e => { const f=e/100; return 2*f/(1+f*f)*100; };
+  const f3 = e => { const f=e/100; return f*(3+f*f)/(1+3*f*f)*100; };
+  const curve = (fn,color) => {
+    ctx.strokeStyle=color; ctx.lineWidth=2.4; ctx.beginPath();
+    for(let e=0;e<=100;e+=1){ const x=X(e), y=Y(fn(e)); e?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+    ctx.stroke();
+  };
+  curve(f2,'#2456a6'); curve(f3,'#0e9c6d');
+  // 曲线标注
+  ctx.font='bold 12.5px sans-serif'; ctx.fillStyle='#2456a6'; ctx.textAlign='left';
+  ctx.fillText('ML₂', X(37), Y(f2(37))-8);
+  ctx.fillStyle='#0e9c6d'; ctx.fillText('ML₃', X(27), Y(f3(27))-10);
+  ctx.fillStyle='#7b8894'; ctx.fillText('线性基准（无放大）', X(80)+6, Y(80)+4);
+  ctx.fillStyle='#0e7a5f'; ctx.textAlign='right'; ctx.fillText('↖ 放大区（+NLE）', X(16), Y(96));
+  // 数据点
+  for (const p of NLE_PTS){
+    ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(X(p.x),Y(p.y),5,0,7); ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+  }
+  // 悬停
+  const cv = $('#nleChart');
+  cv.onmousemove = ev => {
+    const rect = cv.getBoundingClientRect();
+    const mx = (ev.clientX-rect.left)*(cv.width/(window.devicePixelRatio||1))/rect.width;
+    const my = (ev.clientY-rect.top)*(cv.height/(window.devicePixelRatio||1))/rect.height;
+    let best=null;
+    for (const p of NLE_PTS){
+      const d = Math.hypot(mx-X(p.x), my-Y(p.y));
+      if (!best || d<best.d) best={d,p};
+    }
+    const tip=$('#nleTip');
+    if (best && best.d<18){
+      tip.style.display='block';
+      tip.style.left=(ev.clientX+14)+'px'; tip.style.top=(ev.clientY+12)+'px';
+      tip.textContent=best.p.label+'：'+best.p.x+'% ee → '+best.p.y+'% ee';
+    } else tip.style.display='none';
+  };
+  cv.onmouseleave = () => { $('#nleTip').style.display='none'; };
+}
+
+/* ================= 预设 ================= */
+const PRESETS = {
+  p1:{ee0:5,       q:0.50, eemax:0.95,  sigma:0,   A0eq:80, log:Math.log10(5)},
+  p2:{ee0:0.00005, q:0.95, eemax:0.998, sigma:0,   A0eq:30, log:-4.301},
+  p3:{ee0:0.1,     q:0,    eemax:1.0,   sigma:0,   A0eq:30, log:-1},
+  p4:{ee0:86,      q:0,    eemax:0.5,   sigma:0,   A0eq:5,  log:Math.log10(86)},
+  p5:{ee0:0,       q:0.95, eemax:0.998, sigma:0.2, A0eq:30, log:-5},
+};
+function applyPreset(key){
+  const p = PRESETS[key];
+  $('#s-ee0').value = p.log;
+  $('#s-q').value = p.q; $('#s-eemax').value = p.eemax*100;
+  $('#s-sigma').value = p.sigma; $('#s-A').value = p.A0eq;
+  syncOutputs(); resetWorld(false); animateChart();
+}
+
+/* ================= UI 绑定 ================= */
+function fmtEE0(x){
+  if (x>=1) return trimZ(x.toFixed(2))+'%';
+  if (x>=0.01) return trimZ(x.toFixed(4))+'%';
+  if (x>=1e-6) return trimZ(x.toFixed(7))+'%';
+  return x.toExponential(1)+'%';
+}
+function syncOutputs(){
+  const p = paramsFromUI();
+  $('#o-ee0').textContent = fmtEE0(p.ee0);
+  $('#o-q').textContent = trimZ((p.q*100).toFixed(0)) + '%';
+  $('#o-eemax').textContent = trimZ((p.eemax*100).toFixed(1)) + '%';
+  $('#o-sigma').textContent = trimZ((p.sigma*100).toFixed(0)) + '%';
+  $('#o-A').textContent = p.A0eq + ' 当量';
+}
+let deb = 0;
+function onParamChange(){
+  syncOutputs();
+  clearTimeout(deb);
+  deb = setTimeout(()=>{ resetWorld(false); animateChart(); }, 140);
+}
+document.querySelectorAll('.controls input[type=range]').forEach(el=>{
+  el.addEventListener('input', onParamChange);
+});
+$('#chkContrast').addEventListener('change', ()=>{ if (W) drawChart(1); });
+$('#btnRun').addEventListener('click', ()=>{ if (W){ runNextBatch(true); animateChart(); } });
+$('#btnReset').addEventListener('click', ()=>{ resetWorld(false); animateChart(); });
+$('#btnRoll').addEventListener('click', ()=>{ resetWorld(true); animateChart(); });
+document.querySelectorAll('.presets button').forEach(b=>{
+  b.addEventListener('click', ()=>applyPreset(b.dataset.preset));
+});
+document.querySelectorAll('.tabs button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('section').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    $('#tab-'+b.dataset.tab).classList.add('active');
+    if (b.dataset.tab==='nle') drawNLE();
+    if (b.dataset.tab==='lab' && W) drawChart(1);
+  });
+});
+window.addEventListener('resize', ()=>{
+  if (W && $('#tab-lab').classList.contains('active')) drawChart(1);
+  if ($('#tab-nle').classList.contains('active')) drawNLE();
+});
+
+/* 启动 */
+syncOutputs();
+resetWorld(false);
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+=== syntax ===
+ok src/main.js
+ok src/render/game-state.js
+ok src/render/hud.js
+ok src/render/palette.js
+ok src/render/world.js
+ok src/core/atmosphere.js
+ok src/core/constants.js
+ok src/core/failure.js
+ok src/core/flight-model.js
+ok src/core/judgement.js
+ok src/core/launch-sequence.js
+ok src/core/omega.js
+ok src/core/orbit-solver.js
+ok src/core/player-model.js
+ok src/core/simulation.js
+ok src/core/staging.js
+ok tests/prototype/baseline-timeline.mjs
+ok tests/prototype/browser-smoke.mjs
+ok tests/prototype/early-phase-experiment.mjs
+ok tests/prototype/measure-budget.mjs
+ok tests/prototype/open-loop-port-check.mjs
+ok tests/prototype/run-closed-loop.mjs
+ok tests/prototype/shot.mjs
+ok tests/prototype/verify-prototype.mjs
+=== port ===
+
+─── 断言 ───
+  ✅ 时长 ∈ [79.5,82.5]           81.01
+  ✅ 近地点 ∈ [13.5,17.0]km        15.09
+  ✅ 动压 ∈ [15.5,17.5]kPa        16.47
+  ✅ 动压时刻 ∈ [18.5,20.0]s        19.12
+  ✅ TWR0 ∈ [2.65,2.74]         2.693
+  ✅ Δv ∈ [2630,2640]           2634.9
+  ✅ 严格入轨                       ELLIPTIC peri=15.09
+  ✅ SECO 质量≈12000              11998.2
+  ✅ 分离后质量恒等式                   16500.0
+
+  端口一致性：9/9 通过
+=== closed-loop ===
+  ── 关键断言（RT-1 R4 的解除判据）──
+  ✅ A 正常玩家能入轨                      PRECISE
+  ✅ A 时长接近基准 81s（±4s）              81.02 s
+  ✅ A 近地点接近 15km（±2km）             15.03 km
+  ✅ 全部弹道 Ω 回退 = 0                  0/0/0/0/0/0
+  ✅ 全部弹道无 NaN 泄漏                   
+  ✅ 切换跳变 ≤ 0.5%                    0.011/0.011/0.015/0.015/0.018
+  ✅ 安全窗口内分离质量恒为 16500              
+  ✅ 多路径成立（低抛&高抛均入轨）                
+  ✅ 新手失败路径可触发                      ESCAPE_TRAJ
+
+  闭环判据：9/9 通过
+
+  结果已写入 tests/prototype/closed-loop-results.json
+=== verify ===
+  ✅ 演出期间不可跳过 (<1.7s 锁定)  · 由 canRestart 门控
+
+══════════════════════════════════════════════
+  原型验证：41/41 通过 ✅
+══════════════════════════════════════════════

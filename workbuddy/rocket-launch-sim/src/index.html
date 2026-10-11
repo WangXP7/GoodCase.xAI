@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>火箭发射模拟器 · Rocket Launch Simulator (MVP 原型)</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #0b1026; overflow: hidden;
+    font-family: system-ui, sans-serif;
+  }
+  #game { width: 100vw; height: 100vh; display: block; }
+  #game canvas { display: block; margin: 0 auto; }
+  /* 光敏安全：首次启动提示的极简呈现，不自动播放任何闪烁 */
+  #boot-hint {
+    position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
+    color: #5FD8E8; font: 13px/1.4 "Courier New", monospace;
+    letter-spacing: .08em; pointer-events: none; opacity: .85;
+    transition: opacity 1.2s ease;   /* 启动后自动淡出，避免遮挡顶部任务带 */
+  }
+  #boot-hint.gone { opacity: 0; }
+</style>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="boot-hint">1920×1080 · Scale.FIT · 光敏安全：震屏/闪烁默认开启，可按 M 切换「减少动效」</div>
+  <script>
+    // 启动提示 3.5s 后淡出，之后不再遮挡顶部任务带
+    setTimeout(() => { const el = document.getElementById('boot-hint'); if (el) el.classList.add('gone'); }, 3500);
+  </script>
+  <script src="./vendor/phaser.min.js"></script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

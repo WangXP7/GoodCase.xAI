@@ -1,0 +1,68 @@
+
+── V1 · Ω 单调/连续（独立重算，不读模块自报 switchJump） ──
+✅ [V1-a] Ω 逐帧 = 独立实现的 S7 公式（Δ<1e-9）  · maxΔ=0.00e+0 @T+0.0s
+✅ [V1-b] 独立重算 Ω 全程回退 = 0  · 回退=0
+✅ [V1-c] 全程逐帧 |ΔΩ| 无跳变（< 1% 条宽）  · max逐帧Δ=0.083% · p99.9=0.079%
+✅ [V1-d] 切换帧跳变 vs 常规帧跳变（该指标是否真的在测"切换"）  · 切换帧Δ=0.0180% · p99.9=0.0793% · 比值=0.23× → 切换处与普通帧无差异，模块的 switchJump 度量的是常规单步增量，不构成对"不连续"的检验
+✅ [V1-e] 无死区：任意 8s 窗口 Ω 增量 ≥ 4.0%（S7 A7-3）  · 最差增量=5.96%
+✅ [V1-f] 切换时刻 ∈ [58,68]s（S7 A7-4）  · T+61.61s
+✅ [V1-g] 模态 B 可读时长 ≥ 12s（S7 A7-5）  · 19.40s
+
+── V2 · 3 秒重开硬指标（真实 1/60s 帧驱动） ──
+✅ [V2-a] 已进入失败态  · FAILURE · ESCAPE_TRAJ
+✅ [V2-b] 失败后 ≤3.0s 可重开  · 1.72s（103 帧 @60fps）
+✅ [V2-c] 解锁前 canRestart 恒为 false（演出锁定）  · 首次解锁于第 103 帧 ≈ 1.72s
+✅ [V2-d] 重开锁定实测时长（替代原套件的硬编码 true 断言）  · canRestart 门限 = 1.72s
+✅ [V2-e] 重开后回到 IDLE 且 Ω=0 / t=0  · phase=IDLE Ω=0 t=0 outcome=null
+✅ [V2-f] 重开后第二局与第一局末状态逐位一致  · rx/ry/vx/vy/m/t 全等
+
+── V3 · 异常输入鲁棒性（NaN / Infinity / 巨帧 / 负帧 / 乱按 / 倒计时操作） ──
+❌ [V3-a] NaN 输入被拒或净化（不留 NaN）  · NaN 泄漏到 fm.rx（θ=NaN, h=NaN, m=NaN）
+✅ [V3-b] Infinity 输入被夹紧（不留 Inf/NaN）  · ok
+✅ [V3-c-巨帧 1e6] frameDt=巨帧 1e6 不崩溃且状态有限  · 推进至 T+1.050s
+✅ [V3-c-Infinity 帧] frameDt=Infinity 帧 不崩溃且状态有限  · 推进至 T+1.050s
+✅ [V3-c-负帧 -1] frameDt=负帧 -1 不崩溃且状态有限  · 推进至 T+0.008s
+✅ [V3-c-NaN 帧] frameDt=NaN 帧 不崩溃且状态有限  · 推进至 T+0.008s
+✅ [V3-c-零帧 0] frameDt=零帧 0 不崩溃且状态有限  · 推进至 T+1.008s
+⚠️  [V3-c-NaNFreeze] NaN 帧把积分器永久冻结（acc=NaN，物理不再推进）  · NaN 帧后 T+0.008s（对照正常帧 T+1.008s）—— 无异常抛出、无 NaN 泄漏，但状态机静默卡死
+✅ [V3-d] 随机乱按 40 局（含倒计时中操作）无崩溃  · 崩溃 0/40
+✅ [V3-e] 随机乱按 40 局无 NaN/Inf 泄漏到物理态  · 全部有限
+✅ [V3-f] 倒计时期间猛按配平/节流/分离：序列不被破坏  · phase=COUNTDOWN · 分离未误触发(stage=1)
+✅ [V3-g] 倒计时中按 ESC → 回 IDLE，不计失败  · phase=IDLE outcome=null
+
+── V4 · 全部 FailureCode 可达性普查 ──
+✅ [V4-a] 失败码可达性普查完成  · 可达 4/9：ESCAPE_TRAJ, DESTRUCT_AERO, SEP_HIGHQ, INSUFFICIENT_DV
+❌ [V4-b] FailureCode.DESTRUCT_ALPHA 不可达（死代码，P2 归因降级）  · failure.js detect() 条件① q>Q_STRUCT 先于条件② 返回，② 同时要求 q>Q_STRUCT ⇒ 永久被遮蔽；高攻角解体永远被报成「气动解体」而非「箭体折断」
+⚠️  [V4-c] 其余不可达失败码（现有测试覆盖缺口）  · TUMBLE, IMPACT, SEQUENCE_FAULT, ABORT
+    可达明细：{"ESCAPE_TRAJ":"T+81.0s","DESTRUCT_AERO":"T+21.7s","SEP_HIGHQ":"T+14.0s","INSUFFICIENT_DV":"T+81.0s (hTurn=40000)"}
+
+── V5 · control-manifest 约束审计（依赖隔离 / 确定性 / 热路径分配） ──
+✅ [V5-a] core 无 phaser / render / DOM 依赖（B1）  · clean
+✅ [V5-b] core 无 Math.random / Date.now / window（D4）  · clean
+❌ [V5-c] 热路径零分配（Z3）：每物理步是否分配数组/对象  · judgement.js: update() 每步 const ev=[] | launch-sequence.js: update() 每步 const ev=[] | omega.js: _window.push({...}) 每步分配对象 | simulation.js: update() 每步 const ev=[] | staging.js: update() 每步 const ev=[]
+⚠️  [V5-d] Z2：hudModel()/get() 是否复用缓冲对象  · 返回新对象：judgement.js,omega.js
+✅ [V5-e] 实测堆增长/步（含 omega._window 每步 push 对象）  · 10083 步 · 净增 86280 B · 8.6 B/步 
+
+── V6 · Ω 成功/失败分离度（S7 A7-6，现有套件未覆盖） ──
+✅ [V6-a] 入轨组与未入轨组 Ω 终值不重叠（S7 A7-6）  · 入轨 5 组 min=99.4% · 失败 45 组 max=98.9% · 重叠=false
+✅ [V6-b] 未入轨组的最高 Ω（潜在"看着满条却没入轨"）  · Ω=98.9% · 码=ESCAPE_TRAJ · hTurn=10500 p=2
+✅ [V6-c] 可行入轨窗口（玩家通道，防主导策略红线）  · 入轨 5/50 组 · 按 hTurn 分布：hTurn=0: 0/5 · hTurn=500: 0/5 · hTurn=1500: 0/5 · hTurn=3000: 0/5 · hTurn=6000: 1/5 · hTurn=7500: 2/5 · hTurn=10500: 2/5 · hTurn=20000: 0/5 · hTurn=60000: 0/5 · hTurn=1000000000: 0/5
+    V6 网格：0/0.2=ESCAPE_TRAJ(76%) 0/0.5=ESCAPE_TRAJ(76%) 0/0.8=ESCAPE_TRAJ(76%) 0/1.2=ESCAPE_TRAJ(76%) 0/2=ESCAPE_TRAJ(76%) 500/0.2=DESTRUCT_AERO(15%) 500/0.5=DESTRUCT_AERO(14%) 500/0.8=DESTRUCT_AERO(14%) 500/1.2=DESTRUCT_AERO(13%) 500/2=DESTRUCT_AERO(13%) 1500/0.2=DESTRUCT_AERO(25%) 1500/0.5=DESTRUCT_AERO(20%) 1500/0.8=DESTRUCT_AERO(18%) 1500/1.2=DESTRUCT_AERO(17%) 1500/2=DESTRUCT_AERO(15%) 3000/0.2=SEP_HIGHQ(50%) 3000/0.5=DESTRUCT_AERO(37%) 3000/0.8=DESTRUCT_AERO(31%) 3000/1.2=DESTRUCT_AERO(26%) 3000/2=DESTRUCT_AERO(21%) 6000/0.2=TUMBLE(27%) 6000/0.5=OK(99%) 6000/0.8=INSUFFICIENT_DV(98%) 6000/1.2=SEP_HIGHQ(53%) 6000/2=SEP_HIGHQ(55%) 7500/0.2=TUMBLE(30%) 7500/0.5=OK(100%) 7500/0.8=OK(100%) 7500/1.2=ESCAPE_TRAJ(98%) 7500/2=SEP_HIGHQ(54%) 10500/0.2=TUMBLE(35%) 10500/0.5=INSUFFICIENT_DV(96%) 10500/0.8=OK(99%) 10500/1.2=OK(100%) 10500/2=ESCAPE_TRAJ(99%) 20000/0.2=TUMBLE(48%) 20000/0.5=INSUFFICIENT_DV(76%) 20000/0.8=INSUFFICIENT_DV(76%) 20000/1.2=INSUFFICIENT_DV(79%) 20000/2=INSUFFICIENT_DV(95%) 60000/0.2=INSUFFICIENT_DV(76%) 60000/0.5=INSUFFICIENT_DV(76%) 60000/0.8=INSUFFICIENT_DV(76%) 60000/1.2=INSUFFICIENT_DV(76%) 60000/2=INSUFFICIENT_DV(76%) 1000000000/0.2=ESCAPE_TRAJ(76%) 1000000000/0.5=ESCAPE_TRAJ(76%) 1000000000/0.8=ESCAPE_TRAJ(76%) 1000000000/1.2=ESCAPE_TRAJ(76%) 1000000000/2=ESCAPE_TRAJ(76%)
+
+── V7 · 不可退化硬指标（回归防线） ──
+✅ [V7-a] 单局时长 ∈ [60,90]s（P3）  · 81.01s
+✅ [V7-b] 近地点 ≥ 13.5km 严格入轨  · 15.09km
+✅ [V7-c] 峰值动压 < 30kPa（结构极限余量）  · 16.47kPa
+✅ [V7-d] Ω 回退 = 0（生命线）  · 见 V1-b 独立验证
+✅ [V7-e] TWR0 标定值 2.693  · 2.693
+✅ [V7-f] 总 Δv 标定值 2634.9  · 2634.9
+❌ [V7-g] core 无硬编码 300000/15000（S1 唯一真值源）  · failure.js
+⚠️  [V7-h] 重开门限 1.70s 是否被复制到常量表  · 同一魔法数 1.70 同时硬编码在 core/simulation.js 与 render/hud.js —— 任一处改动会使面板与门控失同步（P3 红线无单一真值源）
+
+── V8 · V5 中止（Abort）分阶段生效性 ──
+❌ [V8-a] 飞行段（FLIGHT）按 ESC 中止生效  · phase=FLIGHT outcome=null · _abortPulse 残留未消费=true
+✅ [V8-b] 松绑段（RELEASE）按 ESC 中止生效  · phase=ABORTED
+✅ [V8-c] 倒计时段按 ESC 回 IDLE（不计失败）  · phase=IDLE
+❌ [V8-d] FailureCode.ABORT 可达（P4 中止演出）  · 从未失败
+
+══════════ 独立验证：38 通过 / 6 失败 / 4 存疑 ══════════

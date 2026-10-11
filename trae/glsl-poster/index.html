@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORBITAL CORE · 霓虹轨道海报 — WebGL2 + 原生 GLSL</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#05060d; }
+  canvas { display:block; width:100vw; height:100vh; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<!-- ============================================================
+     顶点着色器 — 全屏三角形，仅传递坐标
+     ============================================================ -->
+<script id="vs" type="x-shader/x-vertex">
+#version 300 es
+in vec2 a_pos;
+void main(){
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+</script>
+
+<!-- ============================================================
+     片元着色器 — 像素级还原《ORBITAL CORE》设计稿
+     坐标约定：p 为中心等比坐标（y 向上），uv 为 0..1 屏幕坐标
+     ============================================================ -->
+<script id="fs" type="x-shader/x-fragment">
+#version 300 es
+precision highp float;
+
+uniform vec2  u_res;      // 画布分辨率
+uniform float u_time;     // 时间（秒）
+uniform vec2  u_mouse;    // 鼠标（中心等比坐标，y 向上）
+
+out vec4 outColor;
+
+/* ---------- 工具函数 ---------- */
+float hash21(vec2 p){
+  p = fract(p * vec2(234.34, 435.345));
+  p += dot(p, p + 34.23);
+  return fract(p.x * p.y);
+}
+
+/* ---------- 主程序 ---------- */
+void main(){
+  /* 基础坐标：p 为中心等比坐标，uv 为屏幕坐标 */
+  vec2 uv = gl_FragCoord.xy / u_res.xy;
+  float aspect = u_res.x / u_res.y;
+  vec2 p = (gl_FragCoord.xy * 2.0 - u_res.xy) / min(u_res.x, u_res.y);
+  p.x *= 1.0; // p 保持 y 轴为短边单位，x 随 aspect 拉伸
+
+  vec3 col = vec3(0.0);
+
+  /* ---------- ① 底色：深空蓝紫纵向渐变 ---------- */
+  vec3 top = vec3(0.014, 0.028, 0.085);
+  vec3 mid = vec3(0.090, 0.022, 0.120);
+  vec3 bot = vec3(0.006, 0.010, 0.028);
+  col = mix(bot, mid, smoothstep(0.0, 0.55, uv.y));
+  col = mix(col, top, smoothstep(0.55, 1.0, uv.y));
+
+  /* ---------- ② 右上角大径向光晕 ---------- */
+  vec3  glowC = vec3(0.22, 0.05, 0.55);
+  vec2  glowPos = vec2(0.78 * aspect, 0.62);
+  float gd = length(p - glowPos);
+  col += glowC * exp(-gd * gd * 3.2) * 0.75;
+  col += vec3(0.12, 0.02, 0.30) * exp(-gd * gd * 1.2) * 0.5;
+
+  /* ---------- ③ 发光核心（画面下方） ---------- */
+  vec3  cyan   = vec3(0.16, 0.90, 1.00);
+  vec3  purple = vec3(0.70, 0.30, 1.00);
+  vec2  coreC  = vec2(0.0, -0.42);
+  float dc = length(p - coreC);
+
+  // 内层亮核
+  col += cyan * exp(-dc * dc * 40.0) * 0.9;
+  // 中圈青色光晕
+  col += cyan * exp(-dc * dc * 8.0) * 0.30;
+  // 外层紫色弥散
+  col += purple * exp(-dc * dc * 2.2) * 0.35;
+
+  /* ---------- ④ 两条虚线轨道环（椭圆，带角度断点=虚线） ---------- */
+  float t = u_time;
+  vec3  ringCols[2];
+  ringCols[0] = cyan * 1.1;
+  ringCols[1] = purple * 1.0;
+  float ringR[2];
+  ringR[0] = 0.62;   // 内环半径
+  ringR[1] = 0.90;   // 外环半径
+  float ringE[2];
+  ringE[0] = 0.46;   // 内环椭圆压扁（偏圆）
+  ringE[1] = 0.80;   // 外环椭圆压扁（更扁）
+
+  for(int i = 0; i < 2; i++){
+    float r   = ringR[i];
+    float ecc = ringE[i];
+    // 椭圆距离：x 轴尺度为 r，y 轴尺度为 r*ecc
+    float d = length(vec2(p.x - coreC.x, (p.y - coreC.y) / ecc)) - r;
+    // 环带宽度（越靠外越细）
+    float w = 0.028 - float(i) * 0.010;
+    float band = smoothstep(w, w * 0.25, abs(d));
+
+    // 虚线：按角度切成若干段，并随环形自转
+    float ang = atan(p.y - coreC.y, p.x - coreC.x);
+    float spin = (i == 0) ? 0.25 : -0.16;
+    float segs = (i == 0) ? 6.0 : 10.0;
+    float a2 = ang * segs / 6.2831853 + t * spin;
+    float dash = smoothstep(-0.35, 0.35, sin(a2 * 6.2831853));
+    dash = smoothstep(0.15, 0.65, dash);
+
+    // 光晕外溢 + 实线主体
+    float glow = smoothstep(w * 3.0, w, abs(d)) * dash;
+    col += ringCols[i] * glow * 0.25;
+    col += ringCols[i] * band * dash * 0.9;
+  }
+
+  /* ---------- ⑤ 沿外环运行的霓虹卫星 ---------- */
+  {
+    float satR = ringR[1];
+    float ecc  = ringE[1];
+    // 卫星在椭圆轨道上运动
+    float sa = t * 0.5 + 1.2;
+    vec2 sat = coreC + vec2(cos(sa) * satR, sin(sa) * satR * ecc);
+    float sd = length(p - sat);
+    col += cyan * exp(-sd * sd * 90.0) * 1.2;
+    col += purple * exp(-sd * sd * 18.0) * 0.8;
+    // 卫星尾迹（沿运动方向拖出的光带）
+    float trail = 0.0;
+    for(int k = 0; k < 6; k++){
+      float bt = float(k) * 0.10;
+      vec2 tpos = coreC + vec2(cos(sa - bt) * satR, sin(sa - bt) * satR * ecc);
+      float td = length(p - tpos);
+      trail += exp(-td * td * 38.0) * (0.35 - float(k) * 0.05);
+    }
+    col += cyan * trail;
+  }
+
+  /* ---------- ⑥ 背景星点 ---------- */
+  {
+    float starScale = 26.0;
+    vec2 sp = p * starScale;
+    sp.x *= aspect;
+    vec2 cell = floor(sp);
+    vec2 fr = fract(sp) - 0.5;
+    float h = hash21(cell);
+    float star = smoothstep(0.045, 0.0, length(fr)) * step(0.92, h);
+    // 缓慢闪烁
+    float tw = 0.6 + 0.4 * sin(u_time * 2.0 + h * 40.0);
+    col += vec3(0.75, 0.85, 1.0) * star * tw * 0.8;
+  }
+
+  /* ---------- ⑦ 底部发光地平线 ---------- */
+  {
+    float hy = p.y + 0.86;
+    float horizon = smoothstep(0.18, 0.0, hy);
+    col += vec3(0.12, 0.35, 0.90) * exp(-abs(hy) * 14.0) * 0.55;
+    // 地平线光带
+    col += cyan * horizon * 0.18;
+  }
+
+  /* ---------- ⑧ 鼠标追光 ---------- */
+  {
+    float md = length(p - u_mouse);
+    col += vec3(0.30, 0.55, 1.0) * exp(-md * md * 5.0) * 0.12;
+  }
+
+  /* ---------- ⑨ 扫描线 + 胶片颗粒 ---------- */
+  col += (sin(gl_FragCoord.y * 0.9) * 0.5 + 0.5) * 0.012;
+  col += (hash21(gl_FragCoord.xy + fract(u_time) * 7.13) - 0.5) * 0.045;
+
+  /* ---------- ⑩ 暗角 (vignette) ---------- */
+  {
+    vec2 vp = uv - 0.5;
+    float v = smoothstep(1.05, 0.25, length(vp * vec2(0.85, 1.0)));
+    col *= mix(0.55, 1.0, v);
+  }
+
+  outColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+/* ============================================================
+   WebGL2 初始化 + 全屏三角形渲染循环（原生 API，无第三方库）
+   ============================================================ */
+(function(){
+  const canvas = document.getElementById('gl');
+  const gl = canvas.getContext('webgl2', { antialias:true, alpha:false });
+  if (!gl) {
+    document.body.textContent = '当前浏览器不支持 WebGL2';
+    return;
+  }
+
+  function compile(type, src){
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      throw new Error(gl.getShaderInfoLog(sh));
+    }
+    return sh;
+  }
+
+  const vs = compile(gl.VERTEX_SHADER, document.getElementById('vs').textContent.trim());
+  const fs = compile(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent.trim());
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(prog));
+  }
+  gl.useProgram(prog);
+
+  // 全屏三角形（3 个顶点覆盖整个裁剪空间）
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1,-1,   3,-1,   -1,3
+  ]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+  // uniform 位置
+  const uRes    = gl.getUniformLocation(prog, 'u_res');
+  const uTime   = gl.getUniformLocation(prog, 'u_time');
+  const uMouse  = gl.getUniformLocation(prog, 'u_mouse');
+
+  // 鼠标（初始为屏幕中心，转为"中心等比坐标"）
+  const mouse = { x:0.0, y:0.0 };
+  canvas.addEventListener('pointermove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = 1.0 - (e.clientY - rect.top) / rect.height;
+    const aspect = canvas.width / canvas.height;
+    mouse.x = (px * 2.0 - 1.0) * aspect;
+    mouse.y = py * 2.0 - 1.0;
+  });
+
+  function resize(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width  = Math.floor(innerWidth * dpr);
+    canvas.height = Math.floor(innerHeight * dpr);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  const start = performance.now();
+  function frame(now){
+    const t = (now - start) / 1000.0;
+    gl.uniform2f(uRes, canvas.width, canvas.height);
+    gl.uniform1f(uTime, t);
+    gl.uniform2f(uMouse, mouse.x, mouse.y);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

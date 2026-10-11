@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>NEON HEX · 物理沙盒</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #04060c; }
+  body { font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  #stage { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+
+  /* ---------- 顶部标题栏 ---------- */
+  .topbar {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px 9px 20px;
+    background: rgba(10, 16, 28, .55);
+    border: 1px solid rgba(34, 211, 238, .28);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 0 24px rgba(34, 211, 238, .12), inset 0 0 18px rgba(34, 211, 238, .05);
+    z-index: 10; user-select: none;
+  }
+  .topbar .title {
+    color: #cffafe; font-size: 14px; font-weight: 600; letter-spacing: 3px;
+    text-shadow: 0 0 12px rgba(34, 211, 238, .8);
+    white-space: nowrap;
+  }
+  .topbar .title b { color: #22d3ee; }
+  #btnToggle {
+    width: 26px; height: 26px; border-radius: 8px;
+    border: 1px solid rgba(34, 211, 238, .35);
+    background: rgba(34, 211, 238, .1); color: #67e8f9;
+    font-size: 16px; line-height: 1; cursor: pointer;
+    transition: all .15s;
+  }
+  #btnToggle:hover { background: rgba(34, 211, 238, .25); box-shadow: 0 0 10px rgba(34,211,238,.4); }
+  #btnToggle.open { transform: rotate(45deg); }
+
+  /* ---------- 设置面板 ---------- */
+  .panel {
+    position: fixed; top: 66px; left: 50%; transform: translateX(-50%);
+    width: 300px; padding: 14px 18px 16px;
+    background: rgba(10, 16, 28, .72);
+    border: 1px solid rgba(34, 211, 238, .22);
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 9; display: none;
+  }
+  .panel.show { display: block; }
+  .panel .row { display: flex; align-items: center; gap: 10px; margin: 9px 0; }
+  .panel label { color: #a5f3fc; font-size: 12px; width: 72px; letter-spacing: 1px; white-space: nowrap; }
+  .panel input[type=range] {
+    flex: 1; height: 3px; appearance: none; -webkit-appearance: none;
+    background: linear-gradient(90deg, #22d3ee, #0e7490); border-radius: 2px; outline: none;
+  }
+  .panel input[type=range]::-webkit-slider-thumb {
+    appearance: none; -webkit-appearance: none;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: #e0feff; box-shadow: 0 0 8px #22d3ee; cursor: pointer;
+  }
+  .panel .val { color: #67e8f9; font-size: 11px; width: 46px; text-align: right;
+    font-family: Consolas, monospace; }
+  .seg { display: flex; flex: 1; gap: 6px; }
+  .segBtn {
+    flex: 1; padding: 5px 0; border-radius: 7px; font-size: 12px; cursor: pointer;
+    border: 1px solid rgba(34, 211, 238, .3);
+    background: rgba(34, 211, 238, .06); color: #8be9f5; letter-spacing: 1px;
+    transition: all .15s;
+  }
+  .segBtn.on {
+    background: rgba(34, 211, 238, .3); color: #e0feff;
+    box-shadow: inset 0 0 10px rgba(34, 211, 238, .35), 0 0 8px rgba(34, 211, 238, .25);
+  }
+  .chk {
+    position: relative; width: 40px; height: 20px; border-radius: 10px; cursor: pointer;
+    border: 1px solid rgba(34, 211, 238, .35);
+    background: rgba(34, 211, 238, .08); transition: background .15s; flex: none;
+  }
+  .chk .knob {
+    position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+    background: #67e8f9; transition: left .15s, background .15s, box-shadow .15s;
+  }
+  .chk.on { background: rgba(34, 211, 238, .45); }
+  .chk.on .knob { left: 22px; background: #e0feff; box-shadow: 0 0 8px #22d3ee; }
+  .chkHint { color: rgba(148, 233, 245, .55); font-size: 11px; white-space: nowrap; }
+  .panel .btns { display: flex; gap: 8px; margin-top: 12px; }
+  .panel button.act {
+    flex: 1; padding: 7px 0; border-radius: 8px; font-size: 12px; cursor: pointer;
+    border: 1px solid rgba(34, 211, 238, .35);
+    background: rgba(34, 211, 238, .1); color: #cffafe; letter-spacing: 1px;
+    transition: background .15s;
+  }
+  .panel button.act:hover { background: rgba(34, 211, 238, .28); }
+
+  /* ---------- 右下角统计 ---------- */
+  .stats {
+    position: fixed; right: 16px; bottom: 14px; z-index: 10;
+    color: rgba(148, 233, 245, .55); font-size: 11px; line-height: 1.8;
+    font-family: Consolas, monospace; text-align: left;
+    user-select: none; pointer-events: none;
+  }
+  .stats b { color: rgba(103, 232, 249, .9); font-weight: 600; }
+
+  /* ---------- 左下角提示 ---------- */
+  .hint {
+    position: fixed; left: 16px; bottom: 14px; z-index: 10;
+    color: rgba(148, 233, 245, .38); font-size: 11px; letter-spacing: 1px;
+    user-select: none; pointer-events: none;
+  }
+
+  /* ---------- 暂停标记 ---------- */
+  .paused-tag {
+    position: fixed; top: 18px; left: 18px; z-index: 10;
+    color: #fbbf24; font-size: 12px; letter-spacing: 2px;
+    border: 1px solid rgba(251, 191, 36, .5); border-radius: 6px;
+    padding: 4px 10px; background: rgba(251, 191, 36, .08);
+    display: none; user-select: none; pointer-events: none;
+  }
+  .paused-tag.show { display: block; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div class="topbar">
+  <span class="title">NEON HEX <b>·</b> 物理沙盒</span>
+  <button id="btnToggle" title="参数面板">+</button>
+</div>
+
+<div class="panel" id="panel">
+  <div class="row"><label>转速 ω</label><input type="range" id="rOmega" min="-8" max="8" step="0.1" value="1.2"><span class="val" id="vOmega">1.2</span></div>
+  <div class="row"><label>重力 g</label><input type="range" id="rGrav" min="0" max="3000" step="50" value="1800"><span class="val" id="vGrav">1800</span></div>
+  <div class="row"><label>弹性 e</label><input type="range" id="rRest" min="0.5" max="1" step="0.01" value="0.85"><span class="val" id="vRest">0.85</span></div>
+  <div class="row"><label>子步 substeps</label><input type="range" id="rSub" min="1" max="16" step="1" value="8"><span class="val" id="vSub">8</span></div>
+  <div class="row"><label>单次加球</label>
+    <div class="seg">
+      <button class="segBtn on" id="segAdd1">1 球</button>
+      <button class="segBtn" id="segAdd10">10 球</button>
+    </div>
+  </div>
+  <div class="row"><label>蓄力变大</label>
+    <button class="chk" id="btnCharge"><span class="knob"></span></button>
+    <span class="chkHint">按住越久球越大</span>
+  </div>
+  <div class="btns">
+    <button class="act" id="btnAdd">+5 球</button>
+    <button class="act" id="btnPause">暂停</button>
+    <button class="act" id="btnReset">重置</button>
+  </div>
+</div>
+
+<div class="stats" id="stats"></div>
+<div class="hint">点击空白加球 · 拖拽球可甩出 · 空格暂停 · R 重置</div>
+<div class="paused-tag" id="pausedTag">‖ 已暂停</div>
+
+<script>
+"use strict";
+/* =========================================================================
+ *  NEON HEX · 物理沙盒
+ *  核心物理：旋转六边形边界的「切向速度传递」 + 球球碰撞 + 子步防穿墙
+ * ========================================================================= */
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+
+/* ---------------- 全局状态 ---------------- */
+const state = {
+  omega: 1.2,        // 六边形角速度 rad/s
+  gravity: 1800,     // 重力 px/s^2
+  restitution: 0.85, // 碰撞弹性
+  substeps: 8,       // 每帧物理子步（防高速穿墙的关键）
+  paused: false,
+  friction: 0.18,    // 球与边的切向摩擦（旋转把球"带起来"的来源）
+  ballFriction: 0.05,// 球球间摩擦
+  maxSpeed: 4200,    // 单球速度上限
+  bounceThresh: 90,  // 低于该法向速度不再反弹（让球堆稳定）
+  clickAdd: 1,       // 单次点击加球数（1 或 10）
+  chargeGrow: false, // 按住蓄力：越久球越大
+};
+
+const hex = { cx: 0, cy: 0, R: 300, angle: 0 };
+
+const PALETTE = [
+  [190, 95, 60],  // cyan
+  [330, 90, 66],  // pink
+  [25, 95, 60],   // orange
+  [82, 90, 55],   // lime
+  [258, 90, 70],  // purple
+  [50, 98, 58],   // yellow
+  [215, 92, 64],  // blue
+  [0, 90, 66],    // red
+  [172, 85, 50],  // teal
+  [292, 90, 68],  // magenta
+];
+
+const balls = [];
+const sparks = [];
+let collisionCount = 0;
+let grabbed = null;          // 被拖拽的球
+let charging = false;        // 空白处按住蓄力中
+let chargeStart = 0;         // 蓄力起始时刻
+const mouse = { x: 0, y: 0, down: false };
+let nextId = 1;
+
+/* ---------------- 画布尺寸 ---------------- */
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  hex.cx = W / 2; hex.cy = H / 2 + H * 0.02;
+  hex.R = Math.min(W, H) * 0.36;
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* ---------------- 球的生成 ---------------- */
+function hsl(h, s, l, a = 1) { return `hsla(${h},${s}%,${l}%,${a})`; }
+
+/* 蓄力半径：按住 0~1.5s，半径 12 → 45 */
+function chargeRadius(holdMs) {
+  return 12 + Math.min(holdMs / 1000, 1.5) * 22;
+}
+
+/* 把出生点拉回六边形内部（贴墙点击/大球群时避免生成在墙外） */
+function clampInsideHex(x, y) {
+  const verts = hexVertices(hex.angle);
+  let k = 0;
+  while (!insideHex(x, y, verts) && k++ < 30) {
+    x = hex.cx + (x - hex.cx) * 0.85;
+    y = hex.cy + (y - hex.cy) * 0.85;
+  }
+  return [x, y];
+}
+
+function makeBall(x, y, r) {
+  const pal = PALETTE[(Math.random() * PALETTE.length) | 0];
+  return {
+    id: nextId++,
+    x, y, r,
+    vx: (Math.random() - 0.5) * 260,
+    vy: (Math.random() - 0.5) * 160,
+    m: r * r / 100,
+    inv: 100 / (r * r),
+    h: pal[0], s: pal[1], l: pal[2],
+  };
+}
+
+function addBalls(n, fromMouse = false) {
+  for (let i = 0; i < n; i++) {
+    const r = 11 + Math.random() * 11;
+    let x, y;
+    if (fromMouse) {
+      // 向日葵螺旋排布：均匀铺开、几乎不重叠
+      const dist = Math.min(i === 0 ? 0 : r * 2.1 * Math.sqrt(i), hex.R * 0.55);
+      const a = i * 2.39996 + Math.random() * 0.5;
+      x = mouse.x + Math.cos(a) * dist; y = mouse.y + Math.sin(a) * dist;
+    }
+    else {
+      const a = Math.random() * Math.PI * 2, d = Math.random() * hex.R * 0.45;
+      x = hex.cx + Math.cos(a) * d; y = hex.cy + Math.sin(a) * d - hex.R * 0.2;
+    }
+    balls.push(makeBall(x, y, r));
+  }
+}
+
+function reset() {
+  balls.length = 0; sparks.length = 0; collisionCount = 0; grabbed = null;
+  addBalls(20);
+}
+reset();
+
+/* ---------------- 六边形几何 ---------------- */
+function hexVertices(angle) {
+  const v = [];
+  for (let i = 0; i < 6; i++) {
+    const a = angle + i * Math.PI / 3;
+    v.push([hex.cx + Math.cos(a) * hex.R, hex.cy + Math.sin(a) * hex.R]);
+  }
+  return v;
+}
+
+/* 点是否在六边形内（凸多边形半平面测试） */
+function insideHex(px, py, verts) {
+  for (let i = 0; i < 6; i++) {
+    const [ax, ay] = verts[i], [bx, by] = verts[(i + 1) % 6];
+    let nx = by - ay, ny = -(bx - ax);             // 候选法线（屏幕坐标系）
+    const midx = (ax + bx) / 2 - hex.cx, midy = (ay + by) / 2 - hex.cy;
+    if (nx * midx + ny * midy < 0) { nx = -nx; ny = -ny; } // 统一为外法线
+    if ((px - ax) * nx + (py - ay) * ny > 0) return false;
+  }
+  return true;
+}
+
+/* ---------------- 球 vs 六边形边 ----------------
+ * 关键点：墙面接触点自身有线速度 v = ω × r（切向速度）。
+ * 碰撞冲量以「相对速度」计算，因此高速旋转的边会把球甩出去、搅动球堆；
+ * 切向摩擦再把一部分切向速度传给球，产生被"带着走"的效果。 */
+function collideWalls(b, verts, h) {
+  for (let i = 0; i < 6; i++) {
+    const [ax, ay] = verts[i], [bx, by] = verts[(i + 1) % 6];
+    const ex = bx - ax, ey = by - ay;
+    const len2 = ex * ex + ey * ey;
+
+    // 球心到线段的最近点
+    let t = ((b.x - ax) * ex + (b.y - ay) * ey) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const px = ax + ex * t, py = ay + ey * t;
+
+    // 外法线方向一致性：与"最近点指向中心"的方向比较
+    let nx = b.x - px, ny = b.y - py;
+    const dist = Math.hypot(nx, ny) || 1e-9;
+    nx /= dist; ny /= dist;
+    const toCenterX = hex.cx - px, toCenterY = hex.cy - py;
+    if (nx * toCenterX + ny * toCenterY < 0) { nx = -nx; ny = -ny; } // 统一为指向内侧
+
+    // 球心到边线的有向距离（内正外负）
+    const d = (b.x - px) * nx + (b.y - py) * ny;
+
+    if (d < b.r) {
+      const pen = b.r - d;
+      // 位置修正：推出墙内
+      b.x += nx * pen; b.y += ny * pen;
+
+      // 接触点的墙面速度：v = ω × r
+      const rx = px - hex.cx, ry = py - hex.cy;
+      const wvx = -state.omega * ry, wvy = state.omega * rx;
+
+      // 相对速度
+      let rvx = b.vx - wvx, rvy = b.vy - wvy;
+      const vn = rvx * nx + rvy * ny;
+
+      if (vn < 0) {
+        const e = (-vn > state.bounceThresh) ? state.restitution : 0;
+        const jn = -(1 + e) * vn / b.inv;   // 冲量 = Δv / invMass
+        b.vx += jn * nx * b.inv; b.vy += jn * ny * b.inv;
+
+        if (-vn > 220) {
+          collisionCount++;
+          spawnSparks(px - nx * b.r * 0.4, py - ny * b.r * 0.4, b, Math.min(6, 2 + (-vn / 400) | 0));
+        }
+
+        // 切向摩擦：库仑摩擦锥 |Jt| <= μ * |Jn|
+        let tvx = rvx - vn * nx, tvy = rvy - vn * ny;
+        const tl = Math.hypot(tvx, tvy);
+        if (tl > 1e-6) {
+          const jt = Math.min(state.friction * jn, tl / b.inv);
+          b.vx -= jt * tvx / tl * b.inv; b.vy -= jt * tvy / tl * b.inv;
+        }
+      }
+    }
+  }
+
+  // 救援：万一因窗口缩放等落在多边形外，拉回内部
+  if (!insideHex(b.x, b.y, verts)) {
+    let best = null, bestD = Infinity;
+    for (let i = 0; i < 6; i++) {
+      const [ax, ay] = verts[i], [bx, by] = verts[(i + 1) % 6];
+      const ex = bx - ax, ey = by - ay;
+      let t = ((b.x - ax) * ex + (b.y - ay) * ey) / (ex * ex + ey * ey);
+      t = Math.max(0, Math.min(1, t));
+      const px = ax + ex * t, py = ay + ey * t;
+      const d = Math.hypot(b.x - px, b.y - py);
+      if (d < bestD) { bestD = d; best = [px, py]; }
+    }
+    if (best) {
+      // 把球放回最近边内侧 r+1 处，并反弹掉向外的速度
+      const dx = best[0] - hex.cx, dy = best[1] - hex.cy, dl = Math.hypot(dx, dy) || 1;
+      const inx = -dx / dl, iny = -dy / dl;         // 指向中心的近似内法线
+      b.x = best[0] + inx * (b.r + 1);
+      b.y = best[1] + iny * (b.r + 1);
+      const vn = b.vx * inx + b.vy * iny;
+      if (vn < 0) { b.vx -= 2 * vn * inx; b.vy -= 2 * vn * iny; }
+    }
+  }
+}
+
+/* ---------------- 球 vs 球（空间哈希宽相位，球数多时仍流畅） ---------------- */
+function resolvePair(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const minD = a.r + b.r;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= minD * minD || d2 === 0) return;
+
+  const d = Math.sqrt(d2);
+  const nx = dx / d, ny = dy / d;
+  const invSum = a.inv + b.inv;
+
+  // 按质量比分离重叠
+  const overlap = minD - d;
+  a.x -= nx * overlap * (a.inv / invSum);
+  a.y -= ny * overlap * (a.inv / invSum);
+  b.x += nx * overlap * (b.inv / invSum);
+  b.y += ny * overlap * (b.inv / invSum);
+
+  // 法向冲量
+  const rvx = b.vx - a.vx, rvy = b.vy - a.vy;
+  const vn = rvx * nx + rvy * ny;
+  if (vn < 0) {
+    const e = (-vn > state.bounceThresh) ? state.restitution : 0;
+    const jn = -(1 + e) * vn / invSum;
+    a.vx -= jn * nx * a.inv; a.vy -= jn * ny * a.inv;
+    b.vx += jn * nx * b.inv; b.vy += jn * ny * b.inv;
+
+    if (-vn > 260) {
+      collisionCount++;
+      spawnSparks(a.x + nx * a.r, a.y + ny * a.r, a, 2);
+    }
+
+    // 轻微切向摩擦
+    const tvx = rvx - vn * nx, tvy = rvy - vn * ny;
+    const tl = Math.hypot(tvx, tvy);
+    if (tl > 1e-6) {
+      const jt = Math.min(state.ballFriction * jn, tl / invSum);
+      a.vx -= jt * tvx / tl * a.inv; a.vy -= jt * tvy / tl * a.inv;
+      b.vx += jt * tvx / tl * b.inv; b.vy += jt * tvy / tl * b.inv;
+    }
+  }
+}
+
+const HASH_W = 16384, HASH_O = 8192;
+function collideBalls() {
+  const ITER = 2;
+  for (let it = 0; it < ITER; it++) {
+    if (balls.length < 2) return;
+    let maxR = 0;
+    for (const b of balls) if (b.r > maxR) maxR = b.r;
+    const cell = Math.max(maxR * 2, 24);
+
+    // 按格子分桶
+    const buckets = new Map();
+    for (let i = 0; i < balls.length; i++) {
+      const b = balls[i];
+      const key = (Math.floor(b.x / cell) + HASH_O) * HASH_W + (Math.floor(b.y / cell) + HASH_O);
+      const arr = buckets.get(key);
+      if (arr) arr.push(i); else buckets.set(key, [i]);
+    }
+
+    // 半邻域偏移：(0,0) 配同格 j>i，其余四个方向避免重复配对
+    const OFF = [[0, 0], [1, 0], [0, 1], [1, 1], [-1, 1]];
+    for (let i = 0; i < balls.length; i++) {
+      const a = balls[i];
+      const gx = Math.floor(a.x / cell), gy = Math.floor(a.y / cell);
+      for (let oi = 0; oi < OFF.length; oi++) {
+        const [ox, oy] = OFF[oi];
+        const arr = buckets.get((gx + ox + HASH_O) * HASH_W + (gy + oy + HASH_O));
+        if (!arr) continue;
+        const same = oi === 0;
+        for (const j of arr) {
+          if (same && j <= i) continue;
+          resolvePair(a, balls[j]);
+        }
+      }
+    }
+  }
+}
+
+/* ---------------- 火花粒子 ---------------- */
+function spawnSparks(x, y, ball, n) {
+  if (sparks.length > 240) return;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 120 + Math.random() * 320;
+    sparks.push({
+      x, y,
+      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 80,
+      life: 0.25 + Math.random() * 0.2, t: 0,
+      h: ball.h, s: ball.s,
+    });
+  }
+}
+
+/* ---------------- 物理推进 ---------------- */
+function substep(h) {
+  hex.angle += state.omega * h;
+  const verts = hexVertices(hex.angle);
+
+  for (const b of balls) {
+    // 拖拽弹簧
+    if (b === grabbed) {
+      b.vx = (mouse.x - b.x) * 24;
+      b.vy = (mouse.y - b.y) * 24;
+    } else {
+      b.vy += state.gravity * h;
+    }
+    // 限速（防止单帧位移超过球半径导致穿透）
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp > state.maxSpeed) { const k = state.maxSpeed / sp; b.vx *= k; b.vy *= k; }
+
+    b.x += b.vx * h; b.y += b.vy * h;
+
+    // 微阻尼
+    const damp = Math.exp(-0.06 * h);
+    b.vx *= damp; b.vy *= damp;
+  }
+
+  collideBalls();
+  for (const b of balls) collideWalls(b, verts, h);
+}
+
+/* ---------------- 渲染 ---------------- */
+function drawBackground() {
+  const g = ctx.createRadialGradient(hex.cx, hex.cy, 0, hex.cx, hex.cy, Math.max(W, H) * 0.75);
+  g.addColorStop(0, "#0a1220");
+  g.addColorStop(0.55, "#060b14");
+  g.addColorStop(1, "#03050a");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawHex(verts) {
+  ctx.save();
+  // 外层柔光
+  ctx.beginPath();
+  ctx.moveTo(verts[0][0], verts[0][1]);
+  for (let i = 1; i < 6; i++) ctx.lineTo(verts[i][0], verts[i][1]);
+  ctx.closePath();
+  ctx.strokeStyle = "rgba(34,211,238,.28)";
+  ctx.lineWidth = 7;
+  ctx.shadowColor = "rgba(34,211,238,.9)";
+  ctx.shadowBlur = 26;
+  ctx.stroke();
+
+  // 内层亮线
+  ctx.shadowBlur = 14;
+  ctx.strokeStyle = "#5eead4";
+  ctx.lineWidth = 2.2;
+  ctx.stroke();
+  ctx.restore();
+
+  // 顶点亮点
+  ctx.save();
+  ctx.shadowColor = "#a5f3fc"; ctx.shadowBlur = 12;
+  ctx.fillStyle = "#e0feff";
+  for (const [vx, vy] of verts) {
+    ctx.beginPath(); ctx.arc(vx, vy, 3.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawBall(b) {
+  const { x, y, r, h, s, l } = b;
+  ctx.save();
+  // 霓虹光晕
+  ctx.shadowColor = hsl(h, s, l, 0.85);
+  ctx.shadowBlur = 14;
+
+  // 主体：径向渐变（亮部偏左上 → 基色 → 暗边）
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.42, r * 0.12, x, y, r);
+  g.addColorStop(0, hsl(h, Math.min(s, 100), Math.min(l + 26, 92)));
+  g.addColorStop(0.55, hsl(h, s, l));
+  g.addColorStop(1, hsl(h, s, Math.max(l - 20, 10)));
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+
+  // 高光点
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(255,255,255,.85)";
+  ctx.beginPath();
+  ctx.arc(x - r * 0.32, y - r * 0.38, r * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.28)";
+  ctx.beginPath();
+  ctx.arc(x + r * 0.18, y - r * 0.52, r * 0.09, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawSparks(dt) {
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const p = sparks[i];
+    p.t += dt;
+    if (p.t >= p.life) { sparks.splice(i, 1); continue; }
+    p.vy += 900 * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    const k = 1 - p.t / p.life;
+    ctx.fillStyle = hsl(p.h, p.s, 70, k * 0.9);
+    ctx.beginPath(); ctx.arc(p.x, p.y, 1.6 + k * 1.8, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* 蓄力预览：虚线圈随按住时间变大 */
+function drawChargePreview() {
+  if (!charging || !state.chargeGrow || grabbed) return;
+  const hold = performance.now() - chargeStart;
+  const r = chargeRadius(hold);
+  const k = Math.min(hold / 1500, 1);
+  ctx.save();
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = `rgba(103, 232, 249, ${0.35 + 0.45 * k})`;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(mouse.x, mouse.y, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = `rgba(34, 211, 238, ${0.06 + 0.1 * k})`;
+  ctx.beginPath(); ctx.arc(mouse.x, mouse.y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(224, 254, 255, .9)";
+  ctx.font = "600 12px Consolas, monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(`+${state.clickAdd}`, mouse.x, mouse.y - r - 8);
+  ctx.restore();
+}
+
+/* ---------------- 主循环：固定步长 + 子步积分 ---------------- */
+const STEP = 1 / 60;
+let acc = 0, last = performance.now(), fps = 60, statTimer = 0;
+
+function frame(now) {
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.05) dt = 0.05;
+  fps += ((1 / Math.max(dt, 1e-4)) - fps) * 0.06;
+
+  if (!state.paused) {
+    acc += dt;
+    while (acc >= STEP) {
+      const h = STEP / state.substeps;
+      for (let s = 0; s < state.substeps; s++) substep(h);
+      acc -= STEP;
+    }
+  } else {
+    acc = 0;
+  }
+
+  drawBackground();
+  drawHex(hexVertices(hex.angle));
+  for (const b of balls) drawBall(b);
+  drawSparks(dt);
+  drawChargePreview();
+
+  statTimer += dt;
+  if (statTimer > 0.2) {
+    statTimer = 0;
+    document.getElementById("stats").innerHTML =
+      `FPS <b>${Math.round(fps)}</b><br>` +
+      `子步 substeps <b>${state.substeps}</b><br>` +
+      `碰撞 <b>${collisionCount}</b> 次<br>` +
+      `球 <b>${balls.length}</b> · ω <b>${state.omega.toFixed(1)}</b> rad/s`;
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------------- 交互 ---------------- */
+function toLocal(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  const p = toLocal(e);
+  mouse.x = p.x; mouse.y = p.y; mouse.down = true;
+  // 优先抓取命中球；空白处则开始蓄力
+  let hit = null, hd = Infinity;
+  for (const b of balls) {
+    const d = Math.hypot(b.x - p.x, b.y - p.y);
+    if (d < b.r + 8 && d < hd) { hd = d; hit = b; }
+  }
+  if (hit) { grabbed = hit; canvas.style.cursor = "grabbing"; }
+  else { charging = true; chargeStart = performance.now(); }
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  const p = toLocal(e);
+  mouse.x = p.x; mouse.y = p.y;
+});
+
+canvas.addEventListener("pointerup", (e) => {
+  const p = toLocal(e);
+  if (!grabbed) {
+    // 空白处松开 = 在该处铺一簇球；蓄力模式下按住越久球越大
+    const hold = performance.now() - chargeStart;
+    const cr = state.chargeGrow ? chargeRadius(hold) : 0;
+    const n = state.clickAdd;
+    for (let i = 0; i < n; i++) {
+      const r = state.chargeGrow
+        ? Math.max(8, cr * (0.9 + Math.random() * 0.2))
+        : 11 + Math.random() * 11;
+      let x, y;
+      if (n === 1) { x = p.x; y = p.y; }
+      else {
+        const dist = Math.min(i === 0 ? 0 : r * 2.1 * Math.sqrt(i), hex.R * 0.55);
+        const a = i * 2.39996 + Math.random() * 0.5;
+        x = p.x + Math.cos(a) * dist; y = p.y + Math.sin(a) * dist;
+      }
+      [x, y] = clampInsideHex(x, y);
+      const b = makeBall(x, y, r);
+      b.vx = (Math.random() - 0.5) * 200; b.vy = -60;
+      balls.push(b);
+    }
+  }
+  grabbed = null; charging = false; mouse.down = false;
+  canvas.style.cursor = "crosshair";
+});
+
+canvas.addEventListener("pointercancel", () => {
+  grabbed = null; charging = false; mouse.down = false;
+  canvas.style.cursor = "crosshair";
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space") { e.preventDefault(); togglePause(); }
+  else if (e.code === "KeyR") reset();
+});
+
+/* ---------------- 面板绑定 ---------------- */
+const $ = (id) => document.getElementById(id);
+
+$("btnToggle").addEventListener("click", () => {
+  $("panel").classList.toggle("show");
+  $("btnToggle").classList.toggle("open");
+});
+
+function bindRange(rid, vid, key, fmt = (v) => v) {
+  const r = $(rid), v = $(vid);
+  r.addEventListener("input", () => {
+    const val = parseFloat(r.value);
+    state[key] = val;
+    v.textContent = fmt(val);
+  });
+}
+bindRange("rOmega", "vOmega", "omega", (v) => v.toFixed(1));
+bindRange("rGrav", "vGrav", "gravity");
+bindRange("rRest", "vRest", "restitution", (v) => v.toFixed(2));
+bindRange("rSub", "vSub", "substeps");
+
+/* 单次加球数 1 / 10 */
+function setClickAdd(n) {
+  state.clickAdd = n;
+  $("segAdd1").classList.toggle("on", n === 1);
+  $("segAdd10").classList.toggle("on", n === 10);
+}
+$("segAdd1").addEventListener("click", () => setClickAdd(1));
+$("segAdd10").addEventListener("click", () => setClickAdd(10));
+
+/* 按住蓄力变大开关 */
+$("btnCharge").addEventListener("click", () => {
+  state.chargeGrow = !state.chargeGrow;
+  $("btnCharge").classList.toggle("on", state.chargeGrow);
+});
+
+$("btnAdd").addEventListener("click", () => addBalls(5));
+function togglePause() {
+  state.paused = !state.paused;
+  $("btnPause").textContent = state.paused ? "继续" : "暂停";
+  $("pausedTag").classList.toggle("show", state.paused);
+}
+$("btnPause").addEventListener("click", togglePause);
+$("btnReset").addEventListener("click", reset);
+</script>
+</body>
+</html>

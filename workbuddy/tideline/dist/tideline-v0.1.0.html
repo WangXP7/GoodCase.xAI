@@ -1,0 +1,4702 @@
+<!DOCTYPE html>
+<!--
+  《潮线 TIDELINE》· 自包含测试版 v0.1.0
+  由 tools/build-single.js 生成 —— 请勿直接编辑本文件，改 src/ 后重新打包。
+  15 个脚本已内联；零外部资产（图集与音频全部程序化生成）。
+  操作：方向键/WASD 游动 · 空格/Shift 冲刺 · 连打任意键脱困 · P 暂停 · M 静音
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<!-- 内联空图标：避免浏览器自动请求 /favicon.ico 而在控制台留下 404 红字。
+     本作零外部资产，不引入任何图标文件。 -->
+<link rel="icon" href="data:,">
+<title>潮线 TIDELINE · 测试版 v0.1.0</title>
+<style>
+/* =====================================================================
+ * TIDELINE · 样式
+ * HUD 与全部菜单走 DOM（ADR-001 §2.3）：屏幕阅读器可读、浏览器缩放可用、
+ * 中文子集化免费。CRT 观感由 #crtOverlay 的 CSS 扫描线 + 暗角补偿。
+ * ===================================================================== */
+:root{
+  --black:#0A0E17; --deep:#16213A; --deep2:#1B2E52; --slate:#2E3E54;
+  --pale:#C7CFD8; --white:#F2F5F8; --amber:#FF8A3D; --blood:#FF3B3B;
+  --magenta:#FF2E88; --cyan:#00C2FF;
+  --accent:var(--white);
+  --hud-font: ui-monospace, "SFMono-Regular", Menlo, Consolas, "PingFang SC", "Microsoft YaHei", monospace;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%; background:var(--black); overflow:hidden;}
+body{font-family:var(--hud-font); color:var(--white); -webkit-font-smoothing:none;}
+
+#fit{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:var(--black);}
+#stage{position:relative; width:1440px; height:864px; flex:0 0 auto;
+  transform-origin:50% 50%; background:#000; overflow:hidden;}
+#gl{position:absolute; inset:0; width:1440px; height:864px; display:block;
+  image-rendering:pixelated; image-rendering:crisp-edges;}
+
+/* ---- CRT 补偿层（盖在 canvas 与 DOM 之上，ADR-001 §2.3） ---- */
+#crtOverlay{position:absolute; inset:0; pointer-events:none; z-index:60;
+  background:
+    repeating-linear-gradient(to bottom, rgba(0,0,0,.20) 0 1px, rgba(0,0,0,0) 1px 2px),
+    radial-gradient(ellipse at center, rgba(0,0,0,0) 52%, rgba(0,0,0,.42) 100%);
+  mix-blend-mode:multiply;}
+html.no-crt #crtOverlay{background:none;}
+
+/* ============================ HUD ============================ */
+#hud{position:absolute; inset:0; z-index:20; pointer-events:none;
+  padding:26px 40px; font-size:16px; letter-spacing:.02em;}
+.hud-top{display:flex; align-items:flex-start; justify-content:space-between; gap:24px;}
+.label{font-size:12px; color:var(--pale); opacity:.75; letter-spacing:.14em;}
+.big{font-size:40px; line-height:1.05; font-weight:700; color:var(--accent);}
+.sub{font-size:14px; color:var(--amber);}
+
+.score-box{min-width:240px;}
+.score-box .big{text-shadow:0 0 0 transparent;}
+
+.alarm-box{flex:1; max-width:520px;}
+.alarm-head{display:flex; align-items:baseline; gap:12px; margin-bottom:6px;}
+#tierName{font-size:14px; color:var(--accent); border:2px solid var(--accent); padding:1px 8px;}
+#alarmNum{font-size:20px; font-weight:700; margin-left:auto; color:var(--accent);}
+.bar{position:relative; height:22px; border:2px solid var(--pale); background:rgba(10,14,23,.72); overflow:hidden;}
+.fill{position:absolute; left:0; top:0; bottom:0; width:0%; background:var(--accent);}
+/* 刻度形状 = ALARM 等级的第二通道（去色后仍可辨） */
+.tick{position:absolute; top:0; bottom:0; width:3px; background:var(--black);}
+.tick.mini{height:9px; bottom:auto; opacity:.7;}
+
+.right-box{min-width:200px; text-align:right;}
+.pips{display:flex; gap:6px; justify-content:flex-end; margin:4px 0 12px;}
+.pip{width:30px; height:18px; border:2px solid var(--pale); background:transparent;}
+.pip.on{background:var(--accent);}
+.pip.low{animation:none;}
+
+/* COMBO / 区域 / 提示 */
+#comboBox{position:absolute; left:40px; top:190px; font-size:22px; font-weight:700; color:var(--cyan);}
+#comboBox small{display:block; font-size:12px; font-weight:400; color:var(--pale); opacity:.7;}
+#zoneBox{position:absolute; left:40px; bottom:34px; font-size:14px; color:var(--pale); opacity:.8;}
+#hintBox{position:absolute; left:40px; bottom:60px; font-size:13px; color:var(--pale); opacity:.55; max-width:520px; line-height:1.6;}
+#toasts{position:absolute; left:50%; top:96px; transform:translateX(-50%);
+  display:flex; flex-direction:column; align-items:center; gap:5px;}
+.toast{font-size:15px; padding:3px 12px; background:rgba(10,14,23,.82); border-left:4px solid var(--amber); color:var(--white);}
+#prompt{position:absolute; left:50%; top:118px; transform:translateX(-50%);
+  font-size:30px; font-weight:700; color:var(--amber); text-align:center; letter-spacing:.06em;}
+#prompt small{display:block; font-size:15px; font-weight:400; color:var(--white); margin-top:4px;}
+#bankBar{position:absolute; left:50%; top:200px; transform:translateX(-50%);
+  width:260px; height:12px; border:2px solid var(--cyan); display:none;}
+#bankBar i{display:block; height:100%; width:0%; background:var(--cyan);}
+
+/* ============================ 屏幕 ============================ */
+#screens{position:absolute; inset:0; z-index:50; display:none;
+  align-items:center; justify-content:center; background:rgba(10,14,23,.88);}
+#screens.show{display:flex;}
+.panel{width:900px; max-width:92%; border:4px solid var(--pale); background:var(--black);
+  padding:34px 40px; pointer-events:auto;}
+.panel h1{font-size:56px; letter-spacing:.10em; margin-bottom:6px; color:var(--white);}
+.panel h2{font-size:30px; margin-bottom:14px; color:var(--amber);}
+.panel .tag{font-size:14px; color:var(--pale); opacity:.7; margin-bottom:22px; letter-spacing:.18em;}
+.panel p{font-size:15px; line-height:1.9; color:var(--pale);}
+.panel .rows{margin:18px 0; font-size:16px; line-height:2.0;}
+.panel .rows div{display:flex; justify-content:space-between; border-bottom:1px solid rgba(199,207,216,.22); padding:2px 0;}
+.panel .rows b{color:var(--white);}
+.panel .rows .loss{color:var(--blood);}
+.keys{display:grid; grid-template-columns:130px 1fr; gap:6px 16px; font-size:15px; margin:16px 0 22px; color:var(--pale);}
+.keys b{color:var(--white);}
+.btnrow{display:flex; gap:14px; margin-top:22px; flex-wrap:wrap;}
+button{font-family:var(--hud-font); font-size:17px; font-weight:700; letter-spacing:.08em;
+  padding:12px 26px; background:transparent; color:var(--white);
+  border:3px solid var(--pale); cursor:pointer; pointer-events:auto;}
+button:hover,button:focus-visible{background:var(--pale); color:var(--black); outline:none;}
+button.primary{border-color:var(--amber); color:var(--amber);}
+button.primary:hover,button.primary:focus-visible{background:var(--amber); color:var(--black);}
+
+/* 选项 */
+.opts{display:grid; grid-template-columns:repeat(2,1fr); gap:8px 26px; margin:8px 0 4px;}
+.opt{display:flex; align-items:center; gap:10px; font-size:15px; color:var(--pale); cursor:pointer;
+  padding:5px 0; user-select:none;}
+.opt input{width:20px; height:20px; accent-color:var(--amber); cursor:pointer;}
+.opt select{font-family:var(--hud-font); font-size:14px; background:var(--black); color:var(--white);
+  border:2px solid var(--pale); padding:3px 6px;}
+.note{font-size:12px; color:var(--pale); opacity:.6; margin-top:12px; line-height:1.7;}
+
+/* 色盲模式：血红→电光蓝，琥珀→金。两条路径灰度化后均为单调亮度序列 */
+html.cb{ --blood:#00C2FF; --amber:#FFD23F; }
+/* 关闭「闪烁」→ 所有脉动改常亮（不应出现无反馈死区） */
+html.no-flash .pip.low{opacity:1;}
+html.no-flash #prompt{animation:none !important;}
+/* prefers-reduced-motion：自动降级 */
+html.rm #prompt{animation:none !important;}
+html.rm .toast{transition:none;}
+
+/* 危险状态提示（形态 + 文字，颜色只是第三通道） */
+#dangerEdge{position:absolute; inset:0; pointer-events:none; z-index:40; display:none;
+  box-shadow:inset 0 0 0 6px var(--blood); opacity:.55;}
+#dangerEdge.on{display:block;}
+
+#rotate{position:fixed; inset:0; z-index:99; display:none; align-items:center; justify-content:center;
+  background:var(--black); color:var(--white); font-size:20px; text-align:center; padding:40px;}
+@media (orientation:portrait) and (max-width:900px){ #rotate{display:flex;} }
+</style>
+</head>
+<body>
+<div id="fit">
+  <div id="stage">
+    <canvas id="gl" width="1440" height="864"></canvas>
+
+    <div id="hud">
+      <div class="hud-top">
+        <div class="score-box">
+          <div class="label">SCORE 已入账</div>
+          <div id="scoreVal" class="big">0</div>
+          <div id="pendingVal" class="sub">未兑现 0</div>
+        </div>
+
+        <div class="alarm-box">
+          <div class="alarm-head">
+            <span class="label">ALARM 通缉度</span>
+            <span id="tierName">平静 T0</span>
+            <span id="alarmNum">0</span>
+          </div>
+          <div id="alarmBar" class="bar">
+            <div id="alarmFill" class="fill"></div>
+            <div class="tick" style="left:25%"></div>
+            <div class="tick" style="left:50%"></div>
+            <div class="tick" style="left:75%"></div>
+            <div class="tick mini" style="left:12.5%"></div>
+            <div class="tick mini" style="left:37.5%"></div>
+            <div class="tick mini" style="left:62.5%"></div>
+            <div class="tick mini" style="left:87.5%"></div>
+          </div>
+          <div id="alarmA11y" class="label" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);"></div>
+        </div>
+
+        <div class="right-box">
+          <div class="label">体力 STAMINA</div>
+          <div id="stamina" class="pips"></div>
+          <div class="label">战利品 CARRY</div>
+          <div id="carry" class="pips"></div>
+        </div>
+      </div>
+
+      <div id="comboBox">COMBO ×1.0<small>0 连击</small></div>
+      <div id="bankBar"><i></i></div>
+      <div id="toasts"></div>
+      <div id="prompt"></div>
+      <div id="hintBox">
+        方向键 / WASD 或单指拖拽 = 转向　·　空格 / J 或第二指点按 = 冲刺（咬合唯一载体）　·　ESC / P 暂停　·　M 静音
+      </div>
+      <div id="zoneBox">深海</div>
+      <div id="dangerEdge"></div>
+    </div>
+
+    <div id="screens" class="show">
+      <div class="panel" id="panel"></div>
+    </div>
+
+    <div id="crtOverlay"></div>
+  </div>
+</div>
+
+<div id="rotate">请横屏游玩<br><span style="font-size:14px;opacity:.7">《潮线 TIDELINE》按 5:3 横屏构图（ADR-002）</span></div>
+
+<script>
+/* ===== src/core/constants.js ===== */
+/* =====================================================================
+ * TIDELINE · constants.js
+ * 全项目唯一真源。禁止在别处硬编码任何数值。
+ *
+ * 单位约定（ADR-002 三层空间模型）：
+ *   DESIGN px : 设计空间 1440x864，所有游戏逻辑数值的单位
+ *   ART px    : 艺术网格 720x432(=RT_WORLD)，1 art px = 2 design px
+ * 本文件所有数值除非注明，均为 DESIGN px / 秒 / 弧度制外的角度。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+
+  /* ---------- L0/L1/L2 空间（ADR-002 §6 常量表） ---------- */
+  var DESIGN_W = 1440, DESIGN_H = 864, ART_SCALE = 2;
+
+  var C = {
+    VERSION: '0.1.0',
+    RUN_SECONDS: 120,
+    COLLECT: { COUNT: 8, RADIUS: 46, SCORE: [10, 20, 30] },
+    FLASH_GAP: 0.51,
+    FLASH_DUR: 0.45,
+    DESIGN_W: DESIGN_W,
+    DESIGN_H: DESIGN_H,
+    ART_SCALE: ART_SCALE,
+    RT_W: DESIGN_W / ART_SCALE,   // 720
+    RT_H: DESIGN_H / ART_SCALE,   // 432
+    SAFE_MARGIN: 48,
+    LETTERBOX: '#0A0E17',
+
+    /* ---------- 世界（GDD-01 §4.1） ---------- */
+    WORLD_W: 3000,                // 航道总长 L_lane（沙盘校准：3000/(300*0.7)=14.3s）
+    WORLD_TOP_SKY: -420,          // 相机可上探到世界顶部之上（搁浅构图用）
+    WORLD_BOTTOM: 1100,           // 世界底部（沙层截面延伸到 864 之下）
+
+    WATER_BASE: 105,              // GDD-01 §4.1 水面线 y=104 → 取 105（ADR-003）
+    WAVE_AMP: 6,
+    WAVE_LEN: 180,
+    WAVE_SPEED: 40,
+
+    /* 海床控制点（ADR-003 §2.2 形式的 11 点表，数值为适配 GDD 的 3000/750 重新推导）
+     * 约束：depth = seabedY - WATER_BASE
+     *   x=750  → depth 400（DEEP|SHALLOW 边界，= GDD 深海 x<750）
+     *   x=1650 → depth 120（SHALLOW|SURF 边界）
+     *   x=2550 → depth 0  （潮线 shoreX，SURF|BEACH 边界）
+     */
+    SEABED_PTS: [
+      [0, 864], [450, 864], [650, 852], [750, 505], [900, 450],
+      [1150, 390], [1400, 315], [1650, 225], [1950, 168], [2250, 128],
+      [2550, 105], [2750, 88], [3000, 78]
+    ],
+    ZONE_DEPTH_DEEP: 400,         // depth >= 400 → DEEP
+    ZONE_DEPTH_SHALLOW: 120,      // depth >= 120 → SHALLOW；否则 SURF / BEACH
+    ZONE_HYST: 8,                 // 区域迟滞（design px）
+
+    /* ---------- 鲨鱼（GDD-01 §4.1/§4.2） ---------- */
+    SHARK: {
+      LEN: 168, HALF_W: 74, HALF_H: 44,      // 碰撞盒 148x88
+      DRAW_HALF_W: 42, DRAW_HALF_H: 20,      // 视觉 84x40 art px
+      DRAW_PAD: 8,                           // 图集外扩留白（art px）：容纳 3px 描边 + 鳍尖溢出
+      MOUTH_OFF: 62, MOUTH_W: 56, MOUTH_H: 40,
+      SINK: 12                                // 允许陷入沙中的深度（搁浅触地判定留量）
+    },
+
+    V_CRUISE: 300,
+    DASH: {
+      WINDUP: 0.08, CRUISE_END: 0.65, TOTAL: 0.80,
+      V_START: 300, V_PEAK: 700, V_END: 300,
+      CD: 1.2, OMEGA: 90, CONE_DEG: 25
+    },
+    OMEGA_CRUISE: 360,
+
+    /* 携带惩罚曲线（GDD-01 §4.2） */
+    CARRY_V: function (k) { return k <= 0 ? 1.0 : (0.94 - 0.12 * k); },
+    CARRY_W: function (k) { return k <= 0 ? 1.0 : Math.max(0.25, 1.0 - 0.20 * k); },
+    CARRY_MAX: 4,
+
+    /* 体力（GDD-01 §4.3） */
+    STAMINA_MAX: 3,
+    DASH_COST_EMPTY: 1,
+    DASH_COST_CARRY: 2,
+    REGEN: { SURF: 0.6, DEEP: 0.4, SHALLOW: 0.2, BEACH: 0 },
+    REGEN_CARRY_MULT: 0.5,
+
+    /* 冲浪模式（GDD-01 §3.5） */
+    SURF: {
+      RATE_MULT: 1.25,
+      OMEGA_MULT: 1.10,
+      BAND: 40,          // |centerY - waterLineY| <= 40 design px（取 GDD 的 40，ADR-003 给 24）
+      SPEED_FRAC: 0.8    // |v| >= 0.8 * v_cruise(k)  ← 见 README「已知冲突 S1」
+    },
+
+    /* 强制打断态 */
+    SLOWED: { DUR: 0.6, RATE_MULT: 0.40, OMEGA_MULT: 0.70, REGEN_MULT: 0.5 },
+    STUN_DUR: 1.5,
+    SNARE_DUR: 1.5,
+    IFRAME_AFTER_CC: 0.6,
+
+    /* 搁浅（GDD-01 §3.6 + ADR-003 §2.4 的连续速率版） */
+    BEACH: {
+      V_TH: 210,       // 0.7 * v_cruise（GDD-01 §4.4）
+      T_STRAND: 1.2,
+      T_WARN: 0.72,    // 60% * T_STRAND
+      REC_IN: 2.0,
+      REC_OUT: 4.0
+    },
+
+    /* QTE（ADR-003 §2.6） */
+    QTE: {
+      WINDOW: 2.5, NEED: 6, MIN_INTERVAL: 0.1,
+      RING_OUTER: 140, RING_INNER: 80,
+      ALARM_RATE: 8.0,
+      FREEZE: 0.08, SHAKE: 6
+    },
+    QTE_ASSIST: { WINDOW: 3.5, NEED: 3 },
+
+    /* ALARM（GDD-02 §3.1/§3.2） */
+    ALARM: {
+      MAX: 100,
+      GRAB: 20, DECOY: 8, JETSKI: 5, CC_HIT: 3,
+      SLOPE: {
+        DEEP_MOVING: -2.0, DEEP_STILL: -4.0,
+        SHALLOW: 2.0, SURF: 0.5, BEACH: 4.0, AIRBORNE: 3.0,
+        BEACHED: 8.0
+      },
+      STILL_SPEED: 60,     // |v| < 此值视为「静止」（深海衰减取 -4.0）
+      UP: [25, 50, 75],    // 上升阈值（🔒）
+      DOWN: [22, 46, 70],  // 下降阈值（3 点迟滞带，安全要求）
+      MAX_EVENT_REARM: 90  // 「通缉令拉满」事件重复触发锁（跌破 90 才重触发）
+    },
+
+    /* 系绳（GDD-02 §3.5） */
+    TETHER: {
+      LOCK: 3.0,          // 锁定致死
+      BREAK: 1.5,         // 脱离观测断线所需（硬约束 < LOCK）
+      SEARCH: 4.0,        // `?` 搜索态持续
+      DEEP_X: 750,        // 深海 = 敌人禁区
+      DEEP_DEPTH: 240     // 水面下深度 > 240 且 x<750 → 不可观测
+    },
+
+    /* DECOY BREACH（GDD-03 §3.4） */
+    DECOY: { RADIUS: 160, MAX_TARGETS: 2, STALL: 2.5, MIN_X: 750, COST: 1 },
+
+    /* 咬合（GDD-03 §3.1） */
+    BITE: { DUR: 0.25, FREEZE: 0.08, SHAKE: 6, SHAKE_CD: 0.5 },
+
+    /* Bank（GDD-03 §3.6） */
+    BANK: { DIGEST: 0.8, DEEP_X: 750 },
+
+    /* 战利品（GDD-03 §3.1） */
+    PREY: {
+      SWIMMER: { score: 100, danger: 1.0, name: '泳客' },
+      SURFER: { score: 150, danger: 1.0, name: '冲浪者' },
+      SUNBATHER: { score: 100, danger: 1.0, name: '日光浴者' },
+      LIFEGUARD: { score: 300, danger: 2.0, name: '救生员' }
+    },
+
+    /* COMBO（GDD-03 §3.3，MVP 简化） */
+    COMBO: { PER_GRAB: 1, PER_COLLECT: 1, M_CAP: 3.0, STEP: 0.2 },
+    BANK_B: function () { return 1.0; },   // MVP：B(k) ≡ 1（线性，🔒 沙盘结论）
+
+    /* 敌人（GDD-02 §3.3/§3.4，MVP 简化版） */
+    ENEMY: {
+      WARN_LEAD: 0.8,
+      T1: { SPEED: 30, DUR: 0.6 },
+      T2A: { TELEGRAPH: 0.5, FLIGHT: 0.4, RANGE: 400, INTERVAL: 2.5 },
+      T2B: { SPEED: 340, KNOCK: 0.3, IFRAME: 0.5 },
+      T3B: { SPEED: 260, ALT: 44 },
+      CAPS: { T1: 3, T2A: 2, T2B: 2, T3B: 1 },
+      HARD_CAP: 7,
+      MIN_LIFE: 1.5
+    },
+
+    /* 相机 */
+    CAM: { LERP: 6.0, FOCUS_X: 0.62, FOCUS_Y: 0.46, Y_MIN: -320, BEACH_PAN: 0.35 },
+
+    /* 光敏性癫痫安全（硬红线①）：所有呼吸式脉动走 breath()，f 恒 <= 2Hz */
+    MAX_FLASH_HZ: 2.0,
+
+    /* 模拟（ADR-006 / GDD-01 E8） */
+    FIXED_DT: 1 / 60,
+    DT_CLAMP: 0.05,
+    MAX_SUBSTEP_PX: 40,
+    MAX_STEPS: 5
+  };
+
+  /* ---------- MVP 调色板 ----------
+   * 美术圣经 §2.3 定义了 13 色索引表，MVP 只取其中 10 色（灰调为主）。
+   * v0.1.0 补入 STEEL/ASH 两色：美术圣经 §4.1.3 明确规定鲨鱼**背侧主体**为
+   *   `#4A5A6E` 雾灰 → `#6E7C8C` 中灰（上深下浅的反遮蔽配色）
+   * 此前实现误用 DEEP2/SLATE（深藏青），导致鲨鱼在深海区（底色 ≈ #111F36）
+   * 的亮度比仅约 1.5:1 —— 玩家角色在 Bank 结算区**几乎不可见**。
+   * 这不是审美取舍，是资产没有执行已锁定的美术规范。
+   */
+  C.PAL = {
+    BLACK: '#0A0E17',
+    DEEP: '#16213A',
+    DEEP2: '#1B2E52',
+    SLATE: '#2E3E54',
+    STEEL: '#4A5A6E',      // 美术圣经 04 雾灰：鲨鱼背侧（上）
+    ASH: '#6E7C8C',        // 美术圣经 05 中灰：鲨鱼背侧（中）
+    MIST: '#8A97A8',       // 美术圣经 06 亮灰：鲨鱼受光边
+    PALE: '#C7CFD8',
+    WHITE: '#F2F5F8',
+    AMBER: '#FF8A3D',
+    BLOOD: '#FF3B3B',
+    MAGENTA: '#FF2E88',
+    CYAN: '#00C2FF'
+  };
+  /* 辅助色（非主调色板，仅用于占位素材内部） */
+  C.XPAL = {
+    SKIN: '#F0C89A',
+    HAIR: '#2A1E18',
+    SAND: '#E8C56A',
+    SAND_DK: '#A8813C',
+    WOOD: '#7A5A34',
+    GOLD: '#FFD23F',
+    TEAL: '#1E5F74'
+  };
+
+  /* 色盲模式映射（GDD-02 §5.4）：两条路径灰度化后均为单调亮度序列 */
+  C.PAL_CB = { BLOOD: '#00C2FF', AMBER: '#FFD23F' };
+
+  C.ZONE = { DEEP: 0, SHALLOW: 1, SURF: 2, BEACH: 3 };
+  C.ZONE_NAME = ['深海', '浅滩', '冲浪区', '沙滩'];
+  C.TIER_NAME = ['平静', '警戒', '追捕', '围剿'];
+
+  TL.C = C;
+})();
+
+</script>
+<script>
+/* ===== src/core/util.js ===== */
+/* =====================================================================
+ * TIDELINE · util.js
+ * 数学 / 随机 / 安全脉动。热路径函数保持零分配。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+  var TAU = Math.PI * 2;
+
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function smoothstep(e0, e1, x) {
+    var t = clamp((x - e0) / (e1 - e0), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  /* 最短角差，归一化到 (-180, 180] —— GDD-01 E5 */
+  function angDelta(target, cur) {
+    var d = (target - cur) % 360;
+    if (d > 180) d -= 360;
+    else if (d <= -180) d += 360;
+    return d;
+  }
+
+  /* 帧率无关的指数趋近 */
+  function damp(cur, dst, rate, dt) {
+    return lerp(cur, dst, 1 - Math.exp(-rate * dt));
+  }
+
+  function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
+    return Math.abs(ax - bx) * 2 < (aw + bw) && Math.abs(ay - by) * 2 < (ah + bh);
+  }
+
+  function dist2(ax, ay, bx, by) {
+    var dx = ax - bx, dy = ay - by;
+    return dx * dx + dy * dy;
+  }
+
+  /* ---- 随机（可播种，便于确定性回放） ---- */
+  var seed = 0x2f6e2b1;
+  function srand(s) { seed = (s >>> 0) || 1; }
+  function rand() {
+    // xorshift32
+    seed ^= seed << 13; seed >>>= 0;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5; seed >>>= 0;
+    return seed / 4294967296;
+  }
+  function rr(a, b) { return a + rand() * (b - a); }
+  function ri(a, b) { return Math.floor(rr(a, b + 1)); }
+  function pick(arr) { return arr[Math.floor(rand() * arr.length)]; }
+
+  /* ---- 光敏性癫痫安全（硬红线①） ----
+   * 全项目唯一的脉动函数。f 恒 <= 2Hz，且为呼吸式（无硬 on/off）。
+   * 关闭「闪烁」开关时调用方应传 f=0（返回常亮 1.0）。
+   */
+  function breath(t, f) {
+    var opts = TL.Game && TL.Game.opts;
+    if (!f || (opts && (!opts.flash || opts.reducedMotion))) return 1.0;
+    f = Math.min(Math.abs(f), TL.C.MAX_FLASH_HZ);
+    return 0.8 + 0.2 * Math.sin(t * f * TAU);
+  }
+
+  /* 有序抖动（Bayer 8x8）在 shader 里做；这里只提供 CPU 侧的量化阈值表 */
+  var BAYER8 = [
+    0, 32, 8, 40, 2, 34, 10, 42,
+    48, 16, 56, 24, 50, 18, 58, 26,
+    12, 44, 4, 36, 14, 46, 6, 38,
+    60, 28, 52, 20, 62, 30, 54, 22,
+    3, 35, 11, 43, 1, 33, 9, 41,
+    51, 19, 59, 27, 49, 17, 57, 25,
+    15, 47, 7, 39, 13, 45, 5, 37,
+    63, 31, 55, 23, 61, 29, 53, 21
+  ];
+
+  /* #RRGGBB → [r,g,b] 0..1 */
+  function hex2rgb(hex) {
+    var n = parseInt(hex.slice(1), 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  }
+
+  /* 亮度（Rec.709），用于校验「血红与洋红亮度相同」这类约束 */
+  function luma(hex) {
+    var c = hex2rgb(hex);
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+
+  TL.U = {
+    TAU: TAU, clamp: clamp, lerp: lerp, smoothstep: smoothstep,
+    angDelta: angDelta, damp: damp, aabb: aabb, dist2: dist2,
+    srand: srand, rand: rand, rr: rr, ri: ri, pick: pick,
+    breath: breath, BAYER8: BAYER8, hex2rgb: hex2rgb, luma: luma,
+    snapArt: function (v) { return Math.round(v / TL.C.ART_SCALE) * TL.C.ART_SCALE; }
+  };
+})();
+
+</script>
+<script>
+/* ===== src/core/input.js ===== */
+/* =====================================================================
+ * TIDELINE · core/input.js
+ * 1.5 个输入自由度（GDD-01 §3.1）：方向（连续）+ 冲刺（离散点按）。
+ * 键盘 / 触屏同源；触屏按 GDD-01 E6 管理 pointerId —— anchor 只由第一根
+ * 手指设定，第二根手指点按 = 冲刺，避免「想冲刺却突然转向」。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+
+  var keys = Object.create(null);
+  var dirX = 0, dirY = 0;
+  var dashFlag = false;
+  var pauseFlag = false;
+  var muteFlag = false;
+  var confirmFlag = false;
+  var taps = [];
+
+  var dragId = null, ax = 0, ay = 0, downT = 0, moved = 0;
+  var DEADZONE = 12, TAP_MS = 220;
+
+  /* 焦点是否落在表单控件上（菜单 / 设置面板内的按钮与勾选框）。 */
+  function typingUI() {
+    var a = document.activeElement;
+    if (!a || !a.tagName) return false;
+    var t = a.tagName.toUpperCase();
+    return t === 'BUTTON' || t === 'INPUT' || t === 'SELECT' ||
+      t === 'TEXTAREA' || t === 'A';
+  }
+
+  function onKeyDown(e) {
+    var k = e.key;
+
+    /* 焦点在按钮/控件上时放行原生行为 —— 否则空格无法激活聚焦的按钮
+     * （Enter 可以、空格不行），这是可访问性缺陷。
+     * 例外：Esc / P / M 是全局功能，任何时候都必须可用。 */
+    if (typingUI() && !(k === 'Escape' || k === 'p' || k === 'P' || k === 'm' || k === 'M')) return;
+
+    if (k === ' ' || k === 'Spacebar') {
+      if (!e.repeat) { dashFlag = true; taps.push(performance.now()); }
+      e.preventDefault();
+      return;
+    }
+    if (k === 'j' || k === 'J') { if (!e.repeat) { dashFlag = true; taps.push(performance.now()); } return; }
+    if (k === 'Escape' || k === 'p' || k === 'P') { pauseFlag = true; return; }
+    if (k === 'm' || k === 'M') { muteFlag = true; return; }
+    if (k === 'Enter') { confirmFlag = true; return; }
+    keys[k.toLowerCase()] = true;
+    if (k.indexOf('Arrow') === 0) e.preventDefault();
+  }
+  function onKeyUp(e) { keys[e.key.toLowerCase()] = false; }
+  /* 失焦：除方向外，**必须一并清掉待消费的一次性标志**。
+   * 否则「按住空格切出去 → 切回来」会凭空触发一次冲刺；
+   * 结算页按过 Enter 再切走，回来还可能直接重开一局。 */
+  function onBlur() {
+    keys = Object.create(null);
+    dirX = dirY = 0; dragId = null;
+    dashFlag = false; pauseFlag = false; muteFlag = false; confirmFlag = false;
+    taps.length = 0;
+  }
+
+  function localPos(e, el) {
+    var r = el.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) / r.width * TL.C.DESIGN_W,
+      y: (e.clientY - r.top) / r.height * TL.C.DESIGN_H
+    };
+  }
+
+  /* ⭐ 判定「这次指针按下落在 UI 上」。
+   *
+   * 为什么必须有这个判断：在 pointerdown 上调 preventDefault() 会按规范
+   * **抑制随后的兼容鼠标事件（mousedown / mouseup / click）**。
+   * 菜单按钮位于 #stage 内部，事件冒泡到 stage 的处理器就被掐断 ——
+   * 结果是「鼠标点不动任何菜单按钮」，而程序化的 el.click() 却能正常触发，
+   * 所以纯 DOM 级测试**永远发现不了**这个缺陷（必须真实指针点击才能暴露）。
+   */
+  function onUI(target, root) {
+    for (var n = target; n && n !== root; n = n.parentNode) {
+      if (!n.tagName) continue;
+      var tag = n.tagName.toUpperCase();
+      if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' ||
+        tag === 'LABEL' || tag === 'A' || tag === 'TEXTAREA') return true;
+      if (n.id === 'screens') return true;      // 任何覆盖层内部一律交给 UI
+    }
+    return false;
+  }
+
+  function bind(el) {
+    el.style.touchAction = 'none';
+    el.addEventListener('pointerdown', function (e) {
+      if (onUI(e.target, el)) return;            // 放行 UI，绝不 preventDefault
+      if (dragId === null) {
+        dragId = e.pointerId;
+        var p = localPos(e, el);
+        ax = p.x; ay = p.y; downT = performance.now(); moved = 0;
+        try { el.setPointerCapture(e.pointerId); } catch (err) { }
+      } else {
+        // 第二根手指 → 冲刺 / QTE 连打
+        dashFlag = true; taps.push(performance.now());
+      }
+      e.preventDefault();
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== dragId) return;
+      var p = localPos(e, el);
+      var dx = p.x - ax, dy = p.y - ay;
+      var len = Math.sqrt(dx * dx + dy * dy);
+      if (len > moved) moved = len;
+      if (len < DEADZONE) { dirX = 0; dirY = 0; return; }
+      dirX = dx / len; dirY = dy / len;
+      e.preventDefault();
+    });
+    function up(e) {
+      if (e.pointerId !== dragId) return;
+      var dt = performance.now() - downT;
+      if (dt < TAP_MS && moved < DEADZONE) {
+        dashFlag = true; taps.push(performance.now());
+      }
+      dragId = null;
+      dirX = 0; dirY = 0;   // E6：不自动接管，保持上一帧 θ
+    }
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  }
+
+  function update() {
+    var kx = 0, ky = 0;
+    if (keys['arrowleft'] || keys['a']) kx -= 1;
+    if (keys['arrowright'] || keys['d']) kx += 1;
+    if (keys['arrowup'] || keys['w']) ky -= 1;
+    if (keys['arrowdown'] || keys['s']) ky += 1;
+    if (kx || ky) {
+      var l = Math.sqrt(kx * kx + ky * ky);
+      dirX = kx / l; dirY = ky / l;
+    } else if (dragId === null) {
+      dirX = 0; dirY = 0;
+    }
+  }
+
+  TL.Input = {
+    bind: bind,
+    update: update,
+    get dirX() { return dirX; },
+    get dirY() { return dirY; },
+    get hasDir() { return (dirX * dirX + dirY * dirY) > 0.0001; },
+    consumeDash: function () { var d = dashFlag; dashFlag = false; return d; },
+    takeTaps: function () { var t = taps; taps = []; return t; },
+    consumePause: function () { var p = pauseFlag; pauseFlag = false; return p; },
+    consumeMute: function () { var m = muteFlag; muteFlag = false; return m; },
+    consumeConfirm: function () { var c = confirmFlag; confirmFlag = false; return c; },
+    clear: function () { dashFlag = false; taps.length = 0; dirX = dirY = 0; },
+    reset: onBlur
+  };
+
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', onBlur);
+})();
+
+</script>
+<script>
+/* ===== src/core/audio.js ===== */
+/* =====================================================================
+ * TIDELINE · core/audio.js
+ * Phase 6 · 音频总监 阮和鸣（Ruan Hemo）
+ *
+ * 设计文档：design/audio/PH6-audio-design.md
+ *
+ * ── 本文件不是"装饰音"，它是「冗余信息通道」的第三重 ────────────────
+ * 硬红线②：颜色永不作为唯一信息通道。美术侧给了形态通道（血红=静态填充 /
+ * 洋红=径向运动粒子），本文件给的是**听觉通道**：玩家不看 HUD、不看颜色，
+ * 也必须知道 ALARM 升降、QTE 还差几次、系绳是否已断、是否刚 Bank 成功。
+ *
+ * ── 三条硬约束 ──────────────────────────────────────────────────────
+ * ① 零外部资产：全部由振荡器 / 噪声缓冲 / 包络 / 滤波器现场合成。
+ * ② 静音必须可用：setMuted(true) 后本模块只读不写，绝不参与任何游戏逻辑。
+ * ③ 光敏安全：音频自身不闪烁，但**不得与视觉脉动同步形成 >2Hz 复合刺激**。
+ *    → QTE 心跳锁死 2.0Hz（与圆环 2Hz 呼吸同频）；
+ *    → 系绳张力音是**连续滑音**，不是脉冲（系绳视觉呼吸 1Hz，二者不同频）；
+ *    → reducedMotion 下关闭心跳层。
+ *
+ * ── 总线结构 ────────────────────────────────────────────────────────
+ *   SFX ──┐
+ *   MUSIC ┼→ limiter(DynamicsCompressor) → master(静音开关) → destination
+ *   UI  ──┘
+ * 音乐层是**四层可加性分层**（L1 脉冲 / L2 军鼓 / L3 引擎 / L4 围剿），
+ * 由 ALARM 档位 tier(0–3) 与「是否携带」共同驱动（概念文档 §2 支柱一）。
+ *
+ * ── 状态来源 ────────────────────────────────────────────────────────
+ * 为**零改动调用方**，本模块不新增任何对外方法调用点：音乐层通过轮询
+ * window.TL.Game 的只读字段（tier / shark.carryK / qte.active / over）
+ * 取得状态；SFX 侧的短时状态（QTE 计数、系绳）由事件流自行镜像。
+ * 因此本模块对游戏是**纯读取**，删除它不会改变任何一帧的判定。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+
+  /* ==================================================================
+   * 0 · 混音常量（唯一真源，改这里不要改各处硬编码）
+   * ================================================================== */
+  var MASTER_GAIN = 0.30;                       // 总输出（留 headroom 给 limiter）
+  var BUS = { SFX: 1.00, MUSIC: 0.42, UI: 0.70 };
+  var MAX_VOICES = 20;                          // SFX 并发上限
+  var MUSIC_EXTRA = 10;                         // 音乐层额外声部预算（不被 SFX 挤掉）
+
+  var LOOKAHEAD = 0.14;                         // 调度提前量（秒）
+  var TICK_MS = 25;                             // 调度器心跳（毫秒）
+
+  /* 音乐：A 自然小调，根音 A1 = 55Hz
+   * 半音级：A=0 B=2 C=3 D=5 E=7 F=8 G=10
+   * ⚠️ 刻意避开《大白鲨》式的两音交替 ostinato（版权与其直白的喜剧感），
+   *    改用 6 音切分的 lope——像"有什么东西在水下绕圈"。            */
+  var ROOT = 55.0;
+  var PULSE_DEG = [0, null, null, 7, null, null, 0, null,
+    3, null, null, 0, null, null, 5, null];
+
+  /* 事件冷却（秒）：防止同名音效在 1 帧内堆叠成噪音墙 */
+  var COOLDOWN = {
+    splash: 0.05, thrash: 0.03, hit: 0.06, lockWarn: 0.25, ui: 0.03,
+    decoy: 0.10, deny: 0.15, tierUp: 0.12, tierDown: 0.12, rescued: 0.10,
+    sting: 0.20, collect: 0.04
+  };
+
+  /* ==================================================================
+   * 1 · 上下文与总线
+   * ================================================================== */
+  var ctx = null, master = null, limiter = null;
+  var busSfx = null, busMusic = null, busUi = null;
+  var noiseBuf = null;
+  var muted = false;
+
+  /** 存活声部表：{ n:[节点...], end:ctxTime }。这是节点泄漏的唯一防线。 */
+  var live = [];
+
+  function ready() { return !!ctx && !muted; }
+
+  function init() {
+    if (ctx) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;                            // 无 WebAudio → 全部静默降级
+    try { ctx = new AC(); } catch (e) { ctx = null; return; }
+
+    /* 主输出链：buses → limiter → master → destination
+     * limiter 放在 master 之前，这样静音斜坡不会引起压缩器抽吸。        */
+    master = ctx.createGain();
+    master.gain.value = muted ? 0 : MASTER_GAIN;
+    master.connect(ctx.destination);
+
+    limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -10;              // 堆叠到 -10dB 开始压
+    limiter.knee.value = 8;
+    limiter.ratio.value = 12;                   // 硬限幅，杜绝削波爆音
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.16;
+    limiter.connect(master);
+
+    busSfx = ctx.createGain(); busSfx.gain.value = BUS.SFX; busSfx.connect(limiter);
+    busMusic = ctx.createGain();
+    busMusic.gain.value = MUS.musicOff ? 0.0001 : BUS.MUSIC;   // 尊重已设定的音乐开关
+    busMusic.connect(limiter);
+    busUi = ctx.createGain(); busUi.gain.value = BUS.UI; busUi.connect(limiter);
+
+    /* 2.0s 白噪声缓冲：所有水花 / 军鼓 / 沙尘 / 抽气声共用同一份数据，
+     * 靠随机读取偏移 + playbackRate 制造变体（省内存，零额外资产）。   */
+    var len = Math.floor(ctx.sampleRate * 2.0);
+    noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+    var d = noiseBuf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+
+    buildMusic();
+    if (!MUS.timer) MUS.timer = setInterval(tick, TICK_MS);
+  }
+
+  function resume() {
+    if (ctx && ctx.state === 'suspended' && ctx.resume) ctx.resume();
+  }
+
+  /* ==================================================================
+   * 2 · 声部核心（两个原语：tone / noise）
+   * ================================================================== */
+  function claim(music) {
+    return live.length < (music ? MAX_VOICES + MUSIC_EXTRA : MAX_VOICES);
+  }
+  function mkEntry(chain, endAt) {
+    var e = { n: chain, end: endAt };
+    live.push(e);
+    return e;
+  }
+  function drop(e) {
+    var i = live.indexOf(e);
+    if (i >= 0) live.splice(i, 1);
+    for (var j = 0; j < e.n.length; j++) { try { e.n[j].disconnect(); } catch (x) { } }
+  }
+  /** 兜底回收：onended 没触发（如上下文被系统挂起）时，按时间强制回收。 */
+  function prune() {
+    if (!ctx) return;
+    var t = ctx.currentTime;
+    for (var i = live.length - 1; i >= 0; i--) if (live[i].end < t) drop(live[i]);
+  }
+
+  function chainFilters(chain, tail, opt) {
+    var f;
+    if (opt.hp) {
+      f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = opt.hp;
+      chain.push(f); tail.connect(f); tail = f;
+    }
+    if (opt.lp) {
+      f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = opt.lp;
+      if (opt.lpSweep) {
+        f.frequency.setValueAtTime(opt.lpSweep[0], ctx.currentTime + (opt.delay || 0));
+        f.frequency.exponentialRampToValueAtTime(
+          Math.max(40, opt.lpSweep[1]), ctx.currentTime + (opt.delay || 0) + opt.dur);
+      }
+      chain.push(f); tail.connect(f); tail = f;
+    }
+    if (opt.bp) {
+      f = ctx.createBiquadFilter(); f.type = 'bandpass';
+      f.frequency.value = opt.bp; f.Q.value = opt.q || 1.0;
+      if (opt.bpSweep) {
+        f.frequency.setValueAtTime(opt.bpSweep[0], ctx.currentTime + (opt.delay || 0));
+        f.frequency.exponentialRampToValueAtTime(
+          Math.max(40, opt.bpSweep[1]), ctx.currentTime + (opt.delay || 0) + opt.dur);
+      }
+      chain.push(f); tail.connect(f); tail = f;
+    }
+    return tail;
+  }
+
+  /**
+   * 振荡器声部。指数包络（听感上更接近"打击"），结束即自动断链。
+   * @param type  sine|square|sawtooth|triangle
+   * @param f0/f1 起止频率（指数滑音；相等则定频）
+   */
+  function tone(type, f0, f1, dur, peak, opt) {
+    if (!ready()) return null;
+    opt = opt || {};
+    if (!claim(opt.music)) return null;
+    var t0 = ctx.currentTime + (opt.delay || 0);
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    var chain = [o, g];
+    o.type = type;
+    o.frequency.setValueAtTime(Math.max(20, f0), t0);
+    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+
+    var atk = opt.attack !== undefined ? opt.attack : Math.min(0.008, dur * 0.22);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + atk);
+    if (opt.hold !== undefined) g.gain.setValueAtTime(Math.max(0.0002, peak), t0 + Math.min(dur * 0.92, opt.hold));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+    o.connect(g);
+    var tail = chainFilters(chain, g, { hp: opt.hp, lp: opt.lp, lpSweep: opt.lpSweep, dur: dur, delay: opt.delay || 0 });
+    tail.connect(opt.bus || busSfx);
+
+    var e = mkEntry(chain, t0 + dur + 0.06);
+    o.onended = function () { drop(e); };
+    o.start(t0);
+    o.stop(t0 + dur + 0.02);
+    return o;
+  }
+
+  /** 噪声声部（水花 / 军鼓 / 沙尘 / 抽气）。共享 noiseBuf，随机读取偏移。 */
+  function noise(dur, peak, opt) {
+    if (!ready() || !noiseBuf) return null;
+    opt = opt || {};
+    if (!claim(opt.music)) return null;
+    var t0 = ctx.currentTime + (opt.delay || 0);
+    var s = ctx.createBufferSource(), g = ctx.createGain();
+    var chain = [s, g];
+    s.buffer = noiseBuf;
+    if (opt.rate) s.playbackRate.value = opt.rate;
+
+    var atk = opt.attack !== undefined ? opt.attack : Math.min(0.006, dur * 0.2);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + atk);
+    if (opt.hold !== undefined) g.gain.setValueAtTime(Math.max(0.0002, peak), t0 + Math.min(dur * 0.92, opt.hold));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+    s.connect(g);
+    var tail = chainFilters(chain, g, {
+      hp: opt.hp, lp: opt.lp, lpSweep: opt.lpSweep,
+      bp: opt.bp, q: opt.q, bpSweep: opt.bpSweep, dur: dur, delay: opt.delay || 0
+    });
+    tail.connect(opt.bus || busSfx);
+
+    var maxOff = Math.max(0, noiseBuf.duration - dur - 0.05);
+    var e = mkEntry(chain, t0 + dur + 0.06);
+    s.onended = function () { drop(e); };
+    s.start(t0, Math.random() * maxOff);
+    s.stop(t0 + dur);
+    return s;
+  }
+
+  /* ==================================================================
+   * 3 · 侧链闪避（duck）：关键音触发时把音乐压下去
+   *    比"单纯调大音效"干净得多——关键音在**安静的床**上才听得清。
+   * ================================================================== */
+  function duck(to, hold) {
+    if (!ready() || !busMusic) return;
+    var t = ctx.currentTime, g = busMusic.gain;
+    try {
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(Math.max(0.0001, g.value), t);
+      g.linearRampToValueAtTime(BUS.MUSIC * to, t + 0.06);
+      g.setValueAtTime(BUS.MUSIC * to, t + 0.06 + hold);
+      g.linearRampToValueAtTime(BUS.MUSIC, t + 0.06 + hold + 0.45);
+    } catch (e) { /* 参数自动化失败不影响游戏 */ }
+  }
+
+  /* ==================================================================
+   * 4 · 事件流镜像（QTE 计数 / 携带 / 系绳）
+   * ================================================================== */
+  var mirror = { qteStep: 0, carry: 0, over: false, collect: 0 };
+
+  function qteReset() { mirror.qteStep = 0; }
+
+  /* ==================================================================
+   * 5 · 系绳张力音（GDD-02 §5.2「绷紧音升调」）
+   *    连续上行滑音：220→660Hz（+ 纯五度泛音），3.0s 走完 = 锁定致死时长。
+   *    ⚠️ 刻意做成**连续滑音而非脉冲**：系绳的视觉呼吸是 1Hz，
+   *       若音频也做脉冲会与之同步，构成复合周期刺激。滑音无周期性。
+   * ================================================================== */
+  var riser = null;
+  function lockSeconds() {
+    return (TL.C && TL.C.TETHER && TL.C.TETHER.LOCK) || 3.0;
+  }
+  function startRiser() {
+    if (!ready()) return;
+    stopRiser(0.04);
+    var t = ctx.currentTime, L = lockSeconds();
+    var a = ctx.createOscillator(), b = ctx.createOscillator();
+    var g = ctx.createGain(), f = ctx.createBiquadFilter();
+    a.type = 'sine'; b.type = 'sine';
+    a.frequency.setValueAtTime(220, t); a.frequency.linearRampToValueAtTime(660, t + L);
+    b.frequency.setValueAtTime(330, t); b.frequency.linearRampToValueAtTime(990, t + L);
+    f.type = 'lowpass'; f.frequency.value = 2400;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.085, t + 0.7);
+    a.connect(f); b.connect(f); f.connect(g); g.connect(busSfx);
+    a.start(t); b.start(t);
+    riser = { a: a, b: b, g: g, f: f };
+  }
+  function stopRiser(fade) {
+    if (!riser || !ctx) return;
+    var r = riser; riser = null;
+    var t = ctx.currentTime, d = (fade === undefined ? 0.12 : fade);
+    try {
+      r.g.gain.cancelScheduledValues(t);
+      r.g.gain.setValueAtTime(Math.max(0.0002, r.g.gain.value), t);
+      r.g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      r.a.stop(t + d + 0.02); r.b.stop(t + d + 0.02);
+      r.a.onended = function () {
+        try { r.a.disconnect(); r.b.disconnect(); r.f.disconnect(); r.g.disconnect(); } catch (x) { }
+      };
+    } catch (e) { }
+  }
+
+  /* ==================================================================
+   * 6 · 动态音乐层（L1 脉冲 / L2 军鼓 / L3 引擎 / L4 围剿）
+   * ================================================================== */
+  var MUS = {
+    timer: 0, step: 0, next: 0, bpm: 96,
+    gPulse: null, gSnare: null, gEngine: null, gHat: null, gSiege: null, gHeart: null,
+    engF: null, tg: { pulse: 1, snare: 0, engine: 0, hat: 0, siege: 0, heart: 0 }
+  };
+
+  function buildMusic() {
+    function layer() {
+      var g = ctx.createGain(); g.gain.value = 0; g.connect(busMusic); return g;
+    }
+    MUS.gPulse = layer(); MUS.gSnare = layer(); MUS.gHat = layer();
+    MUS.gSiege = layer(); MUS.gHeart = layer(); MUS.gEngine = layer();
+
+    /* 引擎层：两个失谐锯齿（48 / 48.7Hz）→ 低通 → 旋翼颤音 → 层增益
+     * 6.5Hz 的 AM 是"直升机旋翼"的听觉签名（GDD-02：T3b 恒定带系绳）。
+     * 它是**连续**的，不与任何 1–2Hz 视觉脉动同步。                    */
+    var f = ctx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 150; f.Q.value = 0.8;
+    MUS.engF = f;
+    var trem = ctx.createGain(); trem.gain.value = 0.65;
+    var lfo = ctx.createOscillator(), lfoG = ctx.createGain();
+    lfo.type = 'sine'; lfo.frequency.value = 6.5; lfoG.gain.value = 0.35;
+    lfo.connect(lfoG); lfoG.connect(trem.gain);
+    for (var i = 0; i < 2; i++) {
+      var o = ctx.createOscillator();
+      o.type = 'sawtooth'; o.frequency.value = 48 + i * 0.7;
+      o.connect(f); o.start(ctx.currentTime);
+    }
+    f.connect(trem); trem.connect(MUS.gEngine);
+    lfo.start(ctx.currentTime);
+  }
+
+  /** 只读轮询游戏状态（不新增任何调用点，不改任何判定）。 */
+  function gameState() {
+    var G = (window.TL && TL.Game) ? TL.Game : null;
+    if (!G) return { tier: 0, carry: 0, qte: false, over: false, reduced: false };
+    var s = G.shark;
+    return {
+      tier: G.tier | 0,
+      carry: (s && s.carryK) ? 1 : 0,
+      qte: !!G.qte.active,
+      over: !!G.over,
+      reduced: !!(G.opts && (G.opts.reducedMotion || G.opts.qteAssist))
+    };
+  }
+
+  /** 各层目标增益（0–1）。支柱一：携带 → 军鼓 + 引擎无条件上场。 */
+  function musicTargets(st) {
+    if (st.over) return { pulse: 0, snare: 0, engine: 0, hat: 0, siege: 0, heart: 0 };
+    if (st.qte && !st.reduced) return { pulse: 0, snare: 0, engine: 0, hat: 0, siege: 0, heart: 1 };
+    var carrying = st.carry > 0;
+    return {
+      pulse: carrying ? 0.55 : 1.00,                 // 携带时低音让位给军鼓/引擎
+      snare: (st.tier >= 1 || carrying) ? 1 : 0,
+      engine: (st.tier >= 2 || carrying) ? 1 : 0,
+      hat: st.tier >= 3 ? 1 : (st.tier >= 2 ? 0.7 : 0),
+      siege: st.tier >= 3 ? 1 : 0,
+      heart: 0
+    };
+  }
+
+  function setG(node, v) {
+    if (!node) return;
+    try { node.gain.setTargetAtTime(v, ctx.currentTime, 0.18); } catch (e) { }
+  }
+  function applyTargets() {
+    var P = MUS.tg;
+    setG(MUS.gPulse, P.pulse);
+    setG(MUS.gSnare, P.snare);
+    setG(MUS.gEngine, P.engine * 0.9);
+    setG(MUS.gHat, P.hat);
+    setG(MUS.gSiege, P.siege);
+    setG(MUS.gHeart, P.heart);
+    if (MUS.engF) {
+      try {
+        MUS.engF.frequency.setTargetAtTime(140 + P.engine * 150 + P.siege * 140, ctx.currentTime, 0.4);
+      } catch (e) { }
+    }
+  }
+
+  function scheduleStep(s, t) {
+    var d = Math.max(0, t - ctx.currentTime);
+    var P = MUS.tg;
+    var i;
+
+    /* 音乐开关关闭时，除**心跳**外的所有层目标增益一律视作 0。
+     * 心跳是 QTE「还差几次」的听觉量表，属冗余信息通道，
+     * 不得随音乐开关一起消失（硬红线②：颜色/音乐都不是唯一通道）。 */
+    if (MUS.musicOff) P = { pulse: 0, snare: 0, engine: 0, hat: 0, siege: 0, heart: P.heart };
+
+    /* --- L1 · 脉冲 Bass（全档位常驻的床） --- */
+    var deg = PULSE_DEG[s];
+    if (deg !== null && deg !== undefined && P.pulse > 0.01) {
+      var f = ROOT * Math.pow(2, deg / 12);
+      tone('triangle', f, f, 0.16, 0.17 * P.pulse, { bus: MUS.gPulse, delay: d, music: 1, attack: 0.006 });
+      tone('sine', f * 0.5, f * 0.5, 0.20, 0.10 * P.pulse, { bus: MUS.gPulse, delay: d, music: 1, attack: 0.008 });
+    }
+
+    /* --- L2 · 军鼓（T1+ 或 携带中）：正拍 4 / 12，T3 加 7 / 15 幽灵音 --- */
+    if (P.snare > 0.01 && (s === 4 || s === 12)) {
+      noise(0.11, 0.15 * P.snare, { lp: 3200, hp: 900, bus: MUS.gSnare, delay: d, music: 1 });
+      tone('triangle', 190, 130, 0.08, 0.06 * P.snare, { bus: MUS.gSnare, delay: d, music: 1 });
+    }
+    if (P.snare > 0.5 && (s === 7 || s === 15)) {
+      noise(0.06, 0.07, { lp: 4200, hp: 1200, bus: MUS.gSnare, delay: d, music: 1 });
+    }
+
+    /* --- L3b · hi-hat：T2 走 8 分，T3 走 16 分（密度即紧迫度） --- */
+    if (P.hat > 0.01 && (P.hat > 0.9 || s % 2 === 0)) {
+      noise(0.035, (s % 4 === 0 ? 0.045 : 0.026) * P.hat,
+        { lp: 7000, hp: 4200, bus: MUS.gHat, delay: d, music: 1 });
+    }
+
+    /* --- L4 · 围剿刺：每小节头的三全音（A2 110 / D#3 155.56）
+     *     减五度 = 不解决。概念文档 §2 支柱二：「贪婪冲滩时是不解决的减和弦」 */
+    if (P.siege > 0.01 && s === 0) {
+      tone('sawtooth', 110, 110, 0.42, 0.10 * P.siege, { bus: MUS.gSiege, delay: d, lp: 700, music: 1 });
+      tone('sawtooth', 155.56, 155.56, 0.42, 0.08 * P.siege, { bus: MUS.gSiege, delay: d, lp: 700, music: 1 });
+    }
+
+    /* --- QTE 心跳：bpm 恒 120 → 步 0/4/8/12 = 严格 2.0Hz
+     *     与 QTE 圆环 2Hz 呼吸**同频**，复合刺激仍为 2Hz（硬红线①） --- */
+    if (P.heart > 0.01 && (s === 0 || s === 4 || s === 8 || s === 12)) {
+      tone('sine', 74, 46, 0.15, 0.26 * P.heart, { bus: MUS.gHeart, delay: d, music: 1 });
+    }
+  }
+
+  function tick() {
+    if (!ctx) return;
+    prune();
+    if (muted || ctx.state !== 'running') return;
+    var st = gameState();
+    var t = ctx.currentTime;
+
+    /* 落后太多（切后台 / 长时间挂起）→ 重新对齐，绝不追赶补发一堆积压音符 */
+    if (MUS.next < t) MUS.next = t + 0.03;
+
+    MUS.tg = musicTargets(st);
+    if (MUS.musicOff) {
+      MUS.tg = { pulse: 0, snare: 0, engine: 0, hat: 0, siege: 0, heart: MUS.tg.heart };
+    }
+    var guard = 0;
+    while (MUS.next < t + LOOKAHEAD && guard++ < 64) {
+      if (MUS.step === 0) {
+        MUS.bpm = st.qte && !st.reduced ? 120 : (96 + st.tier * 8);
+        applyTargets();
+      }
+      scheduleStep(MUS.step, MUS.next);
+      MUS.next += (60 / MUS.bpm) / 4;         // 16 分音符步长
+      MUS.step = (MUS.step + 1) & 15;
+    }
+  }
+
+  /* ==================================================================
+   * 7 · 音效表
+   *   命名约定：<对象><动作>，骆驼命名。时长全部 <200ms（概念文档 §2
+   *   支柱三「留白多，反馈音效短促」），仅 death / bank 例外（它们是
+   *   段落级的情绪收束，不是反馈音）。
+   * ================================================================== */
+  var SFX = {
+
+    /* ---------- P0 · 冗余信息通道（禁止削减、禁止加冷却） ---------- */
+
+    /** ALARM 升档：两音上行 A4→E5（纯五度），square = 硬、刺 */
+    tierUp: function () {
+      tone('square', 440, 440, 0.09, 0.26, { lp: 5200 });
+      tone('square', 659.25, 659.25, 0.10, 0.24, { delay: 0.085, lp: 5200 });
+      duck(0.30, 0.30);
+    },
+
+    /** ALARM 降档：同两音**下行** + triangle（软）
+     *  ⭐ 与升档的区分是**双通道**的：音高走向（上行/下行）+ 波形（方/三角）。
+     *     任一维度单独失效（听力损失 / 音色掩蔽）仍可辨。                  */
+    tierDown: function () {
+      tone('triangle', 659.25, 659.25, 0.09, 0.22, {});
+      tone('triangle', 440, 440, 0.11, 0.20, { delay: 0.085 });
+    },
+
+    /** 「通缉令拉满」（ALARM=100，GDD-02 E6 有重复触发锁）：三连上行 + 三全音悬置 */
+    alarmMax: function () {
+      tone('square', 440, 440, 0.07, 0.24, { lp: 5200 });
+      tone('square', 587.33, 587.33, 0.07, 0.24, { delay: 0.07, lp: 5200 });
+      tone('square', 880, 880, 0.22, 0.26, { delay: 0.14, lp: 5200 });
+      tone('sawtooth', 622.25, 622.25, 0.5, 0.08, { delay: 0.14, lp: 1400 });
+      duck(0.24, 0.55);
+    },
+
+    /** QTE 每次有效输入：音高随进度**逐级上行**（每次 +1.5 半音）
+     *  ⭐ 这是"还差几次"的听觉量表：玩家不看圆环也知道进度。 */
+    thrash: function () {
+      var f = 150 * Math.pow(2, mirror.qteStep * 1.5 / 12);
+      mirror.qteStep++;
+      noise(0.07, 0.18, { lp: 1600, hp: 300, hold: 0.012 });
+      tone('square', f, f * 0.55, 0.09, 0.20, { lp: 3000 });
+    },
+
+    /** 搁浅预警（strandT ≥ 0.72s）：上行滑音 + 轻微失谐 → "不对劲" */
+    sting: function () {
+      tone('sawtooth', 220, 440, 0.40, 0.16, { lp: 1400 });
+      tone('sine', 223, 446, 0.40, 0.09, { lp: 1400 });
+    },
+
+    /** 搁浅确认（enterBeached）：抽气声。带通从 1800 扫到 300 = 强调色被抽干 */
+    beached: function () {
+      noise(0.55, 0.24, { bp: 1800, q: 1.2, bpSweep: [1800, 300], hold: 0.10 });
+      tone('sine', 90, 58, 0.45, 0.26, {});
+      duck(0.12, 0.90);
+    },
+
+    /** ⭐ 系绳锁定开始：死亡倒计时的起点，必须是全场最刺的音之一 */
+    tether: function () {
+      tone('square', 1400, 1400, 0.05, 0.16, { lp: 6000 });
+      tone('square', 1400, 1400, 0.05, 0.14, { delay: 0.085, lp: 6000 });
+      tone('sawtooth', 1200, 380, 0.26, 0.20, { delay: 0.16, lp: 2600 });
+      duck(0.28, 0.45);
+      startRiser();
+    },
+
+    /** ⭐ 断线成功：与 tether **方向相反**（下行 vs 上行）+ 一声"叮" = 安全 */
+    tetherBreak: function () {
+      stopRiser(0.10);
+      tone('sine', 600, 1400, 0.18, 0.22, {});
+      tone('triangle', 1760, 1760, 0.14, 0.14, { delay: 0.10 });
+    },
+
+    /** ⭐ 捕食成功：核心动词的听觉具象化。低频"咔" + 水肉噪声 + 三角点缀 */
+    bite: function () {
+      tone('square', 160, 55, 0.16, 0.34, {});
+      noise(0.22, 0.26, { lp: 900 });
+      tone('triangle', 220, 180, 0.12, 0.14, { delay: 0.02 });
+      duck(0.34, 0.20);
+      mirror.carry = 1;
+    },
+
+    /** ⭐ Bank 结算：「落袋为安」。C-E-G 大三和弦琶音 + 解决的八度长音 */
+    bank: function () {
+      var seq = [523.25, 659.25, 783.99];
+      for (var i = 0; i < seq.length; i++) {
+        tone('triangle', seq[i], seq[i], 0.10, 0.24, { delay: i * 0.09 });
+      }
+      tone('triangle', 1046.5, 1046.5, 0.28, 0.22, { delay: 0.27 });
+      tone('sine', 1567.98, 1567.98, 0.34, 0.06, { delay: 0.30 });   // 余韵
+      duck(0.30, 0.50);
+      mirror.carry = 0; mirror.collect = 0; qteReset(); stopRiser(0.08);
+    },
+
+    /** 脱困 / 冲刺自救：上行四度 G4→C5，**不解决**到长音（与 bank 区分） */
+    rescued: function () {
+      tone('triangle', 392, 392, 0.10, 0.24, {});
+      tone('triangle', 523.25, 523.25, 0.20, 0.22, { delay: 0.10 });
+      noise(0.20, 0.14, { lp: 2400, hp: 400, delay: 0.02 });
+      qteReset();
+    },
+
+    /** 死亡：下扫 + 悬置的减五度（A3/D#4）→ 支柱二「押注全损 = 和弦不解决」 */
+    death: function () {
+      tone('sawtooth', 220, 45, 0.70, 0.30, { lp: 900 });
+      noise(0.60, 0.16, { lp: 500 });
+      tone('sine', 220, 220, 0.90, 0.06, { delay: 0.30 });
+      tone('sine', 311.13, 311.13, 0.90, 0.05, { delay: 0.30 });
+      duck(0.10, 1.20);
+      stopRiser(0.05);
+      qteReset();
+      mirror.carry = 0; mirror.collect = 0;
+    },
+
+    /** 体力不足拒绝（GDD-03 E6 明确要求，此前遗漏）：短促下行两声 = "不行" */
+    deny: function () {
+      tone('square', 300, 300, 0.05, 0.13, { lp: 2000 });
+      tone('square', 200, 200, 0.06, 0.12, { delay: 0.07, lp: 2000 });
+    },
+
+    /* ---------- P1 · 应该有 ---------- */
+
+    /** ⭐ 收集物拾取（副循环）：音高随「本局已收集数」逐级上行（每个 +1.5 半音）。
+     *  玩家不看 HUD 也能靠听知道这一趟攒了多少 —— 与 QTE 连打音同一套听觉量表逻辑。 */
+    collect: function () {
+      var f = 740 * Math.pow(2, Math.min(mirror.collect, 11) * 1.5 / 12);
+      mirror.collect++;
+      tone('triangle', f, f * 1.45, 0.10, 0.15, {});
+      tone('sine', f * 2.0, f * 2.0, 0.07, 0.06, { delay: 0.05 });
+    },
+
+    /** 破水 / 冲刺起手：短水花 */
+    splash: function () {
+      noise(0.16, 0.15, { lp: 2600, hp: 500 });
+      tone('sine', 300, 700, 0.10, 0.09, {});
+    },
+
+    /** 大破水（保留给 Standard 的 breach 演出） */
+    breach: function () {
+      noise(0.34, 0.24, { lp: 3200, hp: 300 });
+      tone('sine', 220, 620, 0.18, 0.13, {});
+    },
+
+    /** DECOY BREACH 炸水：比 splash 大，但**层级低于捕食**（无低频冲击、无顿帧） */
+    decoy: function () {
+      noise(0.40, 0.26, { lp: 2400, hp: 200, hold: 0.06 });
+      tone('sawtooth', 520, 180, 0.22, 0.16, { lp: 1800 });
+      duck(0.38, 0.20);
+    },
+
+    /** 受击（浮标 / 渔网 / 摩托艇 / 垃圾）：锯齿下扫 + 闷噪声 */
+    hit: function () {
+      tone('sawtooth', 140, 70, 0.20, 0.24, { lp: 1200 });
+      noise(0.16, 0.18, { lp: 700 });
+    },
+
+    /** T2+ 敌人登场预警（提前 0.8s）：两声方波警报 + 低频底 */
+    lockWarn: function () {
+      tone('square', 660, 660, 0.06, 0.16, { lp: 3000 });
+      tone('square', 660, 660, 0.06, 0.14, { delay: 0.10, lp: 3000 });
+      tone('sine', 110, 110, 0.20, 0.12, {});
+    },
+
+    /** UI 确认 */
+    ui: function () {
+      tone('square', 700, 700, 0.05, 0.16, { bus: busUi, lp: 4000 });
+    },
+
+    /* ---------- P2 · 可选（已在表中，尚未接线） ---------- */
+
+    /** 诱饵命中：惊动音（GDD-02 §5.2）。需 game.js 在 decoyAt 返回 n>0 时调用 */
+    decoyHit: function () {
+      tone('square', 880, 1320, 0.10, 0.16, { lp: 5000 });
+      noise(0.14, 0.12, { lp: 3000, hp: 800 });
+    },
+
+    /** 游客被叼：短促惊叫（喜剧，非惨叫）。GDD-03 §5.2。需 prey.js 接线 */
+    yelp: function () {
+      tone('square', 500, 900, 0.05, 0.10, { lp: 3000 });
+      tone('square', 900, 400, 0.08, 0.09, { delay: 0.05, lp: 3000 });
+    },
+
+    /** 未兑现 COMBO 破碎（GDD-03 E2 告知义务）。当前由 death 覆盖 */
+    comboBreak: function () {
+      tone('triangle', 780, 300, 0.28, 0.14, {});
+      noise(0.24, 0.10, { lp: 1800, hp: 400 });
+    }
+
+    /* ⛔ 诱饵**被免疫**时刻意**没有音效** —— GDD-02 §5.2 明令：
+     *    「（刻意无音效）」「免疫反馈刻意做得平淡」。
+     *    这是设计好的静默，不是遗漏。请勿补。                            */
+  };
+
+  /* ==================================================================
+   * 8 · 对外接口（与旧版完全兼容）
+   * ================================================================== */
+  var lastAt = {};
+
+  TL.Audio = {
+    init: init,
+    resume: resume,
+
+    play: function (name) {
+      if (!ready()) return;
+      var f = SFX[name];
+      if (!f) return;
+      var gap = COOLDOWN[name];
+      if (gap) {
+        var t = ctx.currentTime;
+        if (lastAt[name] !== undefined && t - lastAt[name] < gap) return;
+        lastAt[name] = t;
+      }
+      try { f(); } catch (e) { /* 单个音效失败绝不影响游戏 */ }
+    },
+
+    /** 静音开关：20ms 斜坡（硬切会有 click）。静音后本模块只读不写。 */
+    setMuted: function (m) {
+      muted = !!m;
+      if (!ctx || !master) return;
+      var t = ctx.currentTime;
+      try {
+        master.gain.cancelScheduledValues(t);
+        master.gain.setValueAtTime(master.gain.value, t);
+        master.gain.linearRampToValueAtTime(muted ? 0 : MASTER_GAIN, t + 0.02);
+      } catch (e) { master.gain.value = muted ? 0 : MASTER_GAIN; }
+      if (muted) stopRiser(0.05);
+    },
+
+    /** 全部立停（结算页 / 重开时用） */
+    stopAll: function () {
+      stopRiser(0.03);
+      for (var i = live.length - 1; i >= 0; i--) drop(live[i]);
+      qteReset();
+    },
+
+    /** 音乐层独立开关：真正切断调度（此前只调总线增益，调度器照旧发声）。 */
+    setMusicEnabled: function (on) {
+      MUS.musicOff = !on;
+      if (busMusic && ctx) {
+        try {
+          busMusic.gain.setTargetAtTime(MUS.musicOff ? 0.0001 : BUS.MUSIC, ctx.currentTime, 0.1);
+        } catch (e) { }
+      }
+    },
+
+    /** 暂停/恢复：整条链挂起，而不是逐个淡出。
+     *  tick() 在 ctx.state !== 'running' 时自行停摆，故恢复后不会有积压音符一起冲出。 */
+    setSuspended: function (on) {
+      if (!ctx) return;
+      if (on) {
+        stopRiser(0.05);
+        if (ctx.state === 'running' && ctx.suspend) ctx.suspend();
+      } else if (ctx.state === 'suspended' && ctx.resume) {
+        ctx.resume();
+      }
+    },
+
+    get muted() { return muted; }
+  };
+})();
+
+</script>
+<script>
+/* ===== src/renderer/gl.js ===== */
+/* =====================================================================
+ * TIDELINE · renderer/gl.js
+ * WebGL2 上下文 + 薄封装（ADR-001：自研薄渲染层，GLSL ES 1.00 写就，
+ * WebGL2 / WebGL1 一套代码通吃，不引入 WebGL2 专属特性）。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+
+  function createContext(canvas) {
+    var opts = {
+      alpha: false, antialias: false, depth: false, stencil: false,
+      premultipliedAlpha: false, preserveDrawingBuffer: false,
+      powerPreference: 'high-performance', desynchronized: true
+    };
+    var gl = canvas.getContext('webgl2', opts);
+    var isGL2 = !!gl;
+    if (!gl) gl = canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
+    if (!gl) return null;
+    return { gl: gl, isGL2: isGL2 };
+  }
+
+  function compile(gl, type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      var log = gl.getShaderInfoLog(s);
+      console.error('[shader]', log, '\n', src);
+      throw new Error('shader compile failed: ' + log);
+    }
+    return s;
+  }
+
+  function createProgram(gl, vsSrc, fsSrc) {
+    var p = gl.createProgram();
+    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, vsSrc));
+    gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, fsSrc));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      throw new Error('program link failed: ' + gl.getProgramInfoLog(p));
+    }
+    // 预取 uniform / attribute 位置
+    var u = {}, a = {};
+    var nu = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (var i = 0; i < nu; i++) {
+      var ui = gl.getActiveUniform(p, i);
+      var nm = ui.name.replace(/\[0\]$/, '');
+      u[nm] = gl.getUniformLocation(p, nm);
+    }
+    var na = gl.getProgramParameter(p, gl.ACTIVE_ATTRIBUTES);
+    for (var j = 0; j < na; j++) {
+      var ai = gl.getActiveAttrib(p, j);
+      a[ai.name] = gl.getAttribLocation(p, ai.name);
+    }
+    return { prog: p, u: u, a: a };
+  }
+
+  /* NEAREST 纹理，无 mipmap（像素风硬边的前提） */
+  function createTexture(gl, w, h, src, filter) {
+    var t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter || gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter || gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    if (src) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    return t;
+  }
+
+  /* 单通道 Bayer 抖动查找纹理（ADR-004：抖动在 shader 里做，3 行 GLSL） */
+  function createBayerTexture(gl, matrix, size) {
+    var data = new Uint8Array(size * size);
+    for (var i = 0; i < size * size; i++) {
+      data[i] = Math.round(matrix[i] / (size * size) * 255);
+    }
+    var t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    // WebGL2 removed LUMINANCE: use a sized single-channel R8 texture.
+    var gl2 = typeof gl.texStorage2D === 'function';
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl2 ? gl.R8 : gl.LUMINANCE, size, size, 0,
+      gl2 ? gl.RED : gl.LUMINANCE, gl.UNSIGNED_BYTE, data);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    return t;
+  }
+
+  /* 渲染目标（RT_WORLD 720x432） */
+  function createFBO(gl, w, h) {
+    var tex = createTexture(gl, w, h, null, gl.NEAREST);
+    var fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { fb: fb, tex: tex, w: w, h: h };
+  }
+
+  TL.glx = {
+    createContext: createContext,
+    createProgram: createProgram,
+    createTexture: createTexture,
+    createBayerTexture: createBayerTexture,
+    createFBO: createFBO
+  };
+})();
+
+</script>
+<script>
+/* ===== src/renderer/atlas.js ===== */
+/* =====================================================================
+ * TIDELINE · renderer/atlas.js
+ * MVP 占位图集：程序化生成（不等真实美术资产）。
+ * 图集以 **艺术像素** 为单位绘制（1 canvas px = 1 art px = 2 design px），
+ * 因此上传后以 NEAREST 采样、按 art px 尺寸绘制，天然硬边。
+ * 资产替换只需保证图块坐标对齐偶数（ADR-002 §4）。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+  var C = TL.C, U = TL.U;
+  var PAL = C.PAL, XP = C.XPAL;
+
+  var ATLAS_W = 512, ATLAS_H = 320;
+
+  /* ---------- ASCII 图章绘制（小素材用，可读性好） ---------- */
+  function stamp(p, rows, cmap, ox, oy) {
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r];
+      for (var c = 0; c < row.length; c++) {
+        var ch = row.charAt(c);
+        if (ch === '.' || ch === ' ') continue;
+        var col = cmap[ch];
+        if (!col) continue;
+        p(ox + c, oy + r, 1, 1, col);
+      }
+    }
+  }
+
+  /* ================= 鲨鱼（逐列程序化，84x40 art px，朝右） ================= */
+  function sharkProfile(u) {
+    // u: 0 = 吻端(右)，1 = 尾端(左)
+    var c = 0.34, h;
+    if (u < c) {
+      var s = (c - u) / c;
+      h = Math.pow(Math.max(0, 1 - s * s), 0.55) * (1 - 0.30 * s * s);
+    } else {
+      var s2 = (u - c) / (1 - c);
+      h = Math.pow(Math.max(0, 1 - s2 * s2), 0.62);
+    }
+    var hh = 15.0 * h;
+    if (u > 0.03 && u < 0.94) hh = Math.max(hh, 2.2);
+    return hh;
+  }
+  function sharkSpine(u) {
+    return 20 + 3.0 * Math.sin(Math.min(1, u * 1.1) * Math.PI)
+      - (u > 0.72 ? 2.2 * (u - 0.72) / 0.28 : 0);
+  }
+
+  /* 鲨鱼画布：84x40 本体 + 每边 8 art px 外扩（容纳 3px 描边与鳍尖溢出） */
+  var SH_CW = 100, SH_CH = 56, SH_PADX = 8, SH_PADY = 8;
+
+  function drawShark(p, open) {
+    var W = 84, H = 40;
+    var OX = SH_PADX, OY = SH_PADY;
+    /* §4.1.3 配色：背侧 #4A5A6E 雾灰 → #6E7C8C 中灰（上深下浅）；
+       腹侧 #C7CFD8 银灰 → #F2F5F8 纸白；描边 #0A0E17 深渊黑 3px */
+    var top = PAL.STEEL, mid = PAL.ASH, belly = PAL.PALE, hi = PAL.WHITE;
+    var fin = PAL.SLATE, dk = PAL.BLACK, mouth = PAL.DEEP2;
+    var x, u, hh, sp, yT, yB, band;
+
+    /* 先收集图元，最后统一补 3px 外描边（验收项 P-06） */
+    var cells = [];
+    function q(ax, ay, aw, ah, col) { cells.push(ax | 0, ay | 0, aw | 0, ah | 0, col); }
+
+    // 躯干
+    for (x = 0; x < W; x++) {
+      u = 1 - x / (W - 1);
+      hh = sharkProfile(u);
+      if (hh <= 0.15) continue;
+      sp = sharkSpine(u);
+      yT = Math.round(sp - hh); yB = Math.round(sp + hh);
+      if (yB < yT) yB = yT;
+      q(x, yT, 1, yB - yT + 1, mid);
+      band = Math.max(1, Math.round(hh * 0.42));
+      if (band * 2 < (yB - yT + 1)) {
+        q(x, yT, 1, band, top);
+        q(x, yB - band + 1, 1, band, belly);
+        if (band >= 3) q(x, yB, 1, 1, hi);      // 腹侧最下高光（§4.1.3 腹侧 → 纸白）
+      }
+    }
+
+    // 尾鳍（新月形，尾端最高）
+    for (x = 0; x <= 13; x++) {
+      var k = x / 13;
+      var up = 16 * (1 - 0.55 * k), dn = 9 * (1 - 0.55 * k);
+      sp = sharkSpine(1 - x / (W - 1));
+      q(x, Math.round(sp - up), 1, Math.round(up + dn), x < 4 ? fin : mid);
+    }
+    q(0, 3, 2, 3, fin);   // 上叶尖加暗
+
+    // 背鳍
+    for (x = 31; x <= 52; x++) {
+      var t = (52 - x) / 21;
+      var fh = 12 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.6)), 1.1);
+      if (fh < 0.6) continue;
+      u = 1 - x / (W - 1); hh = sharkProfile(u); sp = sharkSpine(u);
+      q(x, Math.round(sp - hh - fh), 1, Math.ceil(fh) + 1, fin);
+    }
+    // 胸鳍（腹面，后掠）
+    for (x = 46; x <= 64; x++) {
+      var t2 = (64 - x) / 18;
+      var fh2 = 9 * Math.pow(Math.sin(Math.PI * Math.pow(t2, 0.7)), 1.0);
+      if (fh2 < 0.6) continue;
+      u = 1 - x / (W - 1); hh = sharkProfile(u); sp = sharkSpine(u);
+      q(x, Math.round(sp + hh), 1, Math.ceil(fh2), fin);
+    }
+    // 第二背鳍 / 臀鳍
+    for (x = 14; x <= 23; x++) {
+      u = 1 - x / (W - 1); hh = sharkProfile(u); sp = sharkSpine(u);
+      q(x, Math.round(sp - hh - 4), 1, 4, fin);
+    }
+    for (x = 17; x <= 25; x++) {
+      u = 1 - x / (W - 1); hh = sharkProfile(u); sp = sharkSpine(u);
+      q(x, Math.round(sp + hh), 1, 3, fin);
+    }
+
+    // 鳃裂
+    for (var gi = 0; gi < 3; gi++) {
+      var gx = 66 - gi * 3;
+      u = 1 - gx / (W - 1); sp = sharkSpine(u);
+      q(gx, Math.round(sp - 4), 1, 5, fin);
+    }
+
+    // 眼（眼白 + 瞳）—— 黑色喜剧：死鱼眼，不做凶相
+    var ex = 76;
+    u = 1 - ex / (W - 1); sp = sharkSpine(u);
+    q(ex, Math.round(sp - 4), 2, 2, hi);
+    q(ex + 1, Math.round(sp - 4) + 1, 1, 1, dk);
+
+    // 嘴
+    if (open) {
+      for (x = 69; x <= 83; x++) {
+        u = 1 - x / (W - 1); hh = sharkProfile(u);
+        if (hh < 0.8) continue;
+        sp = sharkSpine(u);
+        var tt = (x - 69) / 14;
+        var mh = hh * (0.35 + 0.75 * tt);
+        var y0 = Math.round(sp + hh * 0.05);
+        q(x, y0, 1, Math.max(1, Math.round(mh)), mouth);
+        if ((x % 4) === 1) q(x, y0, 1, 2, hi);   // 齿（喜剧，非獠牙）
+      }
+    } else {
+      for (x = 70; x <= 82; x++) {
+        u = 1 - x / (W - 1); hh = sharkProfile(u);
+        if (hh < 1) continue;
+        sp = sharkSpine(u);
+        q(x, Math.round(sp + hh * 0.62), 1, 1, dk);
+      }
+    }
+
+    /* ---- 3px 深渊黑外描边（P-06：鲨鱼描边 3px #0A0E17）---- */
+    var m = new Uint8Array(SH_CW * SH_CH), i, cx, cy, dx, dy, nx, ny;
+    for (i = 0; i < cells.length; i += 5) {
+      var ax = cells[i] + OX, ay = cells[i + 1] + OY;
+      var aw = cells[i + 2], ah = cells[i + 3];
+      for (cy = ay; cy < ay + ah; cy++) {
+        if (cy < 0 || cy >= SH_CH) continue;
+        for (cx = ax; cx < ax + aw; cx++) {
+          if (cx < 0 || cx >= SH_CW) continue;
+          m[cy * SH_CW + cx] = 1;
+        }
+      }
+    }
+    var ring = new Uint8Array(SH_CW * SH_CH);
+    for (cy = 0; cy < SH_CH; cy++) {
+      for (cx = 0; cx < SH_CW; cx++) {
+        if (!m[cy * SH_CW + cx]) continue;
+        for (dy = -3; dy <= 3; dy++) {
+          ny = cy + dy; if (ny < 0 || ny >= SH_CH) continue;
+          for (dx = -3; dx <= 3; dx++) {
+            nx = cx + dx; if (nx < 0 || nx >= SH_CW) continue;
+            ring[ny * SH_CW + nx] = 1;
+          }
+        }
+      }
+    }
+    // 按行合并连续段，减少 fillRect 调用
+    for (cy = 0; cy < SH_CH; cy++) {
+      cx = 0;
+      while (cx < SH_CW) {
+        if (ring[cy * SH_CW + cx] && !m[cy * SH_CW + cx]) {
+          var run = cx;
+          while (cx < SH_CW && ring[cy * SH_CW + cx] && !m[cy * SH_CW + cx]) cx++;
+          p(run, cy, cx - run, 1, dk);
+        } else cx++;
+      }
+    }
+
+    /* ---- 实体像素（覆盖描边内侧）---- */
+    for (i = 0; i < cells.length; i += 5) {
+      p(cells[i] + OX, cells[i + 1] + OY, cells[i + 2], cells[i + 3], cells[i + 4]);
+    }
+  }
+
+  /* ================= 素材定义 ================= */
+  function build() {
+    var cv = document.createElement('canvas');
+    cv.width = ATLAS_W; cv.height = ATLAS_H;
+    var ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, ATLAS_W, ATLAS_H);
+
+    var defs = {};
+    var px = 2, py = 2, rowH = 0;
+
+    function alloc(w, h) {
+      if (px + w + 2 > ATLAS_W) { px = 2; py += rowH + 2; rowH = 0; }
+      var r = { x: px, y: py, w: w, h: h };
+      px += w + 2; if (h > rowH) rowH = h;
+      return r;
+    }
+    function add(name, w, h, fn) {
+      var rect = alloc(w, h);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(rect.x, rect.y, w, h); ctx.clip();
+      ctx.translate(rect.x, rect.y);
+      var p = function (x, y, ww, hh2, col) { ctx.fillStyle = col; ctx.fillRect(x | 0, y | 0, ww | 0, hh2 | 0); };
+      fn(p, w, h);
+      ctx.restore();
+      defs[name] = rect;
+      return rect;
+    }
+
+    /* ---- 鲨鱼 ---- */
+    add('shark', SH_CW, SH_CH, function (p) { drawShark(p, false); });
+    add('shark_bite', SH_CW, SH_CH, function (p) { drawShark(p, true); });
+
+    /* ---- 猎物 ---- */
+    var CM = {
+      '.': null, S: XP.SKIN, s: XP.SKIN, H: XP.HAIR, E: PAL.BLACK,
+      T: PAL.CYAN, W: PAL.WHITE, A: PAL.AMBER, G: XP.GOLD, L: PAL.BLOOD
+    };
+
+    add('swimmer', 12, 18, function (p) {
+      stamp(p, [
+        '....HHHH....',
+        '...HHHHHH...',
+        '...HSSSSH...',
+        '...SSSSSS...',
+        '...SESSES...',
+        '...SSSSSS...',
+        '..SSSSSSSS..',
+        '.SSSSSSSSSS.',
+        'SS.SSSSSS.SS',
+        'SS.SSSSSS.SS',
+        '...TTTTTT...',
+        '...TTTTTT...',
+        '...SS..SS...',
+        '...SS..SS...',
+        '..SS....SS..',
+        '.WWWWWWWWWW.',
+        'WW.WWWWWW.WW',
+        '..WW....WW..'
+      ], CM, 0, 0);
+    });
+
+    add('surfer', 20, 16, function (p) {
+      stamp(p, [
+        '.......HHH..........',
+        '......HHHHH.........',
+        '......HSSSH.........',
+        '......SSSSS.........',
+        '......SESSE.........',
+        '.....SSSSSSS........',
+        '..S..SSSSSSS..S.....',
+        '.SSS.SSSSSSS.SSS....',
+        '..S..TTTTTTT..S.....',
+        '.....TTTTTTT........',
+        '.....SS...SS........',
+        '....SS.....SS.......',
+        '...SS.......SS......',
+        '.AAAAAAAAAAAAAAAAAA.',
+        'AAAAAAAAAAAAAAAAAAAA',
+        '.WWWWWWWWWWWWWWWWWW.'
+      ], CM, 0, 0);
+    });
+
+    add('sunbather', 20, 10, function (p) {
+      stamp(p, [
+        '..HHH...............',
+        '..SSS...............',
+        '..SES....TTTTTT.....',
+        '..SSS..TTTTTTTTTT...',
+        '...SSSSSSSSSSSSSSS..',
+        '...SSSSSSSSSSSSSSS..',
+        '..SSSSSSSSSSSSSSSS..',
+        '..SS..SS.......SS...',
+        '.WWWWWWWWWWWWWWWWWW.'
+      ], CM, 0, 0);
+    });
+
+    add('lifeguard', 12, 17, function (p) {
+      stamp(p, [
+        '....HHHH....',
+        '...HHHHHH...',
+        '...HSSSSH...',
+        '...SSSSSS...',
+        '...SESSES...',
+        '...SSSSSS...',
+        '..AAAAAAAA..',
+        '..AAWWWWAA..',
+        '..AAAAAAAA..',
+        '..AAAAAAAA..',
+        '..AAAAAAAA..',
+        '...WWWWWW...',
+        '...SS..SS...',
+        '...SS..SS...',
+        '..SS....SS..',
+        '.WWWWWWWWWW.'
+      ], CM, 0, 0);
+    });
+
+    add('carried', 12, 12, function (p) {
+      stamp(p, [
+        '..SS....SS..',
+        '...SSSSSS...',
+        '..SSSSSSSS..',
+        '...SESSES...',
+        '...SSSSSS...',
+        '..TTTTTTTT..',
+        '..TTTTTTTT..',
+        '...SSSSSS...',
+        '...SS..SS...',
+        '..SS....SS..',
+        '.SS......SS.'
+      ], CM, 0, 0);
+    });
+
+    /* ---- 敌人 / 障碍 ---- */
+    add('tire', 16, 12, function (p) {
+      p(0, 3, 16, 6, PAL.SLATE);
+      p(2, 1, 12, 10, PAL.SLATE);
+      p(3, 0, 10, 12, PAL.SLATE);
+      p(5, 3, 6, 6, PAL.DEEP);
+      p(6, 4, 4, 4, PAL.DEEP);
+      p(4, 2, 1, 1, PAL.PALE); p(11, 8, 1, 1, PAL.PALE);
+    });
+
+    add('crate', 14, 11, function (p) {
+      p(0, 0, 14, 11, XP.SAND_DK);
+      p(1, 1, 12, 9, XP.WOOD);
+      p(1, 4, 12, 1, XP.SAND_DK);
+      p(1, 8, 12, 1, XP.SAND_DK);
+      p(4, 1, 1, 9, XP.SAND_DK);
+      p(9, 1, 1, 9, XP.SAND_DK);
+    });
+
+    add('buoy', 10, 10, function (p) {
+      p(2, 0, 6, 1, PAL.AMBER);
+      p(1, 1, 8, 2, PAL.AMBER);
+      p(0, 3, 10, 4, PAL.AMBER);
+      p(1, 7, 8, 2, PAL.AMBER);
+      p(2, 9, 6, 1, PAL.AMBER);
+      p(3, 2, 4, 2, PAL.WHITE);
+      p(2, 4, 6, 2, PAL.WHITE);
+      p(3, 7, 4, 1, PAL.WHITE);
+    });
+
+    add('jetski', 36, 16, function (p) {
+      // 船体
+      p(4, 8, 28, 5, PAL.PALE);
+      p(2, 10, 32, 3, PAL.WHITE);
+      p(6, 13, 24, 2, PAL.SLATE);
+      p(0, 9, 5, 3, PAL.PALE);
+      p(32, 7, 4, 4, PAL.AMBER);
+      // 骑手
+      p(14, 2, 4, 4, XP.HAIR);
+      p(14, 5, 4, 4, XP.SKIN);
+      p(13, 6, 1, 3, XP.SKIN); p(18, 6, 1, 3, XP.SKIN);
+      p(14, 9, 4, 2, '#D94F4F');
+      // 尾流
+      p(0, 14, 8, 2, PAL.WHITE);
+      p(2, 12, 4, 1, PAL.PALE);
+    });
+
+    add('heli', 46, 18, function (p) {
+      // 旋翼
+      p(2, 0, 42, 1, PAL.SLATE);
+      p(22, 1, 2, 2, PAL.SLATE);
+      // 机身
+      p(14, 3, 16, 8, PAL.DEEP2);
+      p(12, 5, 20, 5, PAL.DEEP2);
+      p(10, 6, 4, 3, PAL.DEEP2);
+      // 舱窗
+      p(15, 5, 8, 4, PAL.CYAN);
+      p(15, 5, 8, 1, PAL.WHITE);
+      // 尾撑 + 尾桨
+      p(30, 6, 12, 2, PAL.DEEP2);
+      p(41, 2, 2, 8, PAL.SLATE);
+      p(38, 4, 8, 1, PAL.SLATE);
+      // 起落橇
+      p(14, 11, 2, 3, PAL.SLATE);
+      p(26, 11, 2, 3, PAL.SLATE);
+      p(10, 13, 22, 1, PAL.SLATE);
+      // 探照灯
+      p(12, 13, 3, 2, PAL.AMBER);
+    });
+
+    add('tower', 26, 30, function (p) {
+      // 支腿
+      p(2, 14, 2, 14, XP.WOOD);
+      p(22, 14, 2, 14, XP.WOOD);
+      p(8, 14, 2, 14, XP.WOOD);
+      p(16, 14, 2, 14, XP.WOOD);
+      p(2, 20, 22, 1, XP.SAND_DK);
+      // 平台
+      p(0, 10, 26, 4, XP.SAND_DK);
+      p(0, 10, 26, 1, XP.SAND);
+      // 顶棚
+      p(1, 2, 24, 2, PAL.WHITE);
+      p(3, 4, 20, 2, '#D94F4F');
+      p(12, 0, 2, 2, PAL.WHITE);
+      // 救生员
+      p(10, 6, 5, 4, XP.HAIR);
+      p(10, 9, 5, 4, PAL.AMBER);
+      p(10, 9, 5, 1, PAL.WHITE);
+    });
+
+    /* ---- 太阳（ALARM 档位的冗余形态通道，GDD-02 §3.2） ---- */
+    function drawSun(p, mood) {
+      p(3, 0, 10, 1, PAL.AMBER); p(1, 1, 14, 1, PAL.AMBER);
+      p(0, 2, 16, 1, PAL.AMBER); p(0, 3, 16, 3, PAL.AMBER);
+      p(0, 6, 16, 4, PAL.AMBER); p(1, 10, 14, 2, PAL.AMBER);
+      p(3, 12, 10, 1, PAL.AMBER);
+      // 光芒
+      p(7, 0, 2, 1, PAL.AMBER); p(0, 7, 1, 2, PAL.AMBER); p(15, 7, 1, 2, PAL.AMBER);
+      if (mood === 0) {        // 微笑
+        p(4, 6, 2, 2, PAL.BLACK); p(10, 6, 2, 2, PAL.BLACK);
+        p(4, 9, 8, 1, PAL.BLACK); p(3, 8, 1, 1, PAL.BLACK); p(12, 8, 1, 1, PAL.BLACK);
+      } else if (mood === 1) { // 平静
+        p(4, 6, 2, 2, PAL.BLACK); p(10, 6, 2, 2, PAL.BLACK);
+        p(5, 9, 6, 1, PAL.BLACK);
+      } else {                 // 皱眉
+        p(4, 6, 2, 2, PAL.BLACK); p(10, 6, 2, 2, PAL.BLACK);
+        p(3, 5, 3, 1, PAL.BLACK); p(10, 5, 3, 1, PAL.BLACK);
+        p(4, 10, 8, 1, PAL.BLACK); p(5, 9, 1, 1, PAL.BLACK); p(10, 9, 1, 1, PAL.BLACK);
+      }
+    }
+    add('sun_calm', 16, 13, function (p) { drawSun(p, 0); });
+    add('sun_alert', 16, 13, function (p) { drawSun(p, 1); });
+    add('sun_siege', 16, 13, function (p) { drawSun(p, 2); });
+
+    /* ---- 粒子 / 通用 ---- */
+    function solid(color) {
+      return function (p, w, h) { p(0, 0, w, h, color); };
+    }
+    add('dot1', 1, 1, solid(PAL.WHITE));
+    add('dot2', 2, 2, solid(PAL.WHITE));
+    add('dot3', 3, 3, solid(PAL.WHITE));
+    add('dot4', 4, 4, solid(PAL.WHITE));
+    add('foam', 8, 3, function (p) {
+      p(1, 0, 6, 1, PAL.PALE);
+      p(0, 1, 8, 1, PAL.WHITE);
+      p(1, 2, 6, 1, PAL.PALE);
+    });
+    add('ring8', 8, 8, function (p) {
+      for (var i = 0; i < 8; i++) {
+        p(i, 0, 1, 1, PAL.WHITE); p(i, 7, 1, 1, PAL.WHITE);
+        p(0, i, 1, 1, PAL.WHITE); p(7, i, 1, 1, PAL.WHITE);
+      }
+    });
+
+    /* ---------------- 副循环收集物（GDD-01 §3.5 冲浪收集） ----------------
+     * 分值 瓶子 10 / 星星 20 / 圆环 30（C.COLLECT.SCORE 的索引顺序）。
+     * 三者必须靠**轮廓**区分而非仅靠颜色 —— 灰度下也要能一眼认出来。 */
+    add('bottle', 10, 14, function (p) {
+      p(4, 0, 2, 3, XP.GOLD);                 // 瓶盖
+      p(3, 3, 4, 8, XP.TEAL);                 // 瓶颈 + 瓶身
+      p(3, 4, 1, 7, PAL.PALE);                // 高光边
+      p(3, 11, 4, 3, XP.TEAL);                // 瓶底加宽
+    });
+    add('star', 13, 13, function (p) {
+      var rows = [
+        '......#......',
+        '.....###.....',
+        '.....###.....',
+        '#############',
+        '.###########.',
+        '..#########..',
+        '...#######...',
+        '...#######...',
+        '..#########..',
+        '..###...###..',
+        '.###.....###.',
+        '.##.......##.',
+        '.#.........#.'
+      ];
+      stamp(p, rows, { '#': XP.GOLD }, 0, 0);
+    });
+    add('pickup_ring', 14, 12, function (p) {
+      // 水面上的圈：椭圆环，顶边亮（明度梯度，灰度可辨）
+      var i;
+      for (i = 0; i < 14; i++) {
+        p(i, 0, 1, 1, PAL.WHITE);
+        p(i, 6, 1, 1, XP.GOLD);
+      }
+      for (i = 0; i < 7; i++) {
+        p(0, i, 1, 1, PAL.WHITE); p(13, i, 1, 1, XP.GOLD);
+      }
+      p(3, 3, 2, 1, PAL.PALE); p(9, 2, 2, 1, PAL.PALE);
+    });
+
+    return { canvas: cv, defs: defs, w: ATLAS_W, h: ATLAS_H };
+  }
+
+  TL.buildAtlas = build;
+})();
+
+</script>
+<script>
+/* ===== src/renderer/batcher.js ===== */
+/* =====================================================================
+ * TIDELINE · renderer/batcher.js
+ * 纹理四边形批处理器。只有两种混合模式 → 2 个桶 → 世界渲染 2 个 draw call
+ * （ADR-001 §2.1：单帧绘制调用 2–4）。
+ *
+ * 顶点格式（8 floats）：x, y (art px, y 向下), u, v, r, g, b, a
+ *   rgb = tint 乘子；a = 「覆盖度」→ 与 Bayer 8x8 比较做 discard
+ *   ⇒ 淡出一律走有序抖动，绝不使用 alpha 渐变（ADR-004 硬约束）
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+  var C = TL.C;
+
+  var VS = [
+    'attribute vec2 a_pos;',
+    'attribute vec2 a_uv;',
+    'attribute vec4 a_tint;',
+    'uniform vec2 u_res;',
+    'varying vec2 v_uv;',
+    'varying vec4 v_tint;',
+    'void main(){',
+    '  vec2 c = vec2(a_pos.x / u_res.x * 2.0 - 1.0, 1.0 - a_pos.y / u_res.y * 2.0);',
+    '  gl_Position = vec4(c, 0.0, 1.0);',
+    '  v_uv = a_uv; v_tint = a_tint;',
+    '}'
+  ].join('\n');
+
+  var FS = [
+    'precision mediump float;',
+    'uniform sampler2D u_tex;',
+    'uniform sampler2D u_bayer;',
+    'uniform float u_bayerScale;',
+    'uniform float u_ditherOn;',
+    'varying vec2 v_uv;',
+    'varying vec4 v_tint;',
+    'void main(){',
+    '  vec4 t = texture2D(u_tex, v_uv);',
+    '  if (t.a < 0.02) discard;',
+    '  if (u_ditherOn > 0.5 && v_tint.a < 0.999) {',
+    '    float b = texture2D(u_bayer, gl_FragCoord.xy * u_bayerScale).r;',
+    '    if (b > v_tint.a) discard;',
+    '  }',
+    '  gl_FragColor = vec4(t.rgb * v_tint.rgb, t.a);',
+    '}'
+  ].join('\n');
+
+  var FLOATS = 8, VERTS = 6;
+  var MAX_QUADS = 4096;
+
+  function Bucket(gl) {
+    this.gl = gl;
+    this.data = new Float32Array(MAX_QUADS * VERTS * FLOATS);
+    this.n = 0;                 // 顶点数
+    this.buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
+    gl.bufferData(gl.ARRAY_BUFFER, this.data.byteLength, gl.DYNAMIC_DRAW);
+  }
+  Bucket.prototype.reset = function () { this.n = 0; };
+
+  function Batcher(gl, atlasTex, bayerTex) {
+    this.gl = gl;
+    this.tex = atlasTex;
+    this.bayer = bayerTex;
+    this.prog = TL.glx.createProgram(gl, VS, FS);
+    this.over = new Bucket(gl);
+    this.add = new Bucket(gl);
+
+    this.resW = C.RT_W; this.resH = C.RT_H;
+    this.scale = 1 / C.ART_SCALE;
+    this.camX = 0; this.camY = 0;
+    this.ditherOn = 1;
+    this.bayerScale = 1 / 8;
+    this.rects = null;
+    this.texW = 1; this.texH = 1;
+    this.drawCalls = 0;
+  }
+
+  Batcher.prototype.setAtlas = function (rects, texW, texH) {
+    this.rects = rects; this.texW = texW; this.texH = texH;
+  };
+
+  /* space: 'world'（design px → art px，减相机）| 'screen'（design px 直出 1440x864） */
+  Batcher.prototype.begin = function (space, camX, camY) {
+    this.over.reset(); this.add.reset();
+    this.drawCalls = 0;
+    if (space === 'screen') {
+      this.resW = C.DESIGN_W; this.resH = C.DESIGN_H;
+      this.scale = 1; this.camX = 0; this.camY = 0;
+      this.bayerScale = 1 / 16;   // 显示空间下抖动单元放大，观感与艺术网格接近
+    } else {
+      this.resW = C.RT_W; this.resH = C.RT_H;
+      this.scale = 1 / C.ART_SCALE;
+      this.camX = camX || 0; this.camY = camY || 0;
+      this.bayerScale = 1 / 8;    // 屏幕锚定在艺术网格上（1 抖动单元 = 8 art px）
+    }
+  };
+
+  /* opts: rot(rad) flipU flipV tint[3] fade(0..1) bucket('over'|'add') pivot[2] */
+  Batcher.prototype.draw = function (name, wx, wy, dw, dh, opts) {
+    var r = this.rects[name];
+    if (!r) return;
+    var o = opts || EMPTY;
+    var bucket = (o.bucket === 'add') ? this.add : this.over;
+    if (bucket.n + VERTS > MAX_QUADS * VERTS) return;
+
+    var sc = this.scale;
+    var w = Math.max(1, Math.round(dw * sc));
+    var h = Math.max(1, Math.round(dh * sc));
+    var cx = Math.round((wx - this.camX) * sc);
+    var cy = Math.round((wy - this.camY) * sc);
+
+    var piv = o.pivot;
+    var pxf = piv ? piv[0] : 0.5, pyf = piv ? piv[1] : 0.5;
+    var x0 = -w * pxf, y0 = -h * pyf, x1 = w * (1 - pxf), y1 = h * (1 - pyf);
+
+    var rot = o.rot || 0;
+    var co = 1, si = 0;
+    if (rot) { co = Math.cos(rot); si = Math.sin(rot); }
+
+    // UV（内缩半纹素，NEAREST 下的安全边界）
+    var iu = 0.5 / this.texW, iv = 0.5 / this.texH;
+    var u0 = (r.x + 0.5) / this.texW, v0 = (r.y + 0.5) / this.texH;
+    var u1 = (r.x + r.w - 0.5) / this.texW, v1 = (r.y + r.h - 0.5) / this.texH;
+    if (o.flipU) { var tu = u0; u0 = u1; u1 = tu; }
+    if (o.flipV) { var tv = v0; v0 = v1; v1 = tv; }
+
+    var t = o.tint;
+    var tr = t ? t[0] : 1, tg = t ? t[1] : 1, tb = t ? t[2] : 1;
+    var ta = (o.fade === undefined) ? 1 : o.fade;
+
+    var d = bucket.data;
+    var i = bucket.n * FLOATS;
+    // 4 角：左上 右上 右下 / 左上 右下 左下
+    var lx = [x0, x1, x1, x0, x1, x0];
+    var ly = [y0, y0, y1, y0, y1, y1];
+    var uu = [u0, u1, u1, u0, u1, u0];
+    var vv = [v0, v0, v1, v0, v1, v1];
+    for (var k = 0; k < 6; k++) {
+      var rx = lx[k] * co - ly[k] * si;
+      var ry = lx[k] * si + ly[k] * co;
+      d[i] = cx + rx; d[i + 1] = cy + ry;
+      d[i + 2] = uu[k]; d[i + 3] = vv[k];
+      d[i + 4] = tr; d[i + 5] = tg; d[i + 6] = tb; d[i + 7] = ta;
+      i += FLOATS;
+    }
+    bucket.n += VERTS;
+  };
+
+  var EMPTY = {};
+
+  Batcher.prototype._flushBucket = function (b) {
+    if (b.n === 0) return;
+    var gl = this.gl, P = this.prog;
+    gl.bindBuffer(gl.ARRAY_BUFFER, b.buf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, b.data.subarray(0, b.n * FLOATS));
+    var stride = FLOATS * 4;
+    gl.enableVertexAttribArray(P.a.a_pos);
+    gl.vertexAttribPointer(P.a.a_pos, 2, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(P.a.a_uv);
+    gl.vertexAttribPointer(P.a.a_uv, 2, gl.FLOAT, false, stride, 8);
+    gl.enableVertexAttribArray(P.a.a_tint);
+    gl.vertexAttribPointer(P.a.a_tint, 4, gl.FLOAT, false, stride, 16);
+    gl.drawArrays(gl.TRIANGLES, 0, b.n);
+    this.drawCalls++;
+  };
+
+  Batcher.prototype.flush = function () {
+    var gl = this.gl, P = this.prog;
+    gl.useProgram(P.prog);
+    gl.uniform2f(P.u.u_res, this.resW, this.resH);
+    gl.uniform1f(P.u.u_ditherOn, this.ditherOn);
+    gl.uniform1f(P.u.u_bayerScale, this.bayerScale);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    gl.uniform1i(P.u.u_tex, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.bayer);
+    gl.uniform1i(P.u.u_bayer, 1);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);   // SOURCE_OVER 桶
+    this._flushBucket(this.over);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);                   // ADD 桶（光效）
+    this._flushBucket(this.add);
+    gl.disable(gl.BLEND);
+  };
+
+  TL.Batcher = Batcher;
+})();
+
+</script>
+<script>
+/* ===== src/renderer/post.js ===== */
+/* =====================================================================
+ * TIDELINE · renderer/post.js
+ * CRT 后期：桶形弯曲 + 色差 + 扫描线 + 暗角 + 整屏去饱和/色闪 + 危险染红。
+ *
+ * 关键实现约定（ADR-002 §2.4 第 3 条）：
+ *   扫描线在 **L1 艺术网格** 上计算（用形变后的 RT 坐标取行号），
+ *   因此它与画面内容一起被弯曲、被 ×2 整数放大，永久免疫摩尔纹。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+
+  var VS = [
+    'attribute vec2 a_pos;',
+    'varying vec2 v_uv;',
+    'void main(){ v_uv = a_pos * 0.5 + 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }'
+  ].join('\n');
+
+  var FS = [
+    'precision mediump float;',
+    'varying vec2 v_uv;',
+    'uniform sampler2D u_tex;',
+    'uniform vec2  u_inRes;',
+    'uniform float u_time;',
+    'uniform float u_crt;',       // 0 = 直通（LOW 档 / CRT 开关关闭）
+    'uniform float u_curve;',     // 桶形曲率 0.08–0.12
+    'uniform float u_ca;',        // 色差，单位 = art px，边缘最大
+    'uniform float u_scan;',      // 扫描线强度 0..1
+    'uniform float u_jitter;',    // 扫描线抖动 0..1（≤2Hz 时间量化）
+    'uniform float u_vig;',       // 暗角
+    'uniform float u_desat;',     // 去饱和 0..1（搁浅 QTE 的「只剩灰与白」）
+    'uniform float u_flash;',     // 整屏色闪 0..1（呼吸式，非硬 on/off）
+    'uniform vec3  u_flashCol;',
+    'uniform float u_danger;',    // T3 围剿档边缘染红
+    '',
+    'void main(){',
+    '  vec2 uv = v_uv;',
+    '  vec2 uvd = uv;',
+    '  if (u_crt > 0.5) {',
+    '    vec2 q = uv * 2.0 - 1.0;',
+    '    float r2 = dot(q, q);',
+    '    vec2 qd = q * (1.0 + u_curve * r2);',
+    '    uvd = qd * 0.5 + 0.5;',
+    '    float rowJ = floor((1.0 - uv.y) * u_inRes.y);',
+    '    float jn = 0.5 + 0.5 * sin(rowJ * 0.17 + u_time * 6.2831853);',
+    '    uvd.x += (jn - 0.5) * u_jitter * 2.0 / u_inRes.x;',
+    '  }',
+    '  vec3 col;',
+    '  if (u_crt > 0.5) {',
+    '    vec2 qd2 = uvd * 2.0 - 1.0;',
+    '    float r2b = dot(qd2, qd2);',
+    '    vec2 dir = qd2 / max(length(qd2), 0.0001);',
+    '    vec2 off = dir * (u_ca * clamp(r2b, 0.0, 1.6)) / u_inRes;',
+    '    float rc = texture2D(u_tex, uvd + off).r;',
+    '    vec4  gc = texture2D(u_tex, uvd);',
+    '    float bc = texture2D(u_tex, uvd - off).b;',
+    '    col = vec3(rc, gc.g, bc);',
+    '    if (uvd.x < 0.0 || uvd.x > 1.0 || uvd.y < 0.0 || uvd.y > 1.0) col = vec3(0.039, 0.055, 0.090);',
+    '  } else {',
+    '    col = texture2D(u_tex, uvd).rgb;',
+    '  }',
+    // 扫描线：行号取自 **形变后的 L1 坐标** → 与画面一起弯曲，锁定艺术网格
+    '  if (u_scan > 0.001) {',
+    '    float row = floor((1.0 - uvd.y) * u_inRes.y);',
+    '    col *= 1.0 - u_scan * 0.34 * mod(row, 2.0);',
+    '  }',
+    '  vec2 vv = uv - 0.5;',
+    '  float dd = dot(vv, vv);',
+    '  col *= clamp(1.0 - u_vig * 1.15 * dd, 0.0, 1.0);',
+    '  col = mix(col, vec3(0.85, 0.10, 0.10), u_danger * 0.08 * smoothstep(0.04, 0.34, dd));',
+    '  col += u_flashCol * u_flash;',
+    '  if (u_desat > 0.001) {',
+    '    float l = dot(col, vec3(0.2126, 0.7152, 0.0722));',
+    '    col = mix(col, vec3(l), u_desat);',
+    '  }',
+    '  gl_FragColor = vec4(col, 1.0);',
+    '}'
+  ].join('\n');
+
+  function Post(gl, inW, inH) {
+    this.gl = gl;
+    this.prog = TL.glx.createProgram(gl, VS, FS);
+    this.buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1, 3, -1, -1, 3
+    ]), gl.STATIC_DRAW);
+    this.inW = inW; this.inH = inH;
+
+    this.curve = 0.10;
+    this.ca = 1.5;
+    this.scan = 1.0;
+    this.jitter = 1.0;
+    this.vig = 1.0;
+    this.desat = 0;
+    this.flash = 0;
+    this.flashCol = [0, 0, 0];
+    this.danger = 0;
+    this.crt = 1;
+    this.time = 0;
+  }
+
+  Post.prototype.draw = function (tex, outW, outH) {
+    var gl = this.gl, P = this.prog;
+    gl.viewport(0, 0, outW, outH);
+    gl.useProgram(P.prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
+    gl.enableVertexAttribArray(P.a.a_pos);
+    gl.vertexAttribPointer(P.a.a_pos, 2, gl.FLOAT, false, 0, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(P.u.u_tex, 0);
+    gl.uniform2f(P.u.u_inRes, this.inW, this.inH);
+    gl.uniform1f(P.u.u_time, this.time);
+    gl.uniform1f(P.u.u_crt, this.crt);
+    gl.uniform1f(P.u.u_curve, this.curve);
+    gl.uniform1f(P.u.u_ca, this.ca);
+    gl.uniform1f(P.u.u_scan, this.scan);
+    gl.uniform1f(P.u.u_jitter, this.jitter);
+    gl.uniform1f(P.u.u_vig, this.vig);
+    gl.uniform1f(P.u.u_desat, this.desat);
+    gl.uniform1f(P.u.u_flash, this.flash);
+    gl.uniform3f(P.u.u_flashCol, this.flashCol[0], this.flashCol[1], this.flashCol[2]);
+    gl.uniform1f(P.u.u_danger, this.danger);
+    gl.disable(gl.BLEND);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
+
+  TL.Post = Post;
+})();
+
+</script>
+<script>
+/* ===== src/game/world.js ===== */
+/* =====================================================================
+ * TIDELINE · game/world.js
+ * 海床剖面（ADR-003 §2.1/§2.2）+ 水面线 + 四层水体区域。
+ *
+ * ⚠ 关键分离（ADR-003）：区域归属用 **静态海床**（稳定，驱动 ALARM/敌人生成），
+ *   接触与搁浅判定用 **动态水面**（可玩，让潮线真正影响手感）。
+ *
+ * 设计取舍说明：GDD-01 用四个 X 区间（0–750/750–1650/1650–2550/2550–3000），
+ * ADR-003 用「由海床水深导出」。二者在本文件合并 —— 海床控制点被推导成让
+ * 导出的分界 **恰好落在 750 / 1650 / 2550**，于是单一真源与 GDD 数值同时成立。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+  var C = TL.C, U = TL.U;
+
+  var STEP = 4;                       // LUT 采样步长（design px）
+  var N = 0;
+  var SEABED = null;
+  var ZONE = null;
+  var shoreX = 0;
+
+  function hermite(p0, p1, m0, m1, h, t) {
+    var t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * p0
+      + (t3 - 2 * t2 + t) * h * m0
+      + (-2 * t3 + 3 * t2) * p1
+      + (t3 - t2) * h * m1;
+  }
+
+  function build() {
+    var pts = C.SEABED_PTS, n = pts.length;
+    N = Math.floor(C.WORLD_W / STEP) + 2;
+    SEABED = new Float32Array(N);
+    ZONE = new Uint8Array(N);
+
+    // 非均匀 Catmull-Rom 切线
+    var m = new Float32Array(n);
+    for (var i = 0; i < n; i++) {
+      if (i === 0) m[i] = (pts[1][1] - pts[0][1]) / (pts[1][0] - pts[0][0]);
+      else if (i === n - 1) m[i] = (pts[i][1] - pts[i - 1][1]) / (pts[i][0] - pts[i - 1][0]);
+      else m[i] = (pts[i + 1][1] - pts[i - 1][1]) / (pts[i + 1][0] - pts[i - 1][0]);
+    }
+
+    var prev = Infinity;
+    var seg = 0;
+    for (var k = 0; k < N; k++) {
+      var x = k * STEP;
+      while (seg < n - 2 && x > pts[seg + 1][0]) seg++;
+      var x0 = pts[seg][0], x1 = pts[seg + 1][0];
+      var h = x1 - x0;
+      var t = U.clamp((x - x0) / h, 0, 1);
+      var y = hermite(pts[seg][1], pts[seg + 1][1], m[seg], m[seg + 1], h, t);
+      // 单调钳制：海床随 x 单调抬升（y 单调减小），杜绝 Catmull-Rom 过冲
+      if (y > prev) y = prev;
+      prev = y;
+      SEABED[k] = y;
+    }
+
+    // 区域表（静态水深导出）
+    for (var q = 0; q < N; q++) {
+      var depth = SEABED[q] - C.WATER_BASE;
+      var z;
+      if (depth >= C.ZONE_DEPTH_DEEP) z = C.ZONE.DEEP;
+      else if (depth >= C.ZONE_DEPTH_SHALLOW) z = C.ZONE.SHALLOW;
+      else if (depth > 0) z = C.ZONE.SURF;
+      else z = C.ZONE.BEACH;
+      ZONE[q] = z;
+    }
+
+    // 潮线：海床穿过水面处
+    shoreX = C.WORLD_W;
+    for (var s = 0; s < N; s++) {
+      if (SEABED[s] <= C.WATER_BASE) { shoreX = s * STEP; break; }
+    }
+  }
+
+  function seabedY(x) {
+    if (!SEABED) build();
+    var f = x / STEP;
+    if (f <= 0) return SEABED[0];
+    if (f >= N - 1) return SEABED[N - 1];
+    var i = f | 0, t = f - i;
+    return SEABED[i] + (SEABED[i + 1] - SEABED[i]) * t;
+  }
+
+  function depthAt(x) { return seabedY(x) - C.WATER_BASE; }
+
+  function zoneAtRaw(x) {
+    if (!SEABED) build();
+    var i = Math.round(x / STEP);
+    return ZONE[U.clamp(i, 0, N - 1)];
+  }
+
+  /* 带迟滞的区域查询：边界附近取前后 ZONE_HYST 两点，不一致则维持原值 */
+  function zoneAt(x, prevZone) {
+    var a = zoneAtRaw(x - C.ZONE_HYST);
+    var b = zoneAtRaw(x + C.ZONE_HYST);
+    if (a === b) return a;
+    if (prevZone === undefined || prevZone === null) return zoneAtRaw(x);
+    return prevZone;
+  }
+
+  /* 动态水面（接触/搁浅判定用） */
+  function waterLineY(x, t) {
+    var depth = depthAt(x);
+    var damp = U.clamp(depth / 60, 0, 1);          // 浅水处波浪衰减（破浪）
+    return C.WATER_BASE
+      + C.WAVE_AMP * damp * Math.sin(U.TAU * (x + t * C.WAVE_SPEED) / C.WAVE_LEN);
+  }
+
+  TL.World = {
+    build: build,
+    seabedY: seabedY,
+    depthAt: depthAt,
+    zoneAt: zoneAt,
+    zoneAtRaw: zoneAtRaw,
+    waterLineY: waterLineY,
+    get shoreX() { if (!SEABED) build(); return shoreX; },
+    STEP: STEP
+  };
+})();
+
+</script>
+<script>
+/* ===== src/game/particles.js ===== */
+/* =====================================================================
+ * TIDELINE · game/particles.js
+ * 硬边方块粒子池。淡出一律走 **有序抖动**（shader 里 discard），
+ * 绝不使用 alpha 渐变（ADR-004 硬约束）。
+ * 尺寸只允许 1 / 2 / 3 art px（= 2 / 4 / 6 design px），保持像素纯度。
+ * 对象池预分配 → 热路径零分配（ADR-001 §3.3）。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+  var C = TL.C, U = TL.U;
+
+  var MAX = 520;
+  var P = {
+    x: new Float32Array(MAX), y: new Float32Array(MAX),
+    vx: new Float32Array(MAX), vy: new Float32Array(MAX),
+    life: new Float32Array(MAX), max: new Float32Array(MAX),
+    g: new Float32Array(MAX), drag: new Float32Array(MAX),
+    size: new Uint8Array(MAX),           // art px
+    r: new Float32Array(MAX), g_: new Float32Array(MAX), b: new Float32Array(MAX),
+    add: new Uint8Array(MAX),
+    n: 0
+  };
+  var rings = [];   // 冲击波环（DECOY BREACH）
+  var density = 1;  // 粒子密度开关 0 / 0.5 / 1
+
+  function reset() { P.n = 0; rings.length = 0; }
+
+  function spawn(x, y, vx, vy, life, size, col, isAdd, g, drag) {
+    if (density <= 0 || P.n >= MAX) return -1;
+    var i = P.n++;
+    P.x[i] = x; P.y[i] = y; P.vx[i] = vx; P.vy[i] = vy;
+    P.life[i] = life; P.max[i] = life;
+    P.g[i] = g === undefined ? 0 : g;
+    P.drag[i] = drag === undefined ? 1.2 : drag;
+    P.size[i] = size;
+    P.r[i] = col[0]; P.g_[i] = col[1]; P.b[i] = col[2];
+    P.add[i] = isAdd ? 1 : 0;
+    return i;
+  }
+
+  function update(dt) {
+    for (var i = P.n - 1; i >= 0; i--) {
+      P.life[i] -= dt;
+      if (P.life[i] <= 0) {
+        var last = --P.n;
+        if (i !== last) {
+          P.x[i] = P.x[last]; P.y[i] = P.y[last];
+          P.vx[i] = P.vx[last]; P.vy[i] = P.vy[last];
+          P.life[i] = P.life[last]; P.max[i] = P.max[last];
+          P.g[i] = P.g[last]; P.drag[i] = P.drag[last];
+          P.size[i] = P.size[last];
+          P.r[i] = P.r[last]; P.g_[i] = P.g_[last]; P.b[i] = P.b[last];
+          P.add[i] = P.add[last];
+        }
+        continue;
+      }
+      P.vy[i] += P.g[i] * dt;
+      var d = 1 - P.drag[i] * dt;
+      if (d < 0) d = 0;
+      P.vx[i] *= d; P.vy[i] *= d;
+      P.x[i] += P.vx[i] * dt;
+      P.y[i] += P.vy[i] * dt;
+    }
+    for (var k = rings.length - 1; k >= 0; k--) {
+      var r = rings[k];
+      r.t += dt;
+      if (r.t >= r.dur) rings.splice(k, 1);
+    }
+  }
+
+  function draw(B) {
+    var sprite = ['dot1', 'dot2', 'dot3'];
+    for (var i = 0; i < P.n; i++) {
+      var fade = P.life[i] / P.max[i];
+      var s = sprite[P.size[i] - 1] || 'dot2';
+      var sz = P.size[i] * C.ART_SCALE;   // art px → design px
+      B.draw(s, P.x[i], P.y[i], sz, sz, {
+        tint: [P.r[i], P.g_[i], P.b[i]],
+        fade: fade,
+        bucket: P.add[i] ? 'add' : 'over'
+      });
+    }
+    for (var k = 0; k < rings.length; k++) {
+      var r = rings[k];
+      var t = r.t / r.dur;
+      var rad = r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - t, 2));
+      var fade = 1 - t;
+      var count = Math.max(8, Math.round(rad / 9));
+      for (var j = 0; j < count; j++) {
+        var a = (j / count) * U.TAU;
+        var px = r.x + Math.cos(a) * rad;
+        var py = r.y + Math.sin(a) * rad * 0.55;   // 水面处压扁
+        B.draw('dot2', px, py, 4, 4, { tint: r.col, fade: fade, bucket: 'add' });
+      }
+    }
+  }
+
+  /* ---------------- 发射器 ---------------- */
+  function scaleCount(n) {
+    var c = Math.round(n * density);
+    return c < 1 ? 0 : c;
+  }
+
+  function splash(x, y, count, col, power) {
+    count = scaleCount(count);
+    for (var i = 0; i < count; i++) {
+      var a = -Math.PI * 0.15 - U.rand() * Math.PI * 0.7;
+      var sp = power * (0.45 + U.rand() * 0.75);
+      spawn(x + U.rr(-8, 8), y + U.rr(-4, 4),
+        Math.cos(a) * sp * (U.rand() < 0.5 ? -1 : 1), Math.sin(a) * sp * 1.15,
+        0.35 + U.rand() * 0.45, U.ri(1, 2), col, false, 520, 1.6);
+    }
+  }
+
+  /* 捕食：洋红径向溅射（GDD-03 §5.2，0.6s，不留残留） */
+  function predation(x, y) {
+    var col = U.hex2rgb(C.PAL.MAGENTA);
+    var n = scaleCount(22);
+    for (var i = 0; i < n; i++) {
+      var a = U.rand() * U.TAU;
+      var sp = 90 + U.rand() * 230;
+      spawn(x, y, Math.cos(a) * sp, Math.sin(a) * sp,
+        0.32 + U.rand() * 0.28, U.ri(1, 3), col, false, 120, 2.6);
+    }
+  }
+
+  function sandPuff(x, y, count) {
+    count = scaleCount(count);
+    var col = U.hex2rgb(C.PAL.PALE);
+    for (var i = 0; i < count; i++) {
+      var a = -Math.PI * 0.5 + U.rr(-1.1, 1.1);
+      var sp = 30 + U.rand() * 90;
+      spawn(x + U.rr(-14, 14), y, Math.cos(a) * sp, Math.sin(a) * sp,
+        0.3 + U.rand() * 0.4, U.ri(1, 2), col, false, 260, 1.8);
+    }
+  }
+
+  function bubble(x, y) {
+    var col = U.hex2rgb(C.PAL.PALE);
+    spawn(x, y, U.rr(-14, 14), U.rr(-40, -12), 0.5 + U.rand() * 0.5, 1, col, false, -20, 0.8);
+  }
+
+  /* DECOY BREACH：环形冲击波（0→180px，0.4s，在水面线处截断） */
+  function shockRing(x, y, r1) {
+    if (density <= 0.01) return;
+    rings.push({ x: x, y: y, r0: 6, r1: r1 || 180, t: 0, dur: 0.4, col: U.hex2rgb(C.PAL.WHITE) });
+  }
+
+  function setDensity(d) { density = U.clamp(Number(d) || 0, 0, 1); if (!density) reset(); }
+
+  TL.FX = {
+    reset: reset, update: update, draw: draw,
+    splash: splash, predation: predation, sandPuff: sandPuff,
+    bubble: bubble, shockRing: shockRing, setDensity: setDensity,
+    get count() { return P.n; }
+  };
+})();
+
+</script>
+<script>
+/* ===== src/game/shark.js ===== */
+/* =====================================================================
+ * TIDELINE · game/shark.js
+ * 鲨鱼状态机与运动（GDD-01）。
+ *
+ * 一句话模型：**速率由状态定、方向由玩家定**（GDD-01 §3.1）。
+ * 玩家永远不能让鲨鱼停下来，只能改变它往哪儿走。
+ * 允许速率为 0 的状态只有四个：Stunned / Snared / Beached / Dead。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+  var C = TL.C, U = TL.U, W = TL.World;
+
+  var D2R = Math.PI / 180, R2D = 180 / Math.PI;
+
+  function create() {
+    return {
+      x: 380, y: 470, theta: 0, speed: 0,
+      state: 'cruise',
+      alive: true,
+
+      carry: [],              // 战利品类型 id 数组
+      get carryK() { return this.carry.length; },
+
+      stamina: C.STAMINA_MAX,
+      dashT: -1, dashCd: 0, dashTheta0: 0, dashBites: 0, dashFromY: 0,
+      biteT: 0,
+      stunT: 0, snareT: 0, slowT: 0, iframeT: 0,
+      shakeCd: 0,
+      surf: false,
+      grounded: false, airborne: false,
+      strandT: 0, strandWarn: false,
+      zone: C.ZONE.DEEP,
+      pendingScore: 0,
+      frozenExternalTimers: false,
+      trailAcc: 0,
+      netSeed: 0
+    };
+  }
+
+  function reset(s) {
+    s.x = 380; s.y = 470; s.theta = 0; s.speed = 0;
+    s.state = 'cruise'; s.alive = true;
+    s.carry.length = 0;
+    s.stamina = C.STAMINA_MAX;
+    s.dashT = -1; s.dashCd = 0; s.dashBites = 0; s.dashFromY = 0;
+    s.biteT = 0; s.stunT = 0; s.snareT = 0; s.slowT = 0; s.iframeT = 0;
+    s.shakeCd = 0; s.surf = false; s.strandT = 0; s.strandWarn = false;
+    s.pendingScore = 0; s.trailAcc = 0;
+    s.zone = W.zoneAt(s.x, null);
+  }
+
+  /* ---- 派生量 ---- */
+  function cruiseSpeed(s) { return C.V_CRUISE * C.CARRY_V(s.carryK); }
+  function omegaOf(s) {
+    return C.OMEGA_CRUISE * C.CARRY_W(s.carryK)
+      * (s.surf ? C.SURF.OMEGA_MULT : 1)
+      * (s.slowT > 0 ? C.SLOWED.OMEGA_MULT : 1);
+  }
+  function dashSpeed(t) {
+    var D = C.DASH;
+    if (t < D.WINDUP) return U.lerp(D.V_START, D.V_PEAK, t / D.WINDUP);
+    if (t < D.CRUISE_END) return D.V_PEAK;
+    var k = (t - D.CRUISE_END) / (D.TOTAL - D.CRUISE_END);
+    return U.lerp(D.V_PEAK, D.V_END, U.clamp(k, 0, 1));
+  }
+  function dashCost(s) { return s.carryK > 0 ? C.DASH_COST_CARRY : C.DASH_COST_EMPTY; }
+
+  function isZeroSpeedState(s) {
+    return s.state === 'stunned' || s.state === 'snared' || s.state === 'beached' || s.state === 'dead';
+  }
+
+  /* =====================================================================
+   * 主更新
+   * ===================================================================== */
+  function update(s, dt, G) {
+    if (!W) W = TL.World;
+    if (!s.alive) { s.state = 'dead'; s.speed = 0; return; }
+
+    var t;
+    if ((t = s.biteT) > 0) { s.biteT = t - dt; if (s.biteT < 0) s.biteT = 0; }
+    if ((t = s.dashCd) > 0) { s.dashCd = t - dt; if (s.dashCd < 0) s.dashCd = 0; }
+    if ((t = s.stunT) > 0) { s.stunT = t - dt; if (s.stunT < 0) { s.stunT = 0; s.iframeT = C.IFRAME_AFTER_CC; } }
+    if ((t = s.snareT) > 0) { s.snareT = t - dt; if (s.snareT < 0) { s.snareT = 0; s.iframeT = C.IFRAME_AFTER_CC; } }
+    if ((t = s.slowT) > 0) { s.slowT = t - dt; if (s.slowT < 0) s.slowT = 0; }
+    if ((t = s.iframeT) > 0) { s.iframeT = t - dt; if (s.iframeT < 0) s.iframeT = 0; }
+    if ((t = s.shakeCd) > 0) { s.shakeCd = t - dt; if (s.shakeCd < 0) s.shakeCd = 0; }
+
+    /* ---- 状态判定（强制打断态优先，GDD-01 §3.3） ---- */
+    if (s.stunT > 0) s.state = 'stunned';
+    else if (s.snareT > 0) s.state = 'snared';
+    else if (s.biteT > 0) s.state = 'bite';
+    else if (s.dashT >= 0) s.state = 'dash';
+    else if (s.state === 'beached') { /* QTE 期间不覆盖 */ }
+    else s.state = 'cruise';
+
+    if (s.state === 'beached') { s.speed = 0; return; }
+
+    /* ---- 冲刺输入 ---- */
+    var wantDash = G.dashPressed;
+    if (wantDash && s.dashT < 0 && s.state === 'cruise' && s.dashCd <= 0) {
+      var cost = dashCost(s);
+      if (s.stamina >= cost) {
+        s.stamina -= cost;
+        s.dashT = 0;
+        s.dashTheta0 = s.theta;
+        s.dashBites = 0;
+        s.dashFromY = s.y;
+        s.state = 'dash';
+        TL.Audio.play('splash');
+        FXBurst(s, 6, C.PAL.PALE, 90);
+      } else {
+        G.events.staminaReject = true;      // GDD-03 E6：明确的失败反馈
+        TL.Audio.play('deny');              // 短促下行两声 =「不行」（音频侧冗余通道）
+      }
+    }
+
+    /* ---- 冲浪模式（GDD-01 §3.5） ---- */
+    var wl = W.waterLineY(s.x, G.time);
+    var nearWave = Math.abs(s.y - wl) <= C.SURF.BAND;
+    var spdNow = (s.state === 'dash') ? dashSpeed(s.dashT) : C.V_CRUISE;
+    var canSurf = s.zone === C.ZONE.SURF && nearWave
+      && (spdNow * C.CARRY_V(s.carryK)) >= C.SURF.SPEED_FRAC * C.V_CRUISE * C.CARRY_V(s.carryK);
+    if (s.surf !== canSurf) {
+      s.surf = canSurf;
+      if (canSurf) TL.Audio.play('splash');
+    }
+
+    /* ---- 速率（状态定） ---- */
+    var base;
+    if (s.state === 'dash') base = dashSpeed(s.dashT);
+    else if (s.state === 'bite') base = C.V_CRUISE * 0.5;
+    else base = C.V_CRUISE;
+    var speed = base * C.CARRY_V(s.carryK)
+      * (s.surf ? C.SURF.RATE_MULT : 1)
+      * (s.slowT > 0 ? C.SLOWED.RATE_MULT : 1);
+    if (s.state === 'stunned' || s.state === 'snared') speed = 0;
+
+    /* ---- 方向（玩家定） ---- */
+    var omega = omegaOf(s);
+    if (s.state === 'dash') omega = C.DASH.OMEGA;
+    if (s.state === 'stunned') omega = 0;
+
+    if (s.state !== 'stunned' && G.hasDir) {
+      var target = Math.atan2(G.dirY, G.dirX) * R2D;
+      var d = U.angDelta(target, s.theta);
+      var step = omega * dt;
+      s.theta += U.clamp(d, -step, step);
+      if (s.state === 'dash') {
+        // 冲刺承诺：θ 限制在起手方向 ±25°
+        var rel = U.angDelta(s.theta, s.dashTheta0);
+        if (rel > C.DASH.CONE_DEG) s.theta = s.dashTheta0 + C.DASH.CONE_DEG;
+        else if (rel < -C.DASH.CONE_DEG) s.theta = s.dashTheta0 - C.DASH.CONE_DEG;
+      }
+    }
+    if (s.theta > 180) s.theta -= 360; else if (s.theta < -180) s.theta += 360;
+
+    s.speed = speed;
+
+    /* ---- 位移积分（GDD-01 E8：子步扫掠，防穿透） ---- */
+    var vx = Math.cos(s.theta * D2R) * speed;
+    var vy = Math.sin(s.theta * D2R) * speed;
+    var dist = Math.sqrt(vx * vx + vy * vy) * dt;
+    var steps = Math.max(1, Math.ceil(dist / C.MAX_SUBSTEP_PX));
+    if (steps > 8) steps = 8;
+    var sdt = dt / steps;
+
+    for (var i = 0; i < steps; i++) {
+      var prevY = s.y;
+      s.x += vx * sdt;
+      s.y += vy * sdt;
+      clampToWorld(s, G);
+      // 跨越水面线（仅上行）= DECOY BREACH（GDD-03 §3.4）
+      if (s.state === 'dash' && !G.decoyFired) {
+        var wlNow = W.waterLineY(s.x, G.time);
+        if (prevY > wlNow && s.y <= wlNow) G.onSurfaceCross(s, s.x, wlNow);
+      }
+      // 咬合走子步（GDD-03 §3.1）
+      if (s.state === 'dash' && s.dashBites < 1) G.tryBite(s);
+    }
+
+    /* ---- 冲刺推进 ---- */
+    if (s.dashT >= 0) {
+      s.dashT += dt;
+      // 一次冲刺只可能触发一次 DECOY BREACH（跨子步保持，冲刺结束时复位）
+      if (s.dashT >= C.DASH.TOTAL) { s.dashT = -1; s.dashCd = C.DASH.CD; G.decoyFired = false; }
+    }
+
+    /* ---- 体力回复（GDD-01 §4.3） ---- */
+    var regen;
+    if (s.surf) regen = C.REGEN.SURF;
+    else if (s.zone === C.ZONE.DEEP) regen = C.REGEN.DEEP;
+    else if (s.zone === C.ZONE.SHALLOW) regen = C.REGEN.SHALLOW;
+    else regen = C.REGEN.BEACH;
+    if (s.carryK > 0) regen *= C.REGEN_CARRY_MULT;
+    if (s.slowT > 0) regen *= C.SLOWED.REGEN_MULT;
+    s.stamina = Math.min(C.STAMINA_MAX, s.stamina + regen * dt);
+
+    /* ---- 携带水花拖尾 L1（GDD-01 §4.2 表：6/10/14/18 粒子每秒） ---- */
+    if (s.carryK > 0) {
+      var rate = 2 + s.carryK * 4;
+      s.trailAcc += rate * dt;
+      while (s.trailAcc >= 1) {
+        s.trailAcc -= 1;
+        TL.FX.splash(s.x - Math.cos(s.theta * D2R) * 40, s.y - Math.sin(s.theta * D2R) * 40,
+          1, U.hex2rgb(C.PAL.PALE), 60);
+      }
+    }
+
+    /* ---- 搁浅累积（ADR-003 §2.4：速率越低累积越快） ---- */
+    updateStranding(s, dt, G);
+  }
+
+  function clampToWorld(s, G) {
+    var SH = C.SHARK;
+    if (s.x < 0) { s.x = 0; }
+    if (s.x > C.WORLD_W) { s.x = C.WORLD_W; }          // E7：硬边界，速率不降
+    var ground = W.seabedY(s.x) - SH.HALF_H + SH.SINK;
+    if (s.y > ground) s.y = ground;
+    if (s.y < 30) s.y = 30;
+    s.grounded = (s.y + SH.HALF_H) >= W.seabedY(s.x) - 8;
+    s.airborne = s.y < W.waterLineY(s.x, G.time);
+  }
+
+  function updateStranding(s, dt, G) {
+    var B = C.BEACH;
+    // 区域每帧更新（迟滞）
+    s.zone = W.zoneAt(s.x, s.zone);
+
+    if (s.zone === C.ZONE.BEACH && s.grounded && s.speed < B.V_TH) {
+      var rate = 1 - s.speed / B.V_TH;                 // ∈ (0,1]
+      s.strandT += dt * rate;
+    } else if (s.zone === C.ZONE.BEACH) {
+      s.strandT -= dt * B.REC_IN;
+    } else {
+      s.strandT -= dt * B.REC_OUT;
+    }
+    s.strandT = U.clamp(s.strandT, 0, B.T_STRAND);
+
+    if (s.strandT >= B.T_STRAND) {
+      G.enterBeached(s);
+    } else if (s.strandT >= B.T_WARN) {
+      if (!s.strandWarn) {
+        s.strandWarn = true;
+        TL.Audio.play('sting');
+        TL.FX.sandPuff(s.x, s.y + 30, 8);
+        G.events.strandWarn = true;
+      }
+    } else {
+      s.strandWarn = false;
+    }
+  }
+
+  function FXBurst(s, n, colHex, power) {
+    TL.FX.splash(s.x, s.y, n, U.hex2rgb(colHex), power);
+  }
+
+  /* =====================================================================
+   * 绘制
+   * ===================================================================== */
+  function draw(s, B, G) {
+    var SH = C.SHARK;
+    var sprite = (s.state === 'bite') ? 'shark_bite' : 'shark';
+    var flipU = Math.cos(s.theta * D2R) < 0;
+    var rot = flipU ? (s.theta * D2R - Math.PI) : (s.theta * D2R);
+    if (s.surf) rot += Math.sin(G.time * 7) * 0.10;
+
+    var tint = [1, 1, 1];
+    if (s.state === 'dash') { tint = [0.72, 0.95, 1.35]; }      // 电光蓝 tint
+    if (s.slowT > 0) { tint = [0.75, 0.85, 1.0]; }
+    if (s.state === 'stunned') { tint = [0.85, 0.85, 1.05]; }
+    if (s.iframeT > 0) {
+      // 呼吸式（≤2Hz），绝不硬 on/off
+      var b = U.breath(G.time, 2);
+      var k = 0.65 + 0.5 * b;
+      tint = [tint[0] * k, tint[1] * k, tint[2] * k];
+    }
+    if (!s.alive) { tint = [0.55, 0.58, 0.66]; }
+
+    var visY = s.y + (s.carryK > 0 ? 6 : 0);        // 携带时下沉 6px（GDD-03 §5.4）
+    var visRot = rot + (s.carryK > 0 ? -8 * D2R * (flipU ? -1 : 1) : 0);  // 头上仰 8°
+
+    // 图集含 8 art px 外扩留白（3px 描边用），故按 (HALF+ PAD) 绘制；
+    // 本体视觉尺寸仍为 84x40 art px（(42+8)*2*2=200 中本体占 168）——不变。
+    var pad = SH.DRAW_PAD || 0;
+    B.draw(sprite, s.x, visY,
+      (SH.DRAW_HALF_W + pad) * 2 * C.ART_SCALE,
+      (SH.DRAW_HALF_H + pad) * 2 * C.ART_SCALE,
+      { rot: visRot, flipU: flipU, flipV: !s.alive, tint: tint });
+
+    /* 携带的战利品（数得出来的冗余通道） */
+    for (var i = 0; i < s.carryK; i++) {
+      var off = 52 + i * 26;
+      var cxp = s.x - Math.cos(s.theta * D2R) * off;
+      var cyp = s.y - Math.sin(s.theta * D2R) * off + 22;
+      B.draw('carried', cxp, cyp, 24, 24, {
+        rot: Math.sin(G.time * 14 + i) * 0.35,
+        flipU: flipU
+      });
+    }
+
+    /* 渔网（Snared 的形态通道，不依赖颜色） */
+    if (s.state === 'snared') {
+      var nw = SH.LEN * 0.9, nh = 100;
+      for (var g = 0; g <= 4; g++) {
+        var fy = s.y - nh / 2 + (nh * g / 4);
+        B.draw('dot1', s.x, fy, nw, 3, { tint: [0.78, 0.81, 0.85], fade: 0.95 });
+        var fx = s.x - nw / 2 + (nw * g / 4);
+        B.draw('dot1', fx, s.y, 3, nh, { tint: [0.78, 0.81, 0.85], fade: 0.95 });
+      }
+    }
+
+    /* 眩晕：头顶旋转星（形态通道） */
+    if (s.state === 'stunned') {
+      for (var k2 = 0; k2 < 3; k2++) {
+        var a = G.time * 4 + k2 * (U.TAU / 3);
+        B.draw('dot2', s.x + Math.cos(a) * 34, s.y - 52 + Math.sin(a) * 10,
+          8, 8, { tint: U.hex2rgb(C.PAL.AMBER) });
+      }
+    }
+
+    /* 搁浅预警：尾部拖沙（ADR-003 §2.5） */
+    if (s.strandWarn && s.state !== 'beached') {
+      if (Math.random() < 0.5) TL.FX.sandPuff(s.x - Math.cos(s.theta * D2R) * 60, s.y + 30, 2);
+    }
+  }
+
+  TL.Shark = {
+    create: create, reset: reset, update: update, draw: draw,
+    cruiseSpeed: cruiseSpeed, dashCost: dashCost, isZeroSpeedState: isZeroSpeedState,
+    mouthBox: function (s) {
+      return {
+        x: s.x + Math.cos(s.theta * D2R) * C.SHARK.MOUTH_OFF,
+        y: s.y + Math.sin(s.theta * D2R) * C.SHARK.MOUTH_OFF,
+        w: C.SHARK.MOUTH_W, h: C.SHARK.MOUTH_H
+      };
+    }
+  };
+})();
+
+</script>
+<script>
+/* ===== src/game/entities.js ===== */
+/* =====================================================================
+ * TIDELINE · game/entities.js
+ * 猎物（泳客/冲浪者/日光浴者/救生员）与敌人（T1/T2a/T2b/T3b）。
+ *
+ * 免疫判据（🔴 执行级约束，GDD-02 §3.6 / GDD-03 §3.5）：
+ *   免疫 = **有系绳**（!has_tether 才受影响），
+ *   不是「在空中」也不是「T3/T4」。直升机与 T4 恒带系绳 → 恒免疫。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+  var C = TL.C, U = TL.U;
+
+  /* =================================================================
+   * 猎物
+   * ================================================================= */
+  var PREY_TARGET = 16;
+  var prey = [];
+
+  function preySurfaceY(p, t) {
+    var W = TL.World;
+    if (p.type === 'sunbather') return W.seabedY(p.x) - 12;
+    if (p.type === 'lifeguard') return W.seabedY(p.x) - 30;
+    return W.waterLineY(p.x, t) + (p.type === 'surfer' ? 0 : 14);
+  }
+
+  function spawnPrey(type, t) {
+    var W = TL.World;
+    var x, p;
+    if (type === 'sunbather') x = U.rr(2590, 2970);
+    else if (type === 'lifeguard') x = U.rr(2600, 2940);
+    else if (type === 'surfer') x = U.rr(1720, 2440);
+    else x = U.rr(880, 1620);
+    p = {
+      type: type, x: x, y: 0, alive: true, t: U.rand() * 6,
+      dir: U.rand() < 0.5 ? -1 : 1, respawn: 0, panic: 0
+    };
+    p.y = preySurfaceY(p, t);
+    prey.push(p);
+    return p;
+  }
+
+  function preyReset(t) {
+    prey.length = 0;
+    var plan = ['swimmer', 'swimmer', 'swimmer', 'surfer', 'surfer', 'swimmer', 'surfer', 'sunbather'];
+    for (var i = 0; i < PREY_TARGET; i++) {
+      var type = plan[i % plan.length];
+      if (i === 5 || i === 11) type = 'lifeguard';
+      spawnPrey(type, t || 0);
+    }
+  }
+
+  function preyUpdate(dt, G) {
+    var W = TL.World;
+    for (var i = 0; i < prey.length; i++) {
+      var p = prey[i];
+      if (!p.alive) {
+        p.respawn -= dt;
+        if (p.respawn <= 0) {
+          var type = U.pick(['swimmer', 'swimmer', 'surfer', 'surfer', 'sunbather', 'sunbather', 'lifeguard']);
+          spawnPrey(type, G.time);
+          prey.splice(i, 1); i--;
+        }
+        continue;
+      }
+      p.t += dt;
+      if (p.panic > 0) p.panic -= dt;
+
+      if (p.type === 'swimmer') {
+        p.x += Math.sin(p.t * 0.5) * 8 * dt;
+      } else if (p.type === 'surfer') {
+        p.x += 22 * dt * (p.x < 2480 ? 1 : -1);
+      } else if (p.type === 'lifeguard') {
+        p.x += p.dir * 26 * dt;
+        if (p.x > 2950) p.dir = -1; else if (p.x < 2590) p.dir = 1;
+      }
+      p.x = U.clamp(p.x, 860, 2980);
+      p.y = preySurfaceY(p, G.time);
+
+      /* 鲨鱼靠近 → 惊慌（黑色喜剧：滑稽不惨烈） */
+      var dx = p.x - G.shark.x, dy = p.y - G.shark.y;
+      if (dx * dx + dy * dy < 190 * 190) {
+        p.panic = 0.6;
+        if (p.type === 'swimmer') p.x += (dx > 0 ? 34 : -34) * dt;
+      }
+    }
+  }
+
+  function preyBox(p) {
+    if (p.type === 'sunbather') return { x: p.x, y: p.y, w: 56, h: 32 };
+    return { x: p.x, y: p.y, w: 32, h: 56 };
+  }
+
+  /* 嘴部命中检测，返回被咬中的猎物 */
+  function preyHit(mb) {
+    for (var i = 0; i < prey.length; i++) {
+      var p = prey[i];
+      if (!p.alive) continue;
+      var b = preyBox(p);
+      if (U.aabb(mb.x, mb.y, mb.w, mb.h, b.x, b.y, b.w, b.h)) return p;
+    }
+    return null;
+  }
+
+  function preyConsume(p) { p.alive = false; p.respawn = U.rr(4.5, 9); }
+
+  function preyDraw(B, G) {
+    for (var i = 0; i < prey.length; i++) {
+      var p = prey[i];
+      if (!p.alive) continue;
+      var bob = (p.type === 'sunbather' || p.type === 'lifeguard')
+        ? Math.round(Math.sin(p.t * 2) * 1)
+        : Math.round(Math.sin(p.t * 2.4) * 3);
+      var sprite = p.type;
+      var w = 24, h = 36;
+      if (p.type === 'surfer') { w = 40; h = 32; }
+      if (p.type === 'sunbather') { w = 40; h = 20; }
+      if (p.type === 'lifeguard') { w = 24; h = 34; }
+      B.draw(sprite, p.x, p.y + bob, w, h, {
+        flipU: (p.type === 'lifeguard' || p.type === 'swimmer') ? p.dir < 0 : false,
+        rot: p.panic > 0 ? Math.sin(p.t * 26) * 0.14 : 0
+      });
+      /* 惊慌：头顶「!」—— 形态通道，不依赖颜色 */
+      if (p.panic > 0) {
+        B.draw('dot2', p.x, p.y - 44, 4, 12, { tint: U.hex2rgb(C.PAL.AMBER) });
+        B.draw('dot2', p.x, p.y - 30, 4, 4, { tint: U.hex2rgb(C.PAL.AMBER) });
+      }
+    }
+  }
+
+  /* =================================================================
+   * 敌人
+   * ================================================================= */
+  var enemies = [];
+  var warns = [];
+  var projectiles = [];
+  var spawnTimers = { T2B: 0, T3B: 0 };
+  var towersPlaced = false;
+
+  function resetEnemies() {
+    enemies.length = 0; warns.length = 0; projectiles.length = 0;
+    spawnTimers.T2B = 0; spawnTimers.T3B = 0; towersPlaced = false;
+  }
+
+  function countKind(k) {
+    var n = 0;
+    for (var i = 0; i < enemies.length; i++) if (enemies[i].kind === k) n++;
+    return n;
+  }
+  function tetherCount() {
+    var n = 0;
+    for (var i = 0; i < enemies.length; i++) if (enemies[i].hasTether) n++;
+    return n;
+  }
+
+  function addWarn(kind, x, y) {
+    warns.push({ kind: kind, x: x, y: y, t: C.ENEMY.WARN_LEAD });
+    TL.Audio.play('lockWarn');
+  }
+
+  function placeTowers() {
+    if (towersPlaced) return;
+    towersPlaced = true;
+    var xs = [2660, 2890];
+    for (var i = 0; i < xs.length; i++) {
+      enemies.push({
+        kind: 'T2A', x: xs[i], y: TL.World.seabedY(xs[i]) - 52,
+        cd: U.rr(0.6, 2.2), telegraph: 0, hasTether: false,
+        decoyT: 0, immuneFlash: 0, life: 0, static: true
+      });
+    }
+  }
+
+  function spawnByTier(tier, G) {
+    var E = C.ENEMY;
+    if (tier >= 1) placeTowers();
+
+    if (tier >= 2) {
+      spawnTimers.T2B -= G.dtRaw;
+      if (spawnTimers.T2B <= 0 && countKind('T2B') < E.CAPS.T2B && enemies.length < E.HARD_CAP) {
+        spawnTimers.T2B = 5.0;
+        addWarn('T2B', C.WORLD_W - 20, G.shark.y);
+        enemies.push({
+          kind: 'T2B', x: C.WORLD_W + 60, y: U.clamp(G.shark.y, 140, 780),
+          vx: -E.T2B.SPEED, hasTether: false, decoyT: 0, immuneFlash: 0,
+          life: 0, wake: 0
+        });
+      }
+    }
+    if (tier >= 3) {
+      spawnTimers.T3B -= G.dtRaw;
+      if (spawnTimers.T3B <= 0 && countKind('T3B') < E.CAPS.T3B) {
+        spawnTimers.T3B = 8.0;
+        addWarn('T3B', C.WORLD_W - 40, C.ENEMY.T3B.ALT);
+        enemies.push({
+          kind: 'T3B', x: C.WORLD_W + 80, y: C.ENEMY.T3B.ALT,
+          vx: -C.ENEMY.T3B.SPEED, hasTether: true, tLock: 0, breakProg: 0,
+          state: 'lock', searchT: 0, lastKnown: G.shark.x,
+          decoyT: 0, immuneFlash: 0, life: 0
+        });
+        TL.Audio.play('tether');
+      }
+    }
+    // T1 漂浮垃圾：全域常驻少量（非「单位」，不参与诱饵）
+    if (countKind('T1') < E.CAPS.T1 && U.rand() < 0.6 * G.dtRaw) {
+      var x = U.rr(900, 2500);
+      enemies.push({
+        kind: 'T1', x: x, y: TL.World.waterLineY(x, G.time) + U.rr(10, 40),
+        vx: U.rr(-30, 30), spin: U.rr(-1, 1), hasTether: false,
+        variant: U.rand() < 0.5 ? 'tire' : 'crate', life: 0, decoyT: 0
+      });
+    }
+  }
+
+  function updateEnemies(dt, G) {
+    var E = C.ENEMY, W = TL.World, s = G.shark;
+
+    for (var i = warns.length - 1; i >= 0; i--) {
+      warns[i].t -= dt;
+      if (warns[i].t <= 0) warns.splice(i, 1);
+    }
+
+    for (var k = enemies.length - 1; k >= 0; k--) {
+      var e = enemies[k];
+      e.life += dt;
+      if (e.decoyT > 0) e.decoyT -= dt;
+      if (e.immuneFlash > 0) e.immuneFlash -= dt;
+
+      if (e.kind === 'T1') {
+        e.x += e.vx * dt;
+        var wly = W.waterLineY(e.x, G.time);
+        e.y = wly + 24 + Math.sin(G.time * 1.4 + e.x * 0.01) * 4;
+        if (e.x < 820 || e.x > 2600) e.vx *= -1;
+        if (e.decoyT > 0) { /* 非单位，诱饵不影响 */ }
+
+      } else if (e.kind === 'T2A') {
+        if (e.decoyT > 0) { e.telegraph = 0; continue; }
+        e.cd -= dt;
+        if (e.telegraph > 0) {
+          e.telegraph -= dt;
+          if (e.telegraph <= 0) fireBuoy(e, G);
+        } else if (e.cd <= 0) {
+          var dx = s.x - e.x, dy = s.y - e.y;
+          if (dx * dx + dy * dy < E.T2A.RANGE * E.T2A.RANGE) {
+            e.telegraph = E.T2A.TELEGRAPH;
+          } else {
+            e.cd = 0.4;
+          }
+        }
+
+      } else if (e.kind === 'T2B') {
+        if (e.decoyT > 0) {
+          var tx = e.decoyX - e.x;
+          e.x += U.clamp(tx, -E.T2B.SPEED * dt, E.T2B.SPEED * dt);
+          e.y = U.damp(e.y, e.decoyY, 3, dt);
+        } else {
+          e.x += e.vx * dt;
+          e.y = U.damp(e.y, U.clamp(s.y, 130, 800), 1.2, dt);
+        }
+        e.wake -= dt;
+        if (e.wake <= 0) { e.wake = 0.05; TL.FX.splash(e.x + 20, e.y + 16, 1, U.hex2rgb(C.PAL.WHITE), 40); }
+        if (e.x < 780 || e.life > 22) { enemies.splice(k, 1); continue; }
+
+      } else if (e.kind === 'T3B') {
+        updateHeli(e, dt, G, k);
+      }
+    }
+
+    /* 投射物（救生员浮标） */
+    for (var j = projectiles.length - 1; j >= 0; j--) {
+      var pr = projectiles[j];
+      pr.t += dt;
+      pr.x += pr.vx * dt; pr.y += pr.vy * dt;
+      pr.rot += dt * 6;
+      if (pr.t > pr.dur || pr.x < 700 || pr.x > C.WORLD_W) {
+        projectiles.splice(j, 1); continue;
+      }
+      var mb = { x: pr.x, y: pr.y, w: 20, h: 20 };
+      var sb = { x: s.x, y: s.y, w: C.SHARK.HALF_W * 2, h: C.SHARK.HALF_H * 2 };
+      if (s.alive && s.iframeT <= 0 && U.aabb(mb.x, mb.y, mb.w, mb.h, sb.x, sb.y, sb.w, sb.h)) {
+        projectiles.splice(j, 1);
+        G.applyStun();
+      }
+    }
+  }
+
+  function fireBuoy(e, G) {
+    var s = G.shark;
+    var dx = s.x - e.x, dy = s.y - e.y;
+    var d = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+    var sp = d / C.ENEMY.T2A.FLIGHT;
+    projectiles.push({
+      x: e.x, y: e.y - 18, vx: dx / d * sp, vy: dy / d * sp,
+      t: 0, dur: C.ENEMY.T2A.FLIGHT + 0.6, rot: 0
+    });
+    e.cd = C.ENEMY.T2A.INTERVAL;
+  }
+
+  function updateHeli(e, dt, G, idx) {
+    var T = C.TETHER, W = TL.World, s = G.shark;
+    var depth = s.y - W.waterLineY(s.x, G.time);
+    var observable = !(s.x < T.DEEP_X && depth > T.DEEP_DEPTH);
+
+    if (e.decoyT > 0) {
+      e.x = U.damp(e.x, e.decoyX, 2.2, dt);
+      e.y = U.damp(e.y, C.ENEMY.T3B.ALT, 2, dt);
+    } else if (e.state === 'lock') {
+      e.x = U.damp(e.x, U.clamp(s.x + 40, 800, C.WORLD_W), 1.1, dt);
+      e.y = U.damp(e.y, C.ENEMY.T3B.ALT, 2, dt);
+    } else {
+      e.x = U.damp(e.x, e.lastKnown + Math.sin(G.time * 0.9) * 180, 1.0, dt);
+      e.y = U.damp(e.y, C.ENEMY.T3B.ALT, 2, dt);
+    }
+
+    if (e.state === 'lock') {
+      if (observable) {
+        e.tLock += dt; e.breakProg = 0;
+        e.lastKnown = s.x;
+        if (e.tLock >= T.LOCK) G.killShark('tether');
+      } else {
+        e.breakProg += dt / T.BREAK;
+        if (e.breakProg >= 1) {
+          e.state = 'search'; e.searchT = 0; e.tLock = 0; e.breakProg = 0;
+          e.hasTether = false;                 // 断线后 → 受诱饵影响
+          TL.Audio.play('tetherBreak');
+          TL.FX.splash(e.x, e.y + 40, 10, U.hex2rgb(C.PAL.WHITE), 120);
+          G.addToast('系绳断裂');
+        }
+      }
+    } else {
+      e.searchT += dt;
+      if (observable) {
+        e.state = 'lock'; e.hasTether = true; e.tLock = 0;
+        TL.Audio.play('tether');
+        G.addToast('重新锁定');
+      } else if (e.searchT >= T.SEARCH) {
+        enemies.splice(idx, 1);
+      }
+    }
+  }
+
+  /* DECOY BREACH 目标筛选（GDD-02 §3.6） */
+  function decoyAt(bx, by) {
+    var list = [];
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (e.kind === 'T1') continue;
+      if (e.hasTether) { e.immuneFlash = 0.7; continue; }        // ⭐ 免疫判据
+      var d = Math.sqrt(U.dist2(e.x, e.y, bx, by));
+      if (d <= C.DECOY.RADIUS) list.push({ e: e, d: d });
+    }
+    list.sort(function (a, b) { return a.d - b.d; });
+    var n = Math.min(C.DECOY.MAX_TARGETS, list.length);
+    for (var k = 0; k < n; k++) {
+      var t = list[k].e;
+      t.decoyT = C.DECOY.STALL;
+      t.decoyX = bx; t.decoyY = by;
+    }
+    return n;
+  }
+
+  /* 与鲨鱼的接触判定（碰撞在 game.js 调用，效果在此施加） */
+  function hitTestShark(s) {
+    var sb = { x: s.x, y: s.y, w: C.SHARK.HALF_W * 2, h: C.SHARK.HALF_H * 2 };
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      var eb = enemyBox(e);
+      if (!U.aabb(sb.x, sb.y, sb.w, sb.h, eb.x, eb.y, eb.w, eb.h)) continue;
+      if (e.kind === 'T1') return { kind: 'T1', e: e };
+      if (e.kind === 'T2B' && e.decoyT <= 0) return { kind: 'T2B', e: e };
+    }
+    return null;
+  }
+
+  function enemyBox(e) {
+    if (e.kind === 'T1') return { x: e.x, y: e.y, w: 34, h: 26 };
+    if (e.kind === 'T2A') return { x: e.x, y: e.y, w: 52, h: 60 };
+    if (e.kind === 'T2B') return { x: e.x, y: e.y, w: 72, h: 32 };
+    return { x: e.x, y: e.y, w: 92, h: 36 };
+  }
+
+  function enemyDraw(B, G) {
+    var W = TL.World;
+    /* 预警箭头（T2+ 提前 0.8s，形态 + 位置双通道） */
+    for (var w = 0; w < warns.length; w++) {
+      var wn = warns[w];
+      var a = U.breath(G.time, 2);
+      var ax2 = U.clamp(wn.x, 40, C.WORLD_W - 40);
+      for (var r = 0; r < 5; r++) {
+        B.draw('dot2', ax2 - r * 10, wn.y - 20 + r * 10, 8, 8,
+          { tint: U.hex2rgb(C.PAL.AMBER), fade: a, bucket: 'add' });
+        B.draw('dot2', ax2 - r * 10, wn.y + 20 - r * 10, 8, 8,
+          { tint: U.hex2rgb(C.PAL.AMBER), fade: a, bucket: 'add' });
+      }
+    }
+
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (e.kind === 'T1') {
+        B.draw(e.variant, e.x, e.y, e.variant === 'tire' ? 34 : 30,
+          e.variant === 'tire' ? 26 : 24, { rot: G.time * e.spin * 0.6 });
+      } else if (e.kind === 'T2A') {
+        B.draw('tower', e.x, e.y, 52, 60);
+        if (e.telegraph > 0) {
+          var a2 = U.breath(G.time, 2);
+          B.draw('buoy', e.x, e.y - 34 - (1 - e.telegraph / C.ENEMY.T2A.TELEGRAPH) * 10, 20, 20,
+            { tint: U.hex2rgb(C.PAL.AMBER), fade: a2 });
+        }
+      } else if (e.kind === 'T2B') {
+        B.draw('jetski', e.x, e.y, 72, 32, { flipU: true });
+      } else if (e.kind === 'T3B') {
+        drawHeli(B, G, e);
+      }
+      /* 诱饵状态标记：! 命中 / ✕ 免疫 —— 形状通道，灰度可辨 */
+      if (e.decoyT > 0) {
+        B.draw('dot2', e.x, e.y - 56, 5, 16, { tint: U.hex2rgb(C.PAL.BLOOD) });
+        B.draw('dot2', e.x, e.y - 38, 5, 5, { tint: U.hex2rgb(C.PAL.BLOOD) });
+      } else if (e.immuneFlash > 0) {
+        var f = U.clamp(e.immuneFlash / 0.7, 0, 1);
+        for (var q = 0; q < 5; q++) {
+          B.draw('dot2', e.x - 8 + q * 4, e.y - 58 + q * 4, 5, 5, { tint: U.hex2rgb(C.PAL.WHITE), fade: f });
+          B.draw('dot2', e.x + 8 - q * 4, e.y - 58 + q * 4, 5, 5, { tint: U.hex2rgb(C.PAL.WHITE), fade: f });
+        }
+      }
+    }
+
+    for (var j = 0; j < projectiles.length; j++) {
+      var pr = projectiles[j];
+      B.draw('buoy', pr.x, pr.y, 20, 20, { rot: pr.rot });
+    }
+  }
+
+  function drawHeli(B, G, e) {
+    var s = G.shark;
+    B.draw('heli', e.x, e.y, 92, 36, { flipU: e.vx < 0 });
+    // 旋翼（运动模糊：两条横线交替）
+    var ph = Math.sin(G.time * 40) > 0;
+    B.draw('dot1', e.x, e.y - 8 + (ph ? 0 : 2), 86, 3, { tint: [0.7, 0.75, 0.85], fade: 0.8 });
+
+    // 探照灯锥（形态通道，非颜色唯一）
+    if (e.state === 'lock') {
+      var a = U.breath(G.time, 1.5);
+      for (var r = 0; r < 9; r++) {
+        var t = r / 8;
+        var cy = e.y + 18 + t * (s.y - e.y - 18);
+        var halfW = 8 + t * 46;
+        B.draw('dot2', e.x - halfW, cy, 4, 4, { tint: U.hex2rgb(C.PAL.AMBER), fade: 0.10 + a * 0.10, bucket: 'add' });
+        B.draw('dot2', e.x + halfW, cy, 4, 4, { tint: U.hex2rgb(C.PAL.AMBER), fade: 0.10 + a * 0.10, bucket: 'add' });
+      }
+      // 系绳（唯一连接两实体的线 = 形态通道）
+      var lockT = e.tLock / C.TETHER.LOCK;
+      var br = U.breath(G.time, 1 + lockT);       // 1 → 2Hz（≤2，硬红线）
+      var dx = s.x - e.x, dy = s.y - (e.y + 18);
+      var len = Math.sqrt(dx * dx + dy * dy);
+      var segs = Math.max(6, Math.round(len / 22));
+      var jitterAmp = lockT > 0.5 ? 3 : 1.5;
+      for (var i = 0; i <= segs; i++) {
+        var tt = i / segs;
+        var jx = (i > 0 && i < segs) ? (U.rand() - 0.5) * jitterAmp : 0;
+        B.draw('dot2', e.x + dx * tt + jx, e.y + 18 + dy * tt,
+          4, 4, { tint: U.hex2rgb(C.PAL.BLOOD), fade: 0.35 + br * 0.45, bucket: 'add' });
+      }
+      // 端点准星
+      var cs = 14 + (1 - lockT) * 10;
+      B.draw('dot1', s.x, s.y - cs, cs, 2, { tint: U.hex2rgb(C.PAL.BLOOD), fade: br });
+      B.draw('dot1', s.x, s.y + cs, cs, 2, { tint: U.hex2rgb(C.PAL.BLOOD), fade: br });
+      B.draw('dot1', s.x - cs, s.y, 2, cs, { tint: U.hex2rgb(C.PAL.BLOOD), fade: br });
+      B.draw('dot1', s.x + cs, s.y, 2, cs, { tint: U.hex2rgb(C.PAL.BLOOD), fade: br });
+    } else {
+      // `?` 搜索态（已断线 → 受诱饵影响）
+      B.draw('dot2', e.x, e.y - 40, 4, 12, { tint: U.hex2rgb(C.PAL.PALE) });
+      B.draw('dot2', e.x + 6, e.y - 34, 4, 4, { tint: U.hex2rgb(C.PAL.PALE) });
+      B.draw('dot2', e.x + 2, e.y - 24, 4, 4, { tint: U.hex2rgb(C.PAL.PALE) });
+      for (var q = 0; q < 7; q++) {
+        var ang = Math.sin(G.time * 1.7) * 0.8 + (q - 3) * 0.16;
+        B.draw('dot2', e.x + Math.sin(ang) * (30 + q * 22), e.y + 20 + Math.cos(ang) * (30 + q * 22),
+          4, 4, { tint: U.hex2rgb(C.PAL.PALE), fade: 0.12, bucket: 'add' });
+      }
+    }
+  }
+
+  /* =================================================================
+   * 副循环 · 冲浪收集（GDD-01 §3.5；详细规则待 GDD-04）
+   *
+   * 空间焊接：收集物**只**生成在冲浪带（贴近水线），与逃生路径重合 ——
+   *   想收集就得贴着水面游，而水面正是摩托艇与直升机的活动层。
+   *   于是「收集」与「安全」互斥（概念文档 §4.2 支柱三）。
+   *
+   * 判定门槛：**必须处于 surf 状态**才可拾取（贴水线 ±40px + 冲浪区 + 速度达标）。
+   *   这防止了「深海安全区顺手刷分」，也保证副循环需要真的技巧投入。
+   *
+   * 原子性：得分计入 pendingScore，与战利品**同池**，死亡全损（GDD-03 E2 裁决）。
+   * COMBO 亦按 PER_COLLECT 累加 —— 沙盘 `m_surf = 2.6` 即由「一次冲浪吃满 8 个」
+   * 推出（8 × STEP 0.2 → ×2.6），因此池内**恒定保持 COUNT 个**，不可削减。
+   * ================================================================= */
+  var PU_SPRITE = ['bottle', 'star', 'pickup_ring'];
+  var pickups = [];
+
+  function spawnPickup(G) {
+    /* 出生点避开鲨鱼周边 260px，免得「凭空出现在嘴边」破坏手感 */
+    var x = U.rr(1720, 2480);
+    for (var tryN = 0; tryN < 8; tryN++) {
+      var cand = U.rr(1720, 2480);
+      if (Math.abs(cand - G.shark.x) >= 260) { x = cand; break; }
+    }
+    pickups.push({ type: U.ri(0, 2), x: x, y: 0, t: U.rand() * 6 });
+  }
+
+  function pickupReset(G) {
+    pickups.length = 0;
+    for (var i = 0; i < C.COLLECT.COUNT; i++) spawnPickup(G);
+  }
+
+  function collectPickup(k, G) {
+    var sc = C.COLLECT.SCORE[k.type];
+    G.pendingScore += sc;
+    G.pendingCount++;
+    G.combo += C.COMBO.PER_COLLECT;
+    if (G.combo > G.comboMax) G.comboMax = G.combo;
+    G.stats.collects++;
+    TL.FX.splash(k.x, k.y, 5, U.hex2rgb(C.PAL.CYAN), 120);
+    TL.Audio.play('collect');
+    G.addToast('+' + sc + ' 未兑现（收集）');
+  }
+
+  function pickupUpdate(dt, G) {
+    var W = TL.World, s = G.shark;
+    for (var i = pickups.length - 1; i >= 0; i--) {
+      var k = pickups[i];
+      k.t += dt;
+      k.y = W.waterLineY(k.x, G.time) + 14 + Math.sin(k.t * 1.6) * 3;
+
+      if (!s.alive || !s.surf) continue;          // ⭐ 只有冲浪中才判定拾取
+      var sb = { x: s.x, y: s.y, w: C.SHARK.HALF_W * 2, h: C.SHARK.HALF_H * 2 };
+      if (U.aabb(sb.x, sb.y, sb.w, sb.h, k.x, k.y, 26, 26)) {
+        collectPickup(k, G);
+        pickups.splice(i, 1);
+        spawnPickup(G);                           // 池恒定 COUNT 个（沙盘约束）
+      }
+    }
+  }
+
+  function pickupDraw(B, G) {
+    for (var i = 0; i < pickups.length; i++) {
+      var k = pickups[i];
+      /* 三种收集物用**不同轮廓 + 不同旋转节奏**区分，不依赖颜色 */
+      var rot = 0, w = 26, h = 26;
+      if (k.type === 2) {
+        // 圆环平放在水面：靠纵向压扁表达透视，自身不转
+        rot = 0; h = 22;
+      } else if (k.type === 1) {
+        rot = Math.sin(k.t * 2.2) * 0.30;         // 星星左右摆
+      } else {
+        rot = Math.sin(k.t * 1.4) * 0.55;         // 瓶子浮沉摇晃
+      }
+      B.draw(PU_SPRITE[k.type], k.x, k.y, w, h, { rot: rot });
+      // 高价值（圆环 30 分）加一圈水光点，形态提示「这个更值钱」
+      if (k.type === 2) {
+        for (var q = 0; q < 6; q++) {
+          var a = k.t * 1.2 + q * (U.TAU / 6);
+          B.draw('dot2', k.x + Math.cos(a) * 20, k.y + Math.sin(a) * 6, 3, 3,
+            { tint: U.hex2rgb(C.PAL.WHITE), fade: 0.55 });
+        }
+      }
+    }
+  }
+
+  TL.Pickups = {
+    reset: pickupReset, update: pickupUpdate, draw: pickupDraw,
+    list: pickups,
+    count: function () { return pickups.length; }
+  };
+
+  TL.Prey = {
+    reset: preyReset, update: preyUpdate, draw: preyDraw, hit: preyHit,
+    consume: preyConsume, list: prey
+  };
+  TL.Enemies = {
+    reset: resetEnemies, update: updateEnemies, draw: enemyDraw,
+    spawnByTier: spawnByTier, decoyAt: decoyAt, hitTestShark: hitTestShark,
+    countKind: countKind, tetherCount: tetherCount, list: enemies
+  };
+})();
+
+</script>
+<script>
+/* ===== src/game/game.js ===== */
+/* =====================================================================
+ * TIDELINE · game/game.js
+ * 核心循环编排：ALARM → 系绳 → Bank → 咬合 / 死亡（GDD-02 E3 帧序仲裁）。
+ *
+ * 帧序（同帧多事件时）：
+ *   ① 输入 → ② 鲨鱼移动（子步）→ ③ 敌人 / 系绳 → ④ ALARM
+ *   → ⑤ Bank 前置条件 → ⑥ 咬合 / 死亡判定
+ * 时序仲裁一律偏向玩家（GDD-02 E3）。
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+  var C = TL.C, U = TL.U;
+
+  var DEATH_PRIO = { beached: 3, tether: 2, harpoon: 1, other: 0 };
+
+  /* 水深配色：明度阶梯 深海 8% → 沙滩 82%（美术圣经 §5.3.0） */
+  var WATER_STOPS = [
+    [0, [0.055, 0.098, 0.176]],
+    [750, [0.075, 0.145, 0.247]],
+    [1650, [0.114, 0.310, 0.435]],
+    [2350, [0.153, 0.478, 0.545]],
+    [2560, [0.196, 0.588, 0.604]]
+  ];
+  var SAND_DRY = [0.910, 0.773, 0.416];
+  var SAND_WET = [0.520, 0.396, 0.180];
+
+  function waterColorAt(x) {
+    for (var i = 1; i < WATER_STOPS.length; i++) {
+      if (x <= WATER_STOPS[i][0] || i === WATER_STOPS.length - 1) {
+        var a = WATER_STOPS[i - 1], b = WATER_STOPS[i];
+        var t = U.clamp((x - a[0]) / (b[0] - a[0]), 0, 1);
+        return [
+          a[1][0] + (b[1][0] - a[1][0]) * t,
+          a[1][1] + (b[1][1] - a[1][1]) * t,
+          a[1][2] + (b[1][2] - a[1][2]) * t
+        ];
+      }
+    }
+    return WATER_STOPS[0][1];
+  }
+
+  var G = {
+    time: 0, dtRaw: 0, running: false, over: false, paused: false,
+    shark: null,
+    alarm: 0, tier: 0, maxEventArmed: true,
+    banked: 0, combo: 0, comboMax: 0, comboLost: 0,
+    pendingScore: 0, pendingCount: 0,
+    lostScore: 0, lostCount: 0,          // 本局累计损失（结算页如实告知，死亡后 pendingScore 会被清零，故必须单独记）
+    bankT: 0,
+    deathReason: '', deathPrio: -1,
+    freeze: 0, desat: 0, desatTarget: 0, flash: 0, flashCol: [0, 0, 0],
+    qte: { active: false, t: 0, need: 6, window: 2.5, count: 0, lastTap: -1 },
+    cam: { x: 0, y: 0, tx: 0, ty: 0, shake: 0, sx: 0, sy: 0 },
+    events: {}, toasts: [],
+    dashPressed: false, hasDir: false, dirX: 1, dirY: 0,
+    decoyFired: false,
+    stats: { grabs: 0, banks: 0, deaths: 0, collects: 0 },
+    opts: null
+  };
+
+  /* =================================================================
+   * 生命周期
+   * ================================================================= */
+  function init(opts) {
+    G.opts = opts;
+    TL.World.build();
+    G.shark = TL.Shark.create();
+    reset();
+  }
+
+  function reset() {
+    G.time = 0; G.over = false; G.running = true; G.paused = false;
+    G.alarm = 0; G.tier = 0; G.maxEventArmed = true;
+    G.banked = 0; G.combo = 0; G.comboMax = 0; G.comboLost = 0;
+    G.pendingScore = 0; G.pendingCount = 0;
+    G.lostScore = 0; G.lostCount = 0;
+    G.bankT = 0;
+    G.deathReason = ''; G.deathPrio = -1;
+    G.freeze = 0; G.desat = 0; G.desatTarget = 0; G.flash = 0;
+    lastFlashAt = -1e9;               // 屏闪限频闸门必须随局重置，否则新一局开局被压住
+    G.qte.active = false; G.qte.count = 0; G.qte.t = 0;
+    G.cam.x = 0; G.cam.y = 0; G.cam.shake = 0;
+    G.toasts.length = 0;
+    G.decoyFired = false;
+    /* 本局统计必须逐局归零 —— 否则重开后「捕食/落袋次数」会叠加上一局 */
+    G.stats.grabs = 0; G.stats.banks = 0; G.stats.deaths = 0; G.stats.collects = 0;
+    G.events = {};
+    TL.Shark.reset(G.shark);
+    TL.Prey.reset(0);
+    TL.Enemies.reset();
+    TL.Pickups.reset(G);
+    TL.FX.reset();
+    G.cam.x = U.clamp(G.shark.x - C.DESIGN_W * 0.42, 0, C.WORLD_W - C.DESIGN_W);
+  }
+
+  /* =================================================================
+   * ALARM（GDD-02 §3.1 / §3.2）
+   * ================================================================= */
+  function addAlarm(v) {
+    G.alarm = U.clamp(G.alarm + v, 0, C.ALARM.MAX);
+  }
+
+  function updateAlarm(dt) {
+    var s = G.shark, A = C.ALARM;
+    var slope;
+    if (s.state === 'beached') slope = A.SLOPE.BEACHED;
+    else if (s.zone === C.ZONE.BEACH) slope = A.SLOPE.BEACH;
+    else if (s.airborne) slope = A.SLOPE.AIRBORNE;
+    else if (s.zone === C.ZONE.DEEP) {
+      slope = (s.speed < A.STILL_SPEED) ? A.SLOPE.DEEP_STILL : A.SLOPE.DEEP_MOVING;
+    } else if (s.zone === C.ZONE.SHALLOW) slope = A.SLOPE.SHALLOW;
+    else slope = A.SLOPE.SURF;
+
+    G.alarm = U.clamp(G.alarm + slope * dt, 0, A.MAX);
+
+    /* 档位迟滞（🔒 安全要求：迟滞未实现 = 等效闪烁超标） */
+    var t = G.tier;
+    if (t < 3 && G.alarm >= A.UP[t]) { G.tier = t + 1; onTierChange(1); }
+    else if (t > 0 && G.alarm < A.DOWN[t - 1]) { G.tier = t - 1; onTierChange(-1); }
+
+    /* 「通缉令拉满」事件：重复触发锁（跌破 90 才重触发，GDD-02 E6） */
+    if (G.alarm >= 100) {
+      if (G.maxEventArmed) {
+        G.maxEventArmed = false;
+        triggerFlash(C.PAL.WHITE, 0.35);
+        TL.Audio.play('alarmMax');       // 三连上行 + 三全音悬置，与普通升档区分
+        G.addToast('通缉令拉满');
+      }
+    } else if (G.alarm < A.MAX_EVENT_REARM) {
+      G.maxEventArmed = true;
+    }
+  }
+
+  function onTierChange(dir) {
+    TL.Audio.play(dir > 0 ? 'tierUp' : 'tierDown');
+    triggerFlash(dir > 0 ? C.PAL.AMBER : C.PAL.PALE, 0.18);
+    G.addToast((dir > 0 ? '↑ ' : '↓ ') + C.TIER_NAME[G.tier] + ' T' + G.tier);
+  }
+
+  /* =================================================================
+   * 反馈（全部走「呼吸式」，禁用硬 on/off）
+   * ================================================================= */
+  /* 🔒 硬红线①统一闸门：全项目屏闪必须在**唯一出口**限频。
+   *
+   * 为什么必须放在这里，而不是各个调用点各自加冷却：
+   *   实测超标场景（QA PH6-QA-002 ①c）—— 冲刺命中**救生员**时
+   *   LIFEGUARD.danger = 2.0 → ALARM 一次 +40；updateAlarm 每帧只升一档，
+   *   于是从 40 连续两帧各跨一次阈值（50 与 75），onTierChange 被调用两次、
+   *   各闪一次，再叠加同帧的咬合闪 → 1 秒窗口内 **3 次屏闪**，超过项目自定的 ≤2。
+   *   逐个调用点打补丁必然漏（本文件有 3 处调用点，未来还会加），
+   *   所以在 triggerFlash 里统一用 C.FLASH_GAP 钳制间隔 —— 任何来源都绕不过去。
+   *   FLASH_GAP = 0.51s ⟹ 任意 1 秒窗口至多 2 次闪，严格 ≤2Hz。
+   *   注意：这里只压制**视觉**，音效与 toast 照常触发，不产生「无反馈死区」。 */
+  var lastFlashAt = -1e9;
+  function triggerFlash(hex, amount) {
+    if (!G.opts || !G.opts.flash) return;      // 关闭「闪烁」→ 无全屏色闪
+    if (G.time - lastFlashAt < C.FLASH_GAP) return;
+    lastFlashAt = G.time;
+    G.flashCol = U.hex2rgb(hex);
+    G.flash = amount;
+  }
+  function triggerShake(px) {
+    if (!G.opts || !G.opts.shake) return;
+    if (px > G.cam.shake) G.cam.shake = px;
+  }
+  function triggerFreeze(sec) { if (sec > G.freeze) G.freeze = sec; }
+
+  function addToast(text) {
+    G.toasts.push({ text: text, t: 0 });
+    if (G.toasts.length > 4) G.toasts.shift();
+  }
+
+  /* =================================================================
+   * 咬合 / 捕食（GDD-03 §3.1）
+   * ================================================================= */
+  function tryBite(s) {
+    if (s.carryK >= C.CARRY_MAX) return;
+    if (!s.alive) return;
+    var mb = TL.Shark.mouthBox(s);
+    var p = TL.Prey.hit(mb);
+    if (!p) return;
+
+    var def = C.PREY[p.type.toUpperCase()] || C.PREY.SWIMMER;
+    s.dashBites++;
+    s.dashT = -1;
+    s.dashCd = C.DASH.CD;             // 一次冲刺 = 一次押注，账本清晰
+    s.biteT = C.BITE.DUR;
+    s.carry.push(p.type);
+    G.pendingScore += def.score;
+    G.pendingCount++;
+    G.combo += C.COMBO.PER_GRAB;
+    if (G.combo > G.comboMax) G.comboMax = G.combo;
+    G.stats.grabs++;
+    addAlarm(C.ALARM.GRAB * def.danger);
+    TL.Prey.consume(p);
+
+    /* 反馈四件套中，震屏与色闪有 0.5s 内部冷却（GDD-03 §5.3 安全裁决） */
+    triggerFreeze(C.BITE.FREEZE);
+    TL.FX.predation(p.x, p.y);
+    TL.Audio.play('bite');
+    if (s.shakeCd <= 0) {
+      s.shakeCd = C.BITE.SHAKE_CD;
+      triggerShake(C.BITE.SHAKE);
+      triggerFlash(C.PAL.MAGENTA, 0.22);
+    }
+    addToast('+' + def.score + ' 未兑现 · ALARM +' + Math.round(C.ALARM.GRAB * def.danger));
+  }
+
+  /* =================================================================
+   * DECOY BREACH（GDD-03 §3.4）
+   * ================================================================= */
+  function onSurfaceCross(s, x, y) {
+    if (x < C.DECOY.MIN_X) return;             // 深海不触发（裁决 1）
+    G.decoyFired = true;
+    s.stamina = Math.max(0, s.stamina - C.DECOY.COST);   // 代价无条件（E5）
+    addAlarm(C.ALARM.DECOY);
+    TL.FX.splash(x, y, 26, U.hex2rgb(C.PAL.WHITE), 280);
+    TL.FX.shockRing(x, y, 180);
+    TL.Audio.play('decoy');
+    var n = TL.Enemies.decoyAt(x, y);
+    if (n > 0) TL.Audio.play('decoyHit');   // 惊动音：只有真的引到了才有
+    addToast(n > 0 ? ('声东击西 · 重定向 ' + n + ' 个') : '声东击西 · 无目标（代价照付）');
+    /* 反馈层级低于捕食：不给震屏、不给顿帧、不给洋红（裁决 3） */
+  }
+
+  /* =================================================================
+   * 强制打断态（GDD-02 §3.4）
+   * ================================================================= */
+  function applyStun() {
+    var s = G.shark;
+    if (!s.alive || s.iframeT > 0) return;
+    s.stunT = C.STUN_DUR;
+    addAlarm(C.ALARM.CC_HIT);
+    TL.Audio.play('hit');
+    TL.FX.splash(s.x, s.y, 8, U.hex2rgb(C.PAL.PALE), 90);
+    addToast('被浮标命中 · 眩晕 1.5s');
+  }
+  function applySnare() {
+    var s = G.shark;
+    if (!s.alive || s.iframeT > 0) return;
+    s.snareT = C.SNARE_DUR;
+    addAlarm(C.ALARM.CC_HIT);
+    TL.Audio.play('hit');
+    addToast('被渔网束缚 1.5s');
+  }
+  function applySlow() {
+    var s = G.shark;
+    if (s.slowT > 0) return;
+    s.slowT = C.SLOWED.DUR;
+    TL.Audio.play('hit');
+    TL.FX.splash(s.x, s.y + 30, 6, U.hex2rgb(C.PAL.PALE), 70);
+  }
+  function jetskiHit(e) {
+    var s = G.shark;
+    if (s.iframeT > 0) return;
+    if (s.carryK > 0) {
+      var lost = s.carry.pop();
+      var def = C.PREY[lost.toUpperCase()] || C.PREY.SWIMMER;
+      G.pendingScore = Math.max(0, G.pendingScore - def.score);
+      G.pendingCount = Math.max(0, G.pendingCount - 1);
+      addToast('被摩托艇撞掉 1 个战利品');
+    } else {
+      addToast('被摩托艇撞击');
+    }
+    addAlarm(C.ALARM.JETSKI);
+    s.iframeT = C.ENEMY.T2B.IFRAME;
+    TL.Audio.play('hit');
+    triggerShake(4);
+    // 击退 0.3s（用 Slow 复用实现，方向由玩家接管）
+    s.slowT = Math.max(s.slowT, C.ENEMY.T2B.KNOCK);
+  }
+
+  /* =================================================================
+   * 搁浅 / QTE（ADR-003 §2.4–§2.6）
+   * ================================================================= */
+  function enterBeached(s) {
+    if (s.state === 'beached') return;
+    s.state = 'beached';
+    s.stunT = 0; s.snareT = 0;
+    s.dashT = -1;
+    G.decoyFired = false;
+
+    /* E1：携带中搁浅 → 战利品掉落并立即判定为丢失，不可再拾取 */
+    if (s.carryK > 0) {
+      for (var i = 0; i < s.carryK; i++) {
+        TL.FX.sandPuff(s.x - i * 24, s.y + 26, 6);
+      }
+      G.lostScore += G.pendingScore;
+      G.lostCount += G.pendingCount;
+      G.pendingScore = 0; G.pendingCount = 0;
+      s.carry.length = 0;
+      addToast('战利品全部散落沙上 · 不可再拾取');
+    }
+
+    var assist = G.opts && (G.opts.qteAssist || G.opts.reducedMotion);
+    G.qte.active = true;
+    G.qte.t = 0;
+    G.qte.count = 0;
+    G.qte.need = assist ? C.QTE_ASSIST.NEED : C.QTE.NEED;
+    G.qte.window = assist ? C.QTE_ASSIST.WINDOW : C.QTE.WINDOW;
+    G.qte.lastTap = -1;
+    G.desatTarget = 1;                 // 「画面只剩灰与白」
+    /* 搁浅确认音（抽气声，带通 1800→300Hz 扫描 = 「颜色被抽干」的听觉对应）。
+     * 注意：预警音 'sting' 由 shark.js 在 strandWarn 时播放，二者语义不同，不可混用。 */
+    TL.Audio.play('beached');
+    TL.FX.sandPuff(s.x, s.y + 30, 14);
+    triggerShake(3);
+  }
+
+  function updateQTE(dt, taps) {
+    var q = G.qte;
+    if (!q.active) return;
+    q.t += dt;
+    for (var i = 0; i < taps.length; i++) {
+      var tt = taps[i] / 1000;
+      if (q.lastTap < 0 || tt - q.lastTap >= C.QTE.MIN_INTERVAL) {
+        q.lastTap = tt;
+        q.count++;
+        TL.Audio.play('thrash');
+        TL.FX.sandPuff(G.shark.x + U.rr(-40, 40), G.shark.y + 30, 4);
+        if (q.count >= q.need) { qteSuccess(); return; }
+      }
+    }
+    if (q.t >= q.window) qteFail();
+  }
+
+  function qteSuccess() {
+    var s = G.shark;
+    G.qte.active = false;
+    s.state = 'cruise';
+    s.strandT = 0; s.strandWarn = false;
+    G.desatTarget = 0;
+    // 弹回水中（并立刻刷新区域与速率，避免脱困帧仍带着 beached 的 speed=0 被误判再次搁浅）
+    s.x = Math.min(s.x - 300, TL.World.shoreX - 200);
+    s.y = TL.World.waterLineY(s.x, G.time) + 90;
+    s.theta = 180;
+    s.zone = TL.World.zoneAt(s.x, s.zone);
+    s.speed = C.V_CRUISE * C.CARRY_V(s.carryK);
+    s.strandWarn = false;
+    triggerFreeze(C.QTE.FREEZE);
+    triggerShake(C.QTE.SHAKE);
+    TL.FX.splash(s.x, s.y, 22, U.hex2rgb(C.PAL.WHITE), 220);
+    TL.Audio.play('rescued');
+    addToast('挣脱！空手弹回水中');
+  }
+
+  function qteFail() {
+    G.qte.active = false;
+    killShark('beached');
+  }
+
+  /* =================================================================
+   * Bank（GDD-03 §3.6）
+   * ================================================================= */
+  function comboMult() {
+    return Math.min(1 + C.COMBO.STEP * G.combo, C.COMBO.M_CAP);
+  }
+
+  function updateBank(dt) {
+    var s = G.shark;
+    if (!s.alive) { G.bankT = 0; return; }
+    if (s.carryK <= 0) { G.bankT = 0; return; }
+
+    var ok = s.zone === C.ZONE.DEEP
+      && TL.Enemies.tetherCount() === 0
+      && s.state !== 'beached' && s.state !== 'stunned' && s.state !== 'snared';
+    if (ok) {
+      G.bankT += dt;
+      if (G.bankT >= C.BANK.DIGEST) doBank();
+    }
+    // E7：离开条件 → 中断但进度保留（不回零）
+  }
+
+  function doBank() {
+    var s = G.shark;
+    var m = comboMult();
+    var k = s.carryK;
+    var score = Math.round(G.pendingScore * m * C.BANK_B(k));
+    G.banked += score;
+    if (G.combo > G.comboMax) G.comboMax = G.combo;
+    G.stats.banks++;
+    s.carry.length = 0;
+    G.pendingScore = 0; G.pendingCount = 0;
+    G.combo = 0;
+    G.alarm = 0; G.tier = 0; G.maxEventArmed = true;
+    G.bankT = 0;
+    TL.Audio.play('bank');
+    triggerFlash(C.PAL.CYAN, 0.20);
+    TL.FX.splash(s.x, s.y, 16, U.hex2rgb(C.PAL.CYAN), 160);
+    for (var i = 0; i < 10; i++) {
+      TL.FX.bubble(s.x + U.rr(-40, 40), s.y + U.rr(-30, 30));
+    }
+    addToast('落袋 +' + score + '（×' + m.toFixed(1) + '）');
+  }
+
+  /* =================================================================
+   * 死亡（GDD-02 E5 优先级：QTE 失败 > 锁定 > 鱼叉）
+   * ================================================================= */
+  function killShark(reason) {
+    var prio = DEATH_PRIO[reason] === undefined ? 0 : DEATH_PRIO[reason];
+    if (G.over) return;
+    var s = G.shark;
+    if (!s.alive) return;
+    s.alive = false;
+    s.state = 'dead';
+    G.over = true;
+    G.deathReason = reason;
+    G.deathPrio = prio;
+    G.qte.active = false;
+    G.comboLost = G.combo;               // 未兑现 COMBO（E2：必须明确告知）
+    /* ⭐ 先记账再清零：pending 一旦归零，结算页就再也算不出玩家损失了多少 */
+    G.lostScore += G.pendingScore;
+    G.lostCount += G.pendingCount;
+    G.pendingScore = 0; G.pendingCount = 0;
+    G.combo = 0;
+    G.desatTarget = 0.85;
+    G.stats.deaths++;
+    TL.Audio.play('death');
+    triggerShake(8);
+  }
+
+  /* =================================================================
+   * 主更新
+   * ================================================================= */
+  function update(dtRaw) {
+    G.dtRaw = dtRaw;
+    if (!G.running || G.paused) return;
+
+    var dt = Math.min(dtRaw, C.DT_CLAMP);
+    G.time += dt;
+
+    /* 顿帧：只冻结逻辑推进，输入照常采集（ADR-003 §2.6） */
+    if (G.freeze > 0) {
+      G.freeze -= dtRaw;
+    }
+
+    /* 输入 */
+    var IN = TL.Input;
+    G.hasDir = IN.hasDir;
+    G.dirX = IN.dirX; G.dirY = IN.dirY;
+    var dash = IN.consumeDash();
+    G.dashPressed = dash;
+    var taps = IN.takeTaps();
+
+    /* QTE 期间只跑 QTE */
+    if (G.qte.active) {
+      updateQTE(dt, taps);
+      updateAlarm(dt);                   // 搁浅期间 ALARM 仍 +8/s（GDD-02 §3.1）
+      TL.FX.update(dt);
+      updateCamera(dt);
+      updateFeedback(dt);
+      return;
+    }
+
+    if (G.freeze <= 0 && !G.over) {
+      var s = G.shark;
+
+      /* ADR-003 §2.5：预警窗口内冲刺可自救（关键的技巧轴） */
+      if (s.strandWarn && s.state !== 'beached' && dash && s.stamina >= 1) {
+        s.stamina -= 1;
+        s.strandT = 0; s.strandWarn = false;
+        s.x -= 140;
+        s.y = TL.World.waterLineY(s.x, G.time) + 90;
+        s.theta = 180;
+        TL.FX.splash(s.x, s.y, 16, U.hex2rgb(C.PAL.WHITE), 200);
+        TL.Audio.play('rescued');
+        addToast('冲刺脱困 −1 体力');
+        G.dashPressed = false;
+      }
+
+      TL.Shark.update(s, dt, G);
+      TL.Prey.update(dt, G);
+      TL.Pickups.update(dt, G);        // 副循环：冲浪收集（原子计入 pending）
+      TL.Enemies.spawnByTier(G.tier, G);
+      TL.Enemies.update(dt, G);
+      updateAlarm(dt);
+
+      /* 接触判定（GDD-02 §3.4） */
+      if (s.alive) {
+        var hit = TL.Enemies.hitTestShark(s);
+        if (hit && s.iframeT <= 0) {
+          if (hit.kind === 'T1') applySlow();
+          else if (hit.kind === 'T2B') jetskiHit(hit.e);
+        }
+      }
+
+      updateBank(dt);
+    } else {
+      TL.Prey.update(dt * 0.2, G);
+      TL.Pickups.update(dt * 0.2, G);   // 顿帧 / 死亡慢镜：随场景一起减速
+    }
+
+    TL.FX.update(dt);
+    updateCamera(dt);
+    updateFeedback(dt);
+
+    for (var i = G.toasts.length - 1; i >= 0; i--) {
+      G.toasts[i].t += dtRaw;
+      if (G.toasts[i].t > 2.6) G.toasts.splice(i, 1);
+    }
+  }
+
+  function updateCamera(dt) {
+    var s = G.shark, cam = G.cam;
+    if (G.qte.active || s.state === 'beached') {
+      // ADR-003 §6.3 方案 A：相机缓推，鲨鱼落在水平 62% / 垂直 46%
+      cam.tx = U.clamp(s.x - C.DESIGN_W * C.CAM.FOCUS_X, 0, C.WORLD_W - C.DESIGN_W);
+      cam.ty = U.clamp(s.y - C.DESIGN_H * C.CAM.FOCUS_Y, C.CAM.Y_MIN, 0);
+    } else {
+      cam.tx = U.clamp(s.x - C.DESIGN_W * 0.42, 0, C.WORLD_W - C.DESIGN_W);
+      cam.ty = 0;
+    }
+    var rate = (G.qte.active ? C.CAM.BEACH_PAN * 8 : C.CAM.LERP);
+    cam.x = U.damp(cam.x, cam.tx, rate, dt);
+    cam.y = U.damp(cam.y, cam.ty, rate, dt);
+
+    if (cam.shake > 0.2) {
+      cam.shake *= Math.pow(0.02, dt);
+      cam.sx = (U.rand() * 2 - 1) * cam.shake;
+      cam.sy = (U.rand() * 2 - 1) * cam.shake;
+    } else { cam.shake = 0; cam.sx = 0; cam.sy = 0; }
+  }
+
+  function updateFeedback(dt) {
+    G.desat = U.damp(G.desat, G.desatTarget, 6, dt);
+    if (G.flash > 0) {
+      G.flash -= dt * 2.2;
+      if (G.flash < 0) G.flash = 0;
+    }
+  }
+
+  /* =================================================================
+   * 渲染
+   * ================================================================= */
+  function drawBackground(B) {
+    var W = TL.World;
+    var x0 = G.cam.x - 40, x1 = G.cam.x + C.DESIGN_W + 40;
+    var yTop = G.cam.y - 420;
+    var STEPX = 24;
+    var i, x, col;
+
+    /* 天空（黄昏带，明度自下而上递减） */
+    var skyBands = 7;
+    for (i = 0; i < skyBands; i++) {
+      var t = i / (skyBands - 1);
+      col = [
+        0.055 + (0.180 - 0.055) * (1 - t),
+        0.078 + (0.290 - 0.078) * (1 - t),
+        0.145 + (0.420 - 0.145) * (1 - t)
+      ];
+      B.draw('dot1', (x0 + x1) / 2, yTop + (C.WATER_BASE - yTop) * (i / skyBands) + (C.WATER_BASE - yTop) / skyBands / 2,
+        x1 - x0, (C.WATER_BASE - yTop) / skyBands + 2, { tint: col });
+    }
+
+    /* 太阳（ALARM 档位的冗余形态通道） */
+    var sunSprite = G.tier >= 3 ? 'sun_siege' : (G.tier >= 1 ? 'sun_alert' : 'sun_calm');
+    var sunX = 520 + G.cam.x * 0.06;                    // 视差 0.06
+    B.draw(sunSprite, sunX, yTop + 90, 64, 52);
+
+    /* 水体 + 海床 + 沙层（逐列） */
+    for (x = Math.floor(x0 / STEPX) * STEPX; x <= x1; x += STEPX) {
+      var wl = W.waterLineY(x, G.time);
+      var sbY = W.seabedY(x);
+      var wc = waterColorAt(x);
+
+      if (sbY > wl) {
+        B.draw('dot1', x + STEPX / 2, (wl + sbY) / 2, STEPX + 1, sbY - wl, { tint: wc });
+      }
+      // 沙层截面：水线以上为干沙（亮），以下为湿沙（暗）
+      if (sbY < C.WORLD_BOTTOM) {
+        var dryH = Math.max(0, wl - sbY);
+        if (dryH > 0) B.draw('dot1', x + STEPX / 2, (sbY + wl) / 2, STEPX + 1, dryH, { tint: SAND_DRY });
+        var wetH = C.WORLD_BOTTOM - Math.max(sbY, wl);
+        if (wetH > 0) {
+          B.draw('dot1', x + STEPX / 2, Math.max(sbY, wl) + wetH / 2, STEPX + 1, wetH, { tint: SAND_WET });
+        }
+      }
+    }
+
+    /* 深海光柱（Bank 区标记，形态通道） */
+    var deepEdge = Math.min(750, x1);
+    if (x0 < 750) {
+      var bx0 = Math.max(x0, 0), bx1 = deepEdge;
+      if (bx1 > bx0) {
+        B.draw('dot1', (bx0 + bx1) / 2, 440, bx1 - bx0, 900,
+          { tint: [0.10, 0.35, 0.55], fade: 0.16, bucket: 'add' });
+        // 下坠箭头列：明确的「这里结算」
+        for (i = 0; i < 6; i++) {
+          B.draw('dot1', 360, 180 + i * 90 + Math.sin(G.time * 2 + i) * 12, 60, 4,
+            { tint: [0.55, 0.85, 1.0], fade: 0.30, bucket: 'add' });
+        }
+      }
+      // 深海边界虚线
+      for (i = 0; i < 20; i++) {
+        B.draw('dot1', 750, 120 + i * 38, 3, 20, { tint: [0.6, 0.75, 0.9], fade: 0.30 });
+      }
+    }
+
+    /* 水面泡沫线 */
+    for (x = Math.floor(x0 / 32) * 32; x <= x1; x += 32) {
+      var w2 = W.waterLineY(x, G.time);
+      var dep = W.depthAt(x);
+      if (dep < 24) continue;
+      B.draw('foam', x, w2, 32, 6, { fade: U.clamp(dep / 120, 0.15, 0.9) });
+    }
+
+    /* 深海光斑（低频视差装饰） */
+    for (i = 0; i < 10; i++) {
+      var rx = 140 + ((i * 337) % 700);
+      var ry = 260 + ((i * 191) % 420);
+      B.draw('dot1', rx + G.cam.x * 0.25, ry, 90 + (i % 3) * 40, 4,
+        { tint: [0.35, 0.62, 0.85], fade: 0.10, bucket: 'add' });
+    }
+  }
+
+  function drawQTERing(B) {
+    var q = G.qte;
+    var cx = C.DESIGN_W / 2, cy = C.DESIGN_H / 2;
+    var t = U.clamp(q.t / q.window, 0, 1);
+    var rad = U.lerp(C.QTE.RING_OUTER, C.QTE.RING_INNER, t);
+    var prog = q.count / q.need;
+    var mag = U.hex2rgb(C.PAL.MAGENTA);
+    var wht = U.hex2rgb(C.PAL.WHITE);
+    var N = 46;
+    for (var i = 0; i < N; i++) {
+      var a = (i / N) * U.TAU - Math.PI / 2;
+      var px = cx + Math.cos(a) * rad;
+      var py = cy + Math.sin(a) * rad;
+      var seg = i / N;
+      var col = seg <= prog ? mag : wht;
+      var fade = seg <= prog ? 1 : 0.55;
+      var sz = seg <= prog ? 8 : 5;
+      B.draw('dot2', px, py, sz, sz, { tint: col, fade: fade, bucket: 'add' });
+    }
+    // 内环：剩余时间扇形（形态通道，灰度可读）
+    var inner = C.QTE.RING_INNER - 26;
+    var M = 30;
+    for (var j = 0; j < M; j++) {
+      if ((j / M) > (1 - t)) continue;
+      var a2 = (j / M) * U.TAU - Math.PI / 2;
+      B.draw('dot2', cx + Math.cos(a2) * inner, cy + Math.sin(a2) * inner, 6, 6,
+        { tint: wht, fade: 0.7, bucket: 'add' });
+    }
+    // 目标刻度：每命中一针点亮一格
+    for (var k = 0; k < q.need; k++) {
+      var a3 = -Math.PI / 2 + (k / q.need) * U.TAU;
+      var r3 = C.QTE.RING_OUTER + 22;
+      B.draw('dot2', cx + Math.cos(a3) * r3, cy + Math.sin(a3) * r3, 10, 10,
+        { tint: k < q.count ? mag : wht, fade: k < q.count ? 1 : 0.35, bucket: 'add' });
+    }
+  }
+
+  function render(B, post, rt) {
+    var gl = B.gl;
+    var s = G.shark;
+
+    /* --- 世界 pass → RT_WORLD(720x432) --- */
+    gl.bindFramebuffer(gl.FRAMEBUFFER, rt.fb);
+    gl.viewport(0, 0, rt.w, rt.h);
+    gl.clearColor(0.039, 0.055, 0.090, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    B.begin('world', G.cam.x + G.cam.sx, G.cam.y + G.cam.sy);
+    drawBackground(B);
+    TL.Pickups.draw(B, G);
+    TL.Prey.draw(B, G);
+    TL.Enemies.draw(B, G);
+    TL.Shark.draw(s, B, G);
+    TL.FX.draw(B);
+    B.flush();
+
+    /* --- 后期 pass → 显示 (1440x864) --- */
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    post.crt = G.opts.crt ? 1 : 0;
+    post.scan = G.opts.crt ? 1.0 : 0.0;
+    post.jitter = G.opts.jitter && !G.opts.reducedMotion ? 0.6 : 0.0;
+    post.vig = 1.0;
+    post.ca = G.opts.crt ? 1.5 : 0;
+    post.desat = G.desat;
+    post.flash = G.flash;
+    post.flashCol = G.flashCol;
+    post.danger = (G.tier >= 3 && !G.over) ? 1 : 0;
+    post.time = G.time;
+    post.draw(rt.tex, C.DESIGN_W, C.DESIGN_H);
+
+    /* --- 叠加 pass：QTE 圆环是去饱和后画面上「唯一保留的颜色」 --- */
+    if (G.qte.active) {
+      B.begin('screen', 0, 0);
+      drawQTERing(B);
+      B.flush();
+    }
+  }
+
+  /* 对外接口 */
+  G.init = init;
+  G.reset = reset;
+  G.update = update;
+  G.render = render;
+  G.addToast = addToast;
+  G.applyStun = applyStun;
+  G.applySnare = applySnare;
+  G.applySlow = applySlow;
+  G.killShark = killShark;
+  G.enterBeached = enterBeached;
+  G.tryBite = tryBite;
+  G.onSurfaceCross = onSurfaceCross;
+  G.comboMult = comboMult;
+  G.hardRestart = function () { reset(); };
+
+  TL.Game = G;
+})();
+
+</script>
+<script>
+/* ===== src/ui/hud.js ===== */
+/* =====================================================================
+ * TIDELINE · ui/hud.js
+ * DOM HUD（ADR-001 §2.3）+ Title / Pause / Results / Options 屏幕。
+ *
+ * 可访问性硬红线②：颜色永不作为唯一信息通道。
+ *   ALARM 等级 = 条长度（连续）+ 刻度形状（25/50/75 缺口）+ 音效 + 文字
+ *   是否携带   = 鲨鱼姿态 + 战利品格子数 + 水花拖尾（canvas 侧）
+ * ===================================================================== */
+(function () {
+  var TL = (window.TL = window.TL || {});
+  var C = TL.C, U = TL.U;
+
+  var el = {};
+  var opts = null;
+  var lastTier = -1;
+
+  function $(id) { return document.getElementById(id); }
+
+  function init(options) {
+    opts = options;
+    ['scoreVal', 'pendingVal', 'tierName', 'alarmNum', 'alarmFill', 'alarmA11y',
+      'stamina', 'carry', 'comboBox', 'zoneBox', 'prompt', 'toasts', 'bankBar',
+      'screens', 'panel', 'dangerEdge', 'stage'].forEach(function (k) { el[k] = $(k); });
+
+    for (var i = 0; i < C.STAMINA_MAX; i++) {
+      var d = document.createElement('div'); d.className = 'pip'; el.stamina.appendChild(d);
+    }
+    for (var j = 0; j < C.CARRY_MAX; j++) {
+      var c = document.createElement('div'); c.className = 'pip'; el.carry.appendChild(c);
+    }
+    applyOptionClasses();
+  }
+
+  function applyOptionClasses() {
+    var h = document.documentElement;
+    h.classList.toggle('cb', !!opts.colorblind);
+    h.classList.toggle('no-crt', !opts.crt);
+    h.classList.toggle('no-flash', !opts.flash);
+    h.classList.toggle('rm', !!opts.reducedMotion);
+  }
+
+  /* ---------------- 每帧更新 ---------------- */
+  function update(G) {
+    var s = G.shark;
+
+    el.scoreVal.textContent = G.banked;
+    el.pendingVal.textContent = '未兑现 ' + G.pendingScore + '（' + G.pendingCount + ' 个）';
+
+    /* ALARM：长度 + 数值 + 刻度 + 档位名 */
+    var a = G.alarm;
+    el.alarmNum.textContent = Math.round(a);
+    el.alarmFill.style.width = a.toFixed(1) + '%';
+    el.tierName.textContent = C.TIER_NAME[G.tier] + ' T' + G.tier;
+    if (G.tier !== lastTier) {
+      lastTier = G.tier;
+      document.documentElement.style.setProperty('--accent',
+        G.tier >= 3 ? 'var(--blood)' : (G.tier >= 1 ? 'var(--amber)' : 'var(--white)'));
+      el.alarmA11y.textContent = '通缉等级 ' + C.TIER_NAME[G.tier];
+    }
+    el.dangerEdge.classList.toggle('on', G.tier >= 3 && !G.over);
+
+    /* 体力三格（离散，不做平滑条 —— 街机感） */
+    var pips = el.stamina.children;
+    for (var i = 0; i < pips.length; i++) {
+      var filled = s.stamina >= (i + 1) - 0.001;
+      var partial = s.stamina > i && s.stamina < i + 1;
+      pips[i].classList.toggle('on', filled);
+      pips[i].classList.toggle('low', !filled && partial);
+      // 最后一格：2Hz 呼吸式脉动（关闭「闪烁」时改常亮，不留无反馈死区）
+      if (!filled && partial && opts.flash && !opts.reducedMotion) {
+        pips[i].style.opacity = (0.35 + 0.5 * U.breath(G.time, 2)).toFixed(3);
+      } else {
+        pips[i].style.opacity = '1';
+      }
+    }
+
+    /* 战利品格子（数得出来的冗余通道） */
+    var cp = el.carry.children;
+    for (var j = 0; j < cp.length; j++) cp[j].classList.toggle('on', j < s.carryK);
+
+    el.comboBox.innerHTML = 'COMBO ×' + G.comboMult().toFixed(1) +
+      '<small>' + G.combo + ' 连击 · 上限 ×' + C.COMBO.M_CAP.toFixed(1) + '</small>';
+    el.zoneBox.textContent = '区域：' + C.ZONE_NAME[s.zone] +
+      (s.surf ? '（冲浪中 ×1.25）' : '') + '　|　速度 ' + Math.round(s.speed) + ' px/s' +
+      (s.carryK > 0 ? '　|　携带 ' + s.carryK + '/4（速率 ×' + C.CARRY_V(s.carryK).toFixed(2) + '）' : '');
+
+    /* 中央提示 */
+    var p = '';
+    if (G.qte.active) {
+      var left = Math.max(0, G.qte.window - G.qte.t);
+      p = '连打！ ' + G.qte.count + ' / ' + G.qte.need +
+        '<small>剩余 ' + left.toFixed(1) + ' s　·　空格 / 点击画布</small>';
+    } else if (s.strandWarn) {
+      p = '正在陷进沙里！' + '<small>立刻按「冲刺」脱困（−1 体力）</small>';
+    } else if (G.bankT > 0 && s.carryK > 0) {
+      p = '结算中…' + '<small>' + (G.bankT / C.BANK.DIGEST * 100).toFixed(0) + '%</small>';
+    } else if (s.state === 'stunned') {
+      p = '眩晕' + '<small>' + s.stunT.toFixed(1) + ' s</small>';
+    } else if (s.state === 'snared') {
+      p = '被渔网束缚' + '<small>' + s.snareT.toFixed(1) + ' s</small>';
+    }
+    el.prompt.innerHTML = p;
+
+    /* Bank 进度条 */
+    if (G.bankT > 0 && s.carryK > 0) {
+      el.bankBar.style.display = 'block';
+      el.bankBar.firstElementChild.style.width =
+        Math.min(100, G.bankT / C.BANK.DIGEST * 100).toFixed(0) + '%';
+    } else {
+      el.bankBar.style.display = 'none';
+    }
+
+    /* Toast */
+    var html = '';
+    for (var k = 0; k < G.toasts.length; k++) {
+      var t = G.toasts[k];
+      var op = U.clamp(2.6 - t.t, 0, 1);
+      html += '<div class="toast" style="opacity:' + op.toFixed(2) + '">' + t.text + '</div>';
+    }
+    el.toasts.innerHTML = html;
+  }
+
+  /* ---------------- 屏幕 ---------------- */
+  var OPT_LABELS = [
+    ['shake', '屏幕震动'],
+    ['flash', '屏幕闪烁（脉动）'],
+    ['jitter', '扫描线抖动'],
+    ['crt', 'CRT 后期（弯曲/色差）'],
+    ['colorblind', '色盲模式（血红→电光蓝）'],
+    ['qteAssist', 'QTE 辅助（3 次 / 3.5s）'],
+    ['mute', '静音'],
+    ['music', '背景音乐'],
+    ['integerSnap', '整数倍缩放（大黑边）']
+  ];
+
+  function optsHtml() {
+    var h = '<div class="opts">';
+    for (var i = 0; i < OPT_LABELS.length; i++) {
+      var k = OPT_LABELS[i][0], label = OPT_LABELS[i][1];
+      h += '<label class="opt"><input type="checkbox" data-opt="' + k + '"' +
+        (opts[k] ? ' checked' : '') + '>' + label + '</label>';
+    }
+    h += '<label class="opt">粒子密度 <select data-opt="particles">' +
+      '<option value="1"' + (opts.particles === 1 ? ' selected' : '') + '>100%</option>' +
+      '<option value="0.5"' + (opts.particles === 0.5 ? ' selected' : '') + '>50%</option>' +
+      '<option value="0"' + (opts.particles === 0 ? ' selected' : '') + '>0%（保留顿帧/动画）</option>' +
+      '</select></label>';
+    h += '</div>';
+    return h;
+  }
+
+  function bindOpts() {
+    var nodes = el.panel.querySelectorAll('[data-opt]');
+    for (var i = 0; i < nodes.length; i++) {
+      (function (n) {
+        var key = n.getAttribute('data-opt');
+        var ev = n.tagName === 'SELECT' ? 'change' : 'change';
+        n.addEventListener(ev, function () {
+          opts[key] = n.tagName === 'SELECT' ? parseFloat(n.value) : n.checked;
+          if (key === 'mute') TL.Audio.setMuted(opts.mute);
+          if (key === 'music') TL.Audio.setMusicEnabled(opts.music);
+          if (key === 'particles') TL.FX.setDensity(opts.particles);
+          applyOptionClasses();
+          TL.Audio.play('ui');
+        });
+      })(nodes[i]);
+    }
+  }
+
+  function showScreen(html) {
+    el.panel.innerHTML = html;
+    el.screens.classList.add('show');
+    bindOpts();
+    var first = el.panel.querySelector('button');
+    if (first) first.focus();
+  }
+  function hideScreen() { el.screens.classList.remove('show'); }
+  function visible() { return el.screens.classList.contains('show'); }
+
+  function title() {
+    showScreen(
+      '<h1>潮线 TIDELINE</h1>' +
+      '<div class="tag">MVP 垂直切片 · PHASE 5 · 核心循环验证</div>' +
+      '<p>你是一条鲨鱼。你<b>永远不能停下</b>——你只能决定往哪儿游（GDD-01 §3.1）。<br>' +
+      '冲上沙滩叼走游客，顶着 ALARM 通缉逃回深海落袋。<b>被抓到、或搁浅 QTE 失败，未结算的一切全部作废。</b></p>' +
+      '<div class="keys">' +
+      '<b>方向</b><span>方向键 / WASD，或单指拖拽（相对位移）</span>' +
+      '<b>冲刺</b><span>空格 / J，或第二指点按。咬合<b>只在冲刺中判定</b></span>' +
+      '<b>声东击西</b><span>冲刺中穿出水面自动触发（−1 体力，ALARM +8）</span>' +
+      '<b>搁浅 QTE</b><span>连打空格或点击画布，2.5 秒内 6 次</span>' +
+      '<b>落袋</b><span>带着战利品游回深海（x &lt; 750）自动结算</span>' +
+      '</div>' +
+      optsHtml() +
+      '<div class="note">硬红线：闪烁频率 ≤ 2 Hz 且全项目禁用硬 on/off；5 个正交开关可独立关闭（右上角暂停菜单内亦可调整）。<br>' +
+      '检测到系统「减少动态效果」时会自动降级。</div>' +
+      '<div class="btnrow"><button class="primary" data-act="start">开始游戏</button></div>'
+    );
+  }
+
+  function pause(G) {
+    showScreen(
+      '<h2>已暂停</h2>' +
+      '<div class="rows">' +
+      '<div><span>已入账分数</span><b>' + G.banked + '</b></div>' +
+      '<div><span>未兑现押注</span><b>' + G.pendingScore + '</b></div>' +
+      '<div><span>ALARM</span><b>' + Math.round(G.alarm) + ' · ' + C.TIER_NAME[G.tier] + '</b></div>' +
+      '</div>' +
+      optsHtml() +
+      '<div class="btnrow">' +
+      '<button class="primary" data-act="resume">继续</button>' +
+      '<button data-act="restart">重新开始</button>' +
+      '</div>'
+    );
+  }
+
+  function results(G) {
+    var reason = {
+      beached: '搁浅 · QTE 失败',
+      tether: '直升机锁定满 3.0 s',
+      harpoon: '被鱼叉命中'
+    }[G.deathReason] || '未知';
+
+    showScreen(
+      '<h2>这一局结束了</h2>' +
+      '<div class="tag">死因：' + reason + '</div>' +
+      '<div class="rows">' +
+      '<div><span>已入账 SCORE（保留）</span><b>' + G.banked + '</b></div>' +
+      /* ⭐ 必须读 lostScore：pendingScore 在死亡/搁浅时已被清零，
+         直接读它会让这一行永远显示 −0，玩家看不到自己亏了什么 */
+      '<div><span class="loss">未兑现押注（作废）</span><b class="loss">−' +
+      (G.lostScore || 0) + (G.lostCount ? '（' + G.lostCount + ' 个）' : '') + '</b></div>' +
+      '<div><span class="loss">未兑现 COMBO</span><b class="loss">×' + (1 + C.COMBO.STEP * G.comboLost).toFixed(1) + ' → 0</b></div>' +
+      '<div><span>本局最高 COMBO</span><b>' + G.comboMax + '</b></div>' +
+      '<div><span>捕食 / 落袋次数</span><b>' + G.stats.grabs + ' / ' + G.stats.banks + '</b></div>' +
+      '<div><span>冲浪收集</span><b>' + G.stats.collects + ' 个</b></div>' +
+      '</div>' +
+      '<div class="note">原子性规则：五步（潜行 → 冲刺 → 捕食 → 逃生 → 结算）走完才算数，中途死亡则本次押注全损（GDD-03 §1）。<br>' +
+      'COMBO 倍率不是分数，是「待兑现的乘数」——被乘数作废，乘数自然归零（GDD-03 E2）。</div>' +
+      optsHtml() +
+      '<div class="btnrow"><button class="primary" data-act="restart">再来一局</button></div>'
+    );
+  }
+
+  TL.HUD = {
+    init: init, update: update,
+    title: title, pause: pause, results: results,
+    hide: hideScreen, visible: visible,
+    applyOptionClasses: applyOptionClasses,
+    panel: function () { return el.panel; }
+  };
+})();
+
+</script>
+<script>
+/* ===== src/main.js ===== */
+/* =====================================================================
+ * TIDELINE · main.js
+ * 引导：GL 上下文 → 图集 → 批处理器 → RT → 后期 → 固定步长主循环。
+ * 无构建步骤，双击 index.html 即可运行（也可用任意静态服务器）。
+ * ===================================================================== */
+(function () {
+  var TL = window.TL, C = TL.C, U = TL.U;
+
+  /* ---------------- 选项（5 个正交开关 + 可访问性） ---------------- */
+  var opts = {
+    shake: true, flash: true, jitter: true, crt: true, particles: 1,
+    colorblind: false, qteAssist: false, mute: false, integerSnap: false,
+    reducedMotion: false, music: true
+  };
+  var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  if (mq && mq.matches) {
+    opts.reducedMotion = true;
+    opts.shake = false; opts.flash = false; opts.jitter = false; opts.particles = 0.5;
+  }
+
+  var stage = document.getElementById('stage');
+  var canvas = document.getElementById('gl');
+  var gl = null, B = null, post = null, rt = null, atlasTex = null, bayerTex = null;
+  var glLost = false;
+
+  function initGL() {
+    var info = TL.glx.createContext(canvas);
+    if (!info) return false;
+    gl = info.gl;
+    var atlas = TL.buildAtlas();
+    atlasTex = TL.glx.createTexture(gl, atlas.w, atlas.h, atlas.canvas);
+    bayerTex = TL.glx.createBayerTexture(gl, U.BAYER8, 8);
+    B = new TL.Batcher(gl, atlasTex, bayerTex);
+    B.setAtlas(atlas.defs, atlas.w, atlas.h);
+    rt = TL.glx.createFBO(gl, C.RT_W, C.RT_H);
+    post = new TL.Post(gl, C.RT_W, C.RT_H);
+    return true;
+  }
+
+  if (!initGL()) {
+    stage.innerHTML = '<div style="padding:80px;font-size:22px;line-height:2">' +
+      '本作需要 WebGL（WebGL2 或 WebGL1）。<br>当前浏览器/设备未提供可用的 WebGL 上下文。<br>' +
+      '<span style="opacity:.6;font-size:16px">ADR-001：低于 WebGL1 的设备不做支持，无降级渲染路径。</span></div>';
+    return;
+  }
+
+  canvas.addEventListener('webglcontextlost', function (e) {
+    e.preventDefault(); glLost = true;
+  });
+  canvas.addEventListener('webglcontextrestored', function () {
+    if (initGL()) glLost = false;
+  });
+
+  /* ---------------- 启动 ---------------- */
+  TL.HUD.init(opts);
+  TL.Game.init(opts);
+  TL.FX.setDensity(opts.particles);
+  TL.Input.bind(stage);
+  TL.HUD.title();
+
+  /* ---------------- 视口适配（5:3 → letterbox） ---------------- */
+  function fit() {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / C.DESIGN_W, vh / C.DESIGN_H);
+    if (opts.integerSnap) s = Math.max(1, Math.floor(s));
+    stage.style.transform = 'scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  /* ---------------- 屏幕动作 ---------------- */
+  var G = TL.Game;
+  var mode = 'title';          // title | playing | paused | results
+  var resultsDelay = 0;
+
+  function startRun() {
+    TL.Audio.init(); TL.Audio.resume();
+    TL.Audio.setMuted(opts.mute);
+    TL.Audio.setMusicEnabled(opts.music);
+    TL.Audio.setSuspended(false);
+    G.reset();
+    TL.Input.clear();
+    TL.HUD.hide();
+    mode = 'playing';
+    resultsDelay = 0;
+  }
+
+  document.getElementById('panel').addEventListener('click', function (e) {
+    var n = e.target;
+    while (n && n !== this && !(n.getAttribute && n.getAttribute('data-act'))) n = n.parentNode;
+    if (!n || n === this) return;
+    var act = n.getAttribute('data-act');
+    TL.Audio.init(); TL.Audio.resume(); TL.Audio.play('ui');
+    if (act === 'start' || act === 'restart') startRun();
+    else if (act === 'resume') {
+      mode = 'playing'; TL.HUD.hide(); TL.Input.clear(); TL.Audio.setSuspended(false);
+    }
+  });
+
+  /* ---------------- 主循环 ---------------- */
+  var acc = 0, last = performance.now(), fpsAcc = 0, fpsN = 0, fps = 0;
+
+  function frame(now) {
+    var dtRaw = (now - last) / 1000;
+    last = now;
+    if (dtRaw > 0.25) dtRaw = 0.25;
+    fpsAcc += dtRaw; fpsN++;
+    if (fpsAcc >= 0.5) { fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
+
+    /* 全局按键 */
+    if (TL.Input.consumePause()) {
+      if (mode === 'playing') { mode = 'paused'; TL.HUD.pause(G); TL.Audio.setSuspended(true); }
+      else if (mode === 'paused') { mode = 'playing'; TL.HUD.hide(); TL.Input.clear(); TL.Audio.setSuspended(false); }
+    }
+    if (TL.Input.consumeMute()) {
+      opts.mute = !opts.mute; TL.Audio.setMuted(opts.mute);
+      TL.HUD.applyOptionClasses();
+      var cb = document.querySelector('[data-opt="mute"]');
+      if (cb) cb.checked = opts.mute;
+    }
+    if (TL.Input.consumeConfirm()) {
+      if (mode === 'title' || mode === 'results') startRun();
+      else if (mode === 'paused') { mode = 'playing'; TL.HUD.hide(); TL.Input.clear(); }
+    }
+
+    if (!glLost) {
+      if (mode === 'playing') {
+        TL.Input.update();
+        acc += dtRaw;
+        var steps = 0;
+        while (acc >= C.FIXED_DT && steps < C.MAX_STEPS) {
+          G.update(C.FIXED_DT);
+          acc -= C.FIXED_DT;
+          steps++;
+        }
+        if (steps >= C.MAX_STEPS) acc = 0;      // 追不上就丢帧，不做死亡螺旋
+
+        if (G.over) {
+          resultsDelay += dtRaw;
+          if (resultsDelay > 1.1) { mode = 'results'; TL.HUD.results(G); }
+        }
+      } else {
+        TL.Input.update();
+        TL.Input.takeTaps();
+        TL.Input.consumeDash();
+      }
+
+      G.render(B, post, rt);
+      TL.HUD.update(G);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+</script>
+</body>
+</html>

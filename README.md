@@ -1,1 +1,26 @@
 # GoodCase.xAI
+
+**AI 编程好案例画廊** —— 同一套工作环境下，由 AI Agent 独立完成的成品案例集。
+
+在线浏览：**https://wangxp7.github.io/GoodCase.xAI/**
+
+## 收录内容
+
+按产出时使用的 AI 工具命名空间分组：
+
+| 命名空间 | 内容 |
+|---|---|
+| `zcode/` | ZCode 产出：WebGL/GLSL 3D 场景、霓虹小游戏、鹈鹕骑车 SVG 系列、密室 3D 游戏、诺奖化学科普交互页、星际水族箱、后室游戏等 |
+| `workbuddy/` | WorkBuddy 产出：Buckshot Roulette 网页复刻、Eaves 数值沙盘、Tideline 潮汐游戏、tidewater-fish 网页版、火箭发射模拟（含完整 GDD 设计文档工程）、Token 消耗看板等 |
+| `trae/` | Trae 产出：AURORA-9 火箭入轨全流程模拟、GLSL 霓虹轨道海报 |
+
+每个案例目录内含可独立运行的 `index.html`（直接打开即用）与相应的设计文档 / 源码 / 测试脚本。
+
+## 结构
+
+```
+index.html            ← 画廊首页(自动生成, 27 个案例入口)
+zcode/  workbuddy/  trae/
+```
+
+案例持续补充中。所有页面均为纯静态实现，可直接在浏览器中运行。

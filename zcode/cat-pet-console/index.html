@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEKO PAL · 猫咪掌机</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="dn-noon">
+<div class="stage" id="stage">
+  <div class="console" id="console">
+
+    <div class="console-top">
+      <div class="brand">NEKO<b>PAL</b><i>猫咪掌机</i></div>
+      <div class="power"><i class="led" id="powerLed"></i><span>POWER</span></div>
+    </div>
+
+    <div class="bezel">
+      <div class="screen" id="screen">
+
+        <!-- 顶部状态 HUD -->
+        <div class="hud" id="hud">
+          <div class="bars">
+            <div class="bar" data-k="hunger"  title="饱食度"><span class="ico">🍚</span><div class="track"><i></i></div></div>
+            <div class="bar" data-k="happiness" title="心情"><span class="ico">💗</span><div class="track"><i></i></div></div>
+            <div class="bar" data-k="energy"  title="精力"><span class="ico">💤</span><div class="track"><i></i></div></div>
+            <div class="bar" data-k="clean"   title="清洁"><span class="ico">🫧</span><div class="track"><i></i></div></div>
+          </div>
+          <div class="meta">
+            <div class="coins">💰<b id="coinNum">0</b></div>
+            <div class="lvl">🌟<b id="lvlNum">Lv.1</b></div>
+          </div>
+        </div>
+
+        <!-- 房间场景：CSS 3D 等距小屋 -->
+        <div class="room" id="room">
+          <div class="iso">
+
+            <!-- 地板 -->
+            <div class="ground">
+              <div class="rug deco" data-deco="rug"><span class="p1">🐾</span><span class="p2">🐾</span><span class="p3">🐾</span></div>
+            </div>
+
+            <!-- 后墙 -->
+            <div class="wall wb">
+              <div class="window">
+                <div class="sky"></div>
+                <i class="sun"></i><i class="moon"></i>
+                <div class="stars"><i></i><i></i><i></i><i></i><i></i></div>
+                <i class="hill"></i>
+                <i class="winbar m"></i><i class="winbar v"></i>
+                <div class="curtain l"></div><div class="curtain r"></div>
+                <div class="sill"></div>
+                <div class="sillplant deco" data-deco="sillPlant"><i>🌱</i></div>
+              </div>
+              <div class="clock"><i class="face"></i><i class="hand hh" id="clockH"></i><i class="hand mm" id="clockM"></i><i class="pin"></i></div>
+              <div class="frame f1"><span>🐈</span></div>
+              <div class="frame f2"><span>🌻</span></div>
+              <div class="frame photo deco" data-deco="photo"><span>📸</span></div>
+              <div class="frame family deco" data-deco="family"><span>🏠</span></div>
+            </div>
+
+            <!-- 洗衣机 -->
+            <div class="f washer3d">
+              <i class="b t"></i>
+              <i class="b fr">
+                <i class="panel"><i class="knob k1"></i><i class="knob k2"></i><i class="ledrow"></i></i>
+                <i class="door"><i class="glass"><i class="sock"></i></i></i>
+              </i>
+              <i class="b sd"></i>
+              <i class="detergent"><i class="cap"></i><i class="lab"></i></i>
+            </div>
+
+            <!-- 沙发 -->
+            <div class="f sofa3d">
+              <i class="b seat"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b back"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b arm a1"><i class="b t"></i><i class="b fr"></i></i>
+              <i class="b arm a2"><i class="b t"></i><i class="b fr"></i></i>
+              <i class="cushion"></i>
+              <i class="blanket deco" data-deco="blanket"></i>
+            </div>
+
+            <!-- 猫爬架 -->
+            <div class="f tree3d">
+              <i class="b base"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b pole"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b plat p1"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b plat p2"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b hole"><i class="b t"></i><i class="b fr"><i class="dent"></i></i><i class="b sd"></i></i>
+            </div>
+
+            <!-- 茶几 -->
+            <div class="f table3d">
+              <i class="b top"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b leg"><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b leg l2"><i class="b fr"></i><i class="b sd"></i></i>
+            </div>
+
+            <!-- 鱼缸（茶几上） -->
+            <div class="f aqua3d deco" data-deco="aquarium">
+              <i class="b t"></i><i class="b fr"><i class="water"></i><i class="fish">🐟</i></i><i class="b sd"><i class="water"></i></i>
+              <i class="bub b1"></i><i class="bub b2"></i>
+            </div>
+
+            <!-- 大盆栽 -->
+            <div class="f plant3d">
+              <i class="leaves"><i class="leaf lf1"></i><i class="leaf lf2"></i><i class="leaf lf3"></i></i>
+              <i class="b pot"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+            </div>
+
+            <!-- 食盆 / 水碗 -->
+            <div class="f bowl3d" id="bowl"><i class="b t"><i class="food" id="bowlFood"></i></i><i class="b fr"></i><i class="b sd"></i></div>
+            <div class="f wbowl3d"><i class="b t"><i class="water"></i></i><i class="b fr"></i><i class="b sd"></i></div>
+
+            <!-- 落地灯 -->
+            <div class="f lamp3d deco" data-deco="lamp">
+              <i class="glow"></i>
+              <i class="b shade"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b pole"><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b stand"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+            </div>
+
+            <!-- 书堆 -->
+            <div class="f books3d deco" data-deco="books">
+              <i class="b k1"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b k2"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+              <i class="b k3"><i class="b t"></i><i class="b fr"></i><i class="b sd"></i></i>
+            </div>
+
+            <!-- 小立牌物件 -->
+            <div class="yarn" id="yarn"><i class="sh"></i><i class="ball"></i></div>
+            <div class="ducky">🐤</div>
+            <div class="trophy deco" data-deco="trophy"><span>🏆</span></div>
+
+            <!-- 猫（billboard 立牌） -->
+            <div class="cat" id="cat">
+              <i class="cat-shadow"></i>
+              <div class="bb">
+                <div class="bubble" id="bubble"></div>
+                <div class="fx" id="fx"></div>
+                <div class="flip" id="catFlip">
+                  <svg class="catsvg" viewBox="0 0 240 230" id="catSvg">
+                    <!-- 尾巴 -->
+                    <g class="tail-g">
+                      <path class="tail" d="M156 198 Q 212 196 206 150 Q 202 126 179 131" fill="none" stroke="var(--fur)" stroke-width="17" stroke-linecap="round"/>
+                      <path class="tail-end" d="M208 154 Q 205 130 181 130" fill="none" stroke="var(--fur-dark)" stroke-width="17" stroke-linecap="round"/>
+                    </g>
+                    <!-- 身体 -->
+                    <ellipse class="body" cx="120" cy="168" rx="61" ry="47" fill="var(--fur)"/>
+                    <path class="stripe sb1" d="M66 148 q11 13 3 30" fill="none" stroke="var(--fur-dark)" stroke-width="7" stroke-linecap="round"/>
+                    <path class="stripe sb2" d="M174 148 q-11 13 -3 30" fill="none" stroke="var(--fur-dark)" stroke-width="7" stroke-linecap="round"/>
+                    <g class="cow-patches">
+                      <path d="M148 138 q30 -10 36 16 q4 24 -24 26 q-24 0 -22 -22 q1 -14 10 -20Z" fill="var(--fur-dark)"/>
+                      <path d="M96 190 q18 -6 22 8 q3 14 -14 16 q-16 1 -15 -12 q1 -8 7 -12Z" fill="var(--fur-dark)"/>
+                    </g>
+                    <ellipse class="belly" cx="120" cy="186" rx="36" ry="26" fill="var(--fur-lite)"/>
+                    <!-- 后脚尖 -->
+                    <ellipse class="hfoot hl" cx="72" cy="211" rx="13" ry="8" fill="var(--fur-lite)"/>
+                    <ellipse class="hfoot hr" cx="168" cy="211" rx="13" ry="8" fill="var(--fur-lite)"/>
+                    <!-- 前爪 -->
+                    <ellipse class="paw pl" cx="97" cy="213" rx="16" ry="10" fill="var(--fur-lite)"/>
+                    <ellipse class="paw pr" cx="143" cy="213" rx="16" ry="10" fill="var(--fur-lite)"/>
+                    <path class="toe t1" d="M92 210 v6 M102 210 v6" stroke="rgba(120,100,90,.35)" stroke-width="2" stroke-linecap="round"/>
+                    <path class="toe t2" d="M138 210 v6 M148 210 v6" stroke="rgba(120,100,90,.35)" stroke-width="2" stroke-linecap="round"/>
+                    <!-- 头 -->
+                    <g class="head-g">
+                      <path class="ear el" d="M70 64 Q 59 16 83 13 Q 106 11 109 52 Z" fill="var(--fur)"/>
+                      <path class="ear-in el" d="M77 55 Q 71 27 85 25 Q 97 26 101 50 Z" fill="var(--ear-pink)"/>
+                      <path class="ear er" d="M170 64 Q 181 16 157 13 Q 134 11 131 52 Z" fill="var(--fur)"/>
+                      <path class="ear-in er" d="M163 55 Q 169 27 155 25 Q 143 26 139 50 Z" fill="var(--ear-pink)"/>
+                      <ellipse class="head" cx="120" cy="92" rx="61" ry="55" fill="var(--fur)"/>
+                      <path class="stripe sh1" d="M107 41 v13" stroke="var(--fur-dark)" stroke-width="7" stroke-linecap="round"/>
+                      <path class="stripe sh2" d="M120 38 v15" stroke="var(--fur-dark)" stroke-width="7" stroke-linecap="round"/>
+                      <path class="stripe sh3" d="M133 41 v13" stroke="var(--fur-dark)" stroke-width="7" stroke-linecap="round"/>
+                      <g class="eyes-open">
+                        <ellipse cx="98" cy="97" rx="8.5" ry="11" fill="#332e3a"/>
+                        <circle cx="101.5" cy="92.5" r="3.4" fill="#fff"/>
+                        <circle cx="94.5" cy="101" r="1.6" fill="#fff" opacity=".85"/>
+                        <ellipse cx="142" cy="97" rx="8.5" ry="11" fill="#332e3a"/>
+                        <circle cx="145.5" cy="92.5" r="3.4" fill="#fff"/>
+                        <circle cx="138.5" cy="101" r="1.6" fill="#fff" opacity=".85"/>
+                      </g>
+                      <g class="eyes-happy">
+                        <path d="M89 100 Q 98 89 107 100" fill="none" stroke="#332e3a" stroke-width="4.2" stroke-linecap="round"/>
+                        <path d="M133 100 Q 142 89 151 100" fill="none" stroke="#332e3a" stroke-width="4.2" stroke-linecap="round"/>
+                      </g>
+                      <g class="eyes-closed">
+                        <path d="M89 98 Q 98 107 107 98" fill="none" stroke="#332e3a" stroke-width="4" stroke-linecap="round"/>
+                        <path d="M133 98 Q 142 107 151 98" fill="none" stroke="#332e3a" stroke-width="4" stroke-linecap="round"/>
+                      </g>
+                      <path class="nose" d="M115 115 L125 115 L120 122 Z" fill="#e59a92"/>
+                      <path class="mouth" d="M111 127 Q 115.5 133 120 127 Q 124.5 133 129 127" fill="none" stroke="#8a7268" stroke-width="2.4" stroke-linecap="round"/>
+                      <g class="whiskers" fill="none" stroke="rgba(95,80,72,.5)" stroke-width="2" stroke-linecap="round">
+                        <path d="M64 100 q -14 -4 -27 -9"/>
+                        <path d="M62 109 h -28"/>
+                        <path d="M64 118 q -14 4 -27 9"/>
+                        <path d="M176 100 q 14 -4 27 -9"/>
+                        <path d="M178 109 h 28"/>
+                        <path d="M176 118 q 14 4 27 9"/>
+                      </g>
+                      <ellipse class="blush bl" cx="83" cy="113" rx="9" ry="5.5" fill="#f2a19a" opacity=".55"/>
+                      <ellipse class="blush br" cx="157" cy="113" rx="9" ry="5.5" fill="#f2a19a" opacity=".55"/>
+                    </g>
+                  </svg>
+                  <div class="bath-foam" id="bathFoam"><i>🫧</i><i>🫧</i><i>🫧</i></div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /iso -->
+          <div class="dim" id="dim"></div>
+        </div>
+
+        <!-- 弹窗层 / 提示 -->
+        <div class="modal-layer" id="modalLayer"></div>
+        <div class="toast" id="toast"></div>
+        <div class="glass"></div>
+      </div>
+    </div>
+
+    <!-- 掌机按键区 -->
+    <div class="pad">
+      <div class="dpad" id="dpad" title="戳一下试试"><i class="dh"></i><i class="dv"></i><i class="ddot"></i></div>
+      <div class="keys">
+        <div class="keywrap"><button class="key k-a" id="btnFeed">🍚</button><span>喂食</span></div>
+        <div class="keywrap"><button class="key k-b" id="btnPlay">🎣</button><span>玩耍</span></div>
+        <div class="keywrap"><button class="key k-c" id="btnBath">🛁</button><span>清洁</span></div>
+        <div class="keywrap"><button class="key k-d" id="btnSleep">🌙</button><span>睡觉</span></div>
+      </div>
+      <div class="minis">
+        <button class="mini" id="btnSound" title="音效开关">🔔</button>
+        <button class="mini" id="btnHelp" title="帮助">❔</button>
+      </div>
+    </div>
+
+    <div class="console-bottom">
+      <div class="speaker"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="made">MADE WITH <b>♥</b> · 好好照顾你的猫</div>
+    </div>
+
+  </div>
+</div>
+<script src="js/game.js"></script>
+</body>
+</html>

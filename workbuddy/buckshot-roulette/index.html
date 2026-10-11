@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080b08"><meta name="description" content="恶魔轮盘——直面天命！YiQiGAME-TiWiStudio 制作的 3D 双人同屏复刻。">
+  <title>恶魔轮盘——直面天命！ · BUCKSHOT ROULETTE</title>
+  <link rel="icon" type="image/svg+xml" href="./icon.svg"><link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="world"></div>
+  <div id="vignette" aria-hidden="true"></div><div id="flash" aria-hidden="true"></div>
+  <div id="boot"><div class="boot-symbol">ϟ</div><p>正在接通电源<span class="dots">...</span></p><small>YiQiGAME-TiWiStudio · BUCKSHOT ROULETTE</small></div>
+
+  <main id="menu" class="screen hidden">
+    <div class="menu-shade"></div>
+    <div class="menu-content">
+      <div class="eyebrow"><span class="live-dot"></span> 地下俱乐部 · 最后一张桌子</div>
+      <div class="studio-mark" aria-label="YiQiGAME-TiWiStudio"><span class="studio-glyph">Y</span><span><strong>YiQiGAME-TiWiStudio</strong><small>GAME STUDIO</small></span></div>
+      <h1><span>BUCKSHOT</span><span>ROULETTE<span class="title-dot">.</span></span></h1>
+      <div class="chinese-title">恶魔轮盘<em>——直面天命！</em></div>
+      <div class="menu-divider"><span>12 GAUGE</span><i></i><span>ONE WAY OUT</span></div>
+      <nav aria-label="主菜单">
+        <button id="continue" class="menu-button hidden"><span class="menu-number">00</span>继续对局<span class="menu-arrow">↗</span></button>
+        <button id="start" class="menu-button primary"><span class="menu-number">01</span>进入游戏<span class="menu-arrow">↗</span></button>
+        <button id="endless" class="menu-button"><span class="menu-number">02</span>双倍或归零<span class="menu-english">DOUBLE OR NOTHING</span></button>
+        <button id="versus" class="menu-button"><span class="menu-number">03</span>同屏双人<span class="menu-english">LOCAL VERSUS</span></button>
+        <button id="how" class="menu-button"><span class="menu-number">04</span>游戏规则</button>
+        <button id="settings" class="menu-button"><span class="menu-number">05</span>选项</button>
+      </nav>
+      <p class="menu-quote">“枪已经准备好了。请坐。”</p>
+    </div>
+    <footer class="menu-footer"><span>建议佩戴耳机 <i>／</i> 点击开始后启用声音</span><button id="credits">YiQiGAME-TiWiStudio <span>↗</span></button><span class="version">v1.1 · OFFLINE</span></footer>
+  </main>
+
+  <section id="intro" class="screen hidden">
+    <div class="intro-caption"><small>00:47 AM · 地下俱乐部</small><h2>你已经来了。</h2><p>门的另一边，有人在等你。</p></div>
+    <button id="leave-bathroom" class="outline-button">推门进入　→ <kbd>E</kbd></button>
+    <button id="intro-back" class="text-button">返回主菜单　ESC</button>
+  </section>
+
+  <section id="hud" class="screen hidden" aria-label="游戏状态">
+    <header class="game-header">
+      <div class="round-stamp"><small id="mode-label">THE LAST TABLE</small><div>ROUND <strong id="round-number">01</strong><span>/ 03</span></div><p id="round-label">第一轮 · 试探</p></div>
+      <nav class="utility"><button id="memory-button" title="Tab：查看本次装弹记录">记弹 <kbd>TAB</kbd></button><button id="help-button" title="H：规则">规则 <kbd>H</kbd></button><button id="pause-button" title="Esc：暂停">暂停 <kbd>ESC</kbd></button></nav>
+    </header>
+    <div id="studio-watermark">YiQiGAME-TiWiStudio</div>
+    <div id="opponent-inventory"><div id="dealer-items-label">庄家的道具</div><div id="dealer-items" aria-label="庄家的道具"></div></div>
+    <nav id="view-controls" aria-label="转动视角"><button data-view="left" title="A：向左看" aria-label="向左看">←</button><button data-view="table" title="0：俯看整个桌面">全桌</button><button data-view="center" title="回到正前方">回正</button><button data-view="right" title="D：向右看" aria-label="向右看">→</button></nav>
+    <div id="status" class="status-tag">YOUR TURN</div>
+    <div id="crosshair" aria-hidden="true">·</div>
+    <div id="hover-tip" class="hidden"></div>
+    <div id="subtitle" role="status" aria-live="polite"></div>
+    <div id="load-panel" class="hidden">
+      <small class="eyebrow">LOADING THE CHAMBER</small><h2 id="load-title">记住这些子弹。</h2>
+      <div class="load-numbers"><span class="live"><b id="load-live">1</b> 发实弹</span><i>／</i><span class="blank"><b id="load-blank">2</b> 发空包弹</span></div>
+      <p>顺序已被打乱。每次射击后，子弹依次减少。</p>
+      <button id="load-confirm" class="outline-button">记住了，继续 <span>↵</span></button>
+    </div>
+    <div id="action-area">
+      <div id="gun-prompt"><span id="prompt-main">点击霰弹枪</span><small id="prompt-sub">也可以先使用桌上的道具</small><button id="grab-button">拿起霰弹枪 <kbd>SPACE</kbd></button></div>
+      <div id="target-choices" class="hidden"><small>把枪口指向谁？</small><div><button id="shoot-dealer" class="target-button danger"><span>射击庄家</span><small>实弹造成伤害，空包弹也交出回合</small><kbd>W</kbd></button><button id="shoot-self" class="target-button"><span>射击自己</span><small>空包弹保留回合，实弹扣除电荷</small><kbd>S</kbd></button></div><button id="put-down" class="text-button">放回桌上 <kbd>SPACE</kbd></button></div>
+    </div>
+    <div id="inventory-wrap"><div id="inventory-label" class="inventory-label">你的道具 <span id="inventory-count">0 / 8</span></div><div id="inventory"></div></div>
+    <div class="bottom-right"><span id="health-summary"></span><span id="chamber-summary">CHAMBER · 03</span></div>
+  </section>
+
+  <aside id="memory" class="hidden"><header><span>本次装弹记录</span><button id="close-memory" aria-label="关闭记录">×</button></header><p id="memory-initial"></p><div id="memory-shells"></div><div id="memory-knowledge"></div><small>只记录公开信息与你使用道具获得的信息。</small></aside>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-panel" id="modal-panel"><button id="modal-close" class="modal-close" aria-label="关闭">×</button><div id="modal-content"></div></div></div>
+  <div id="toast" class="hidden" role="status"></div>
+  <noscript><div class="fallback">此游戏需要启用 JavaScript。请使用现代浏览器或附带的 Windows 启动器。</div></noscript>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
