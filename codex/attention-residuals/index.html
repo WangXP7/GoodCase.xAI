@@ -1,0 +1,2815 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f2efe7">
+  <meta name="description" content="一份可离线运行的 Attention Residuals 交互式中文讲解。">
+  <title>深度调音台｜Attention Residuals 交互讲解</title>
+  <style>
+    :root {
+      --paper: #f2efe7;
+      --paper-2: #e9e4d8;
+      --ink: #17242c;
+      --ink-2: #4b5a61;
+      --line: #c8c2b4;
+      --line-dark: #7f817c;
+      --white: #fffdf8;
+      --teal: #087e8b;
+      --teal-dark: #075f69;
+      --teal-soft: #d6eceb;
+      --amber: #c5682c;
+      --amber-dark: #954616;
+      --amber-soft: #f4dfce;
+      --coral: #d64c4c;
+      --coral-soft: #f5dada;
+      --lime: #b8d061;
+      --shadow: 0 1px 0 rgba(23, 36, 44, .12), 0 18px 50px rgba(23, 36, 44, .08);
+      --radius: 22px;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--paper);
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 1px 1px, rgba(23, 36, 44, .08) 1px, transparent 1px) 0 0 / 28px 28px,
+        var(--paper);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.65;
+      text-rendering: optimizeLegibility;
+      overflow-x: hidden;
+    }
+
+    button,
+    input,
+    output {
+      font: inherit;
+    }
+
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button {
+      color: inherit;
+    }
+
+    a {
+      color: inherit;
+      text-underline-offset: .22em;
+    }
+
+    :focus-visible {
+      outline: 3px solid var(--coral);
+      outline-offset: 3px;
+    }
+
+    .skip-link {
+      position: fixed;
+      z-index: 100;
+      top: 10px;
+      left: 10px;
+      padding: .7rem 1rem;
+      border: 2px solid var(--ink);
+      border-radius: 10px;
+      background: var(--white);
+      transform: translateY(-150%);
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    .top-progress {
+      position: fixed;
+      z-index: 80;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: transparent;
+      pointer-events: none;
+    }
+
+    .top-progress > span {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, var(--amber), var(--coral), var(--teal));
+      transition: width .16s linear;
+    }
+
+    .site-header {
+      position: sticky;
+      z-index: 70;
+      top: 0;
+      border-bottom: 1px solid rgba(127, 129, 124, .35);
+      background: rgba(242, 239, 231, .9);
+      backdrop-filter: blur(16px);
+    }
+
+    .header-inner {
+      width: min(1180px, calc(100% - 32px));
+      min-height: 68px;
+      margin-inline: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      gap: 11px;
+      text-decoration: none;
+      font-weight: 850;
+      letter-spacing: -.02em;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      border: 2px solid var(--ink);
+      border-radius: 50%;
+      background: conic-gradient(from 20deg, var(--teal) 0 32%, var(--paper) 32% 40%, var(--amber) 40% 72%, var(--paper) 72% 80%, var(--coral) 80%);
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      inset: 9px;
+      border: 2px solid var(--ink);
+      border-radius: 50%;
+      background: var(--white);
+    }
+
+    .brand small {
+      display: block;
+      color: var(--ink-2);
+      font-family: var(--mono);
+      font-size: .64rem;
+      font-weight: 650;
+      letter-spacing: .08em;
+      line-height: 1;
+    }
+
+    .site-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .site-nav a {
+      padding: .52rem .72rem;
+      border-radius: 999px;
+      color: var(--ink-2);
+      font-size: .86rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .site-nav a:hover,
+    .site-nav a[aria-current="true"] {
+      color: var(--ink);
+      background: var(--white);
+      box-shadow: inset 0 0 0 1px var(--line);
+    }
+
+    .offline-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: .42rem .68rem;
+      border: 1px solid var(--line-dark);
+      border-radius: 999px;
+      background: var(--lime);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .offline-pill::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      background: var(--white);
+      box-shadow: inset 0 0 0 2px var(--lime);
+    }
+
+    main {
+      display: block;
+    }
+
+    .section {
+      width: min(1180px, calc(100% - 32px));
+      margin-inline: auto;
+      padding: 104px 0;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 18px;
+      color: var(--teal-dark);
+      font-family: var(--mono);
+      font-size: .76rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 22px;
+      height: 2px;
+      background: currentColor;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.12;
+      text-wrap: balance;
+    }
+
+    h1 {
+      max-width: 790px;
+      margin-bottom: 26px;
+      font-size: clamp(3rem, 7.2vw, 6.9rem);
+      letter-spacing: -.07em;
+    }
+
+    h2 {
+      margin-bottom: 18px;
+      font-size: clamp(2.25rem, 5vw, 4.5rem);
+      letter-spacing: -.055em;
+    }
+
+    h3 {
+      margin-bottom: 12px;
+      font-size: clamp(1.2rem, 2vw, 1.6rem);
+      letter-spacing: -.025em;
+    }
+
+    .hero {
+      min-height: calc(100svh - 68px);
+      padding-top: clamp(64px, 10vh, 112px);
+      padding-bottom: 72px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.07fr) minmax(390px, .93fr);
+      align-items: center;
+      gap: clamp(44px, 7vw, 100px);
+    }
+
+    .hero-copy {
+      position: relative;
+      z-index: 2;
+    }
+
+    .hero-copy .lead {
+      max-width: 700px;
+      margin-bottom: 30px;
+      color: var(--ink-2);
+      font-size: clamp(1.08rem, 2vw, 1.32rem);
+    }
+
+    .hero-copy strong {
+      color: var(--ink);
+    }
+
+    .title-accent {
+      position: relative;
+      display: inline-block;
+      color: var(--teal-dark);
+    }
+
+    .title-accent::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      left: -.04em;
+      right: -.04em;
+      bottom: .06em;
+      height: .2em;
+      background: var(--lime);
+      transform: rotate(-1.5deg);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .button {
+      min-height: 48px;
+      padding: .78rem 1.1rem;
+      border: 2px solid var(--ink);
+      border-radius: 12px;
+      background: var(--white);
+      box-shadow: 3px 3px 0 var(--ink);
+      cursor: pointer;
+      font-weight: 800;
+      line-height: 1.2;
+      transition: transform .16s ease, box-shadow .16s ease, background-color .16s ease;
+    }
+
+    .button:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    .button:active {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0 var(--ink);
+    }
+
+    .button.primary {
+      color: var(--white);
+      background: var(--ink);
+    }
+
+    .button.teal {
+      color: var(--white);
+      background: var(--teal-dark);
+    }
+
+    .button.compact {
+      min-height: 44px;
+      padding: .62rem .85rem;
+      border-width: 1.5px;
+      border-radius: 10px;
+      box-shadow: 2px 2px 0 var(--ink);
+      font-size: .86rem;
+    }
+
+    .button[aria-pressed="true"] {
+      color: var(--white);
+      background: var(--ink);
+    }
+
+    .local-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 18px;
+      color: var(--ink-2);
+      font-family: var(--mono);
+      font-size: .76rem;
+    }
+
+    .local-note::before {
+      content: "✓";
+      display: grid;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      border: 1px solid var(--ink-2);
+      border-radius: 50%;
+      color: var(--teal-dark);
+      font-weight: 900;
+    }
+
+    .hero-machine {
+      position: relative;
+      min-height: 570px;
+      border: 2px solid var(--ink);
+      border-radius: 34px;
+      background: var(--white);
+      box-shadow: 14px 14px 0 var(--ink);
+      overflow: hidden;
+      transform: rotate(1.2deg);
+    }
+
+    .machine-head {
+      min-height: 70px;
+      padding: 18px 22px;
+      border-bottom: 2px solid var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      background: var(--paper-2);
+    }
+
+    .machine-title {
+      font-family: var(--mono);
+      font-size: .82rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+
+    .machine-lights {
+      display: flex;
+      gap: 7px;
+    }
+
+    .machine-lights i {
+      width: 11px;
+      height: 11px;
+      border: 1.5px solid var(--ink);
+      border-radius: 50%;
+      background: var(--paper);
+    }
+
+    .machine-lights i:nth-child(1) {
+      background: var(--coral);
+    }
+
+    .machine-lights i:nth-child(2) {
+      background: var(--amber);
+    }
+
+    .machine-lights i:nth-child(3) {
+      background: var(--lime);
+    }
+
+    .layer-stage {
+      position: relative;
+      height: 430px;
+      padding: 34px 30px;
+      background:
+        linear-gradient(90deg, transparent 49.8%, rgba(23, 36, 44, .13) 50%, transparent 50.2%),
+        linear-gradient(var(--paper) 1px, transparent 1px) 0 0 / 100% 54px;
+    }
+
+    .layer-rail {
+      position: absolute;
+      z-index: 1;
+      left: 50%;
+      top: 36px;
+      bottom: 36px;
+      width: 12px;
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      background: var(--paper);
+      transform: translateX(-50%);
+    }
+
+    .layer-rail::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 4px;
+      width: 6px;
+      height: 34%;
+      border-radius: 999px;
+      background: linear-gradient(var(--coral), var(--amber), var(--teal));
+      transform: translateX(-50%);
+      animation: rail-flow 3.6s ease-in-out infinite alternate;
+    }
+
+    .hero-layer {
+      position: absolute;
+      z-index: 2;
+      left: 50%;
+      top: calc(41px + var(--i) * 45px);
+      width: calc(170px + var(--i) * 16px);
+      height: 36px;
+      border: 2px solid var(--ink);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      background: var(--white);
+      box-shadow: 3px 3px 0 rgba(23, 36, 44, .28);
+      transform: translateX(-50%);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 750;
+      animation: layer-breathe 4s calc(var(--i) * -.36s) ease-in-out infinite;
+    }
+
+    .hero-layer::after {
+      content: "";
+      width: 28px;
+      height: 6px;
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      background: var(--layer-color, var(--amber));
+    }
+
+    .hero-layer:nth-of-type(3n) {
+      --layer-color: var(--teal);
+    }
+
+    .hero-layer:nth-of-type(4n) {
+      --layer-color: var(--coral);
+    }
+
+    .machine-foot {
+      height: 70px;
+      padding: 0 22px;
+      border-top: 2px solid var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: var(--paper-2);
+      font-family: var(--mono);
+      font-size: .76rem;
+      font-weight: 750;
+    }
+
+    .meter {
+      width: 130px;
+      height: 12px;
+      border: 1.5px solid var(--ink);
+      border-radius: 999px;
+      background: var(--white);
+      overflow: hidden;
+    }
+
+    .meter span {
+      display: block;
+      width: 68%;
+      height: 100%;
+      background: repeating-linear-gradient(90deg, var(--teal) 0 8px, transparent 8px 11px);
+      animation: meter 2.2s ease-in-out infinite alternate;
+    }
+
+    .hero-stamp {
+      position: absolute;
+      z-index: 3;
+      right: -24px;
+      bottom: 42px;
+      padding: 13px 18px;
+      border: 2px solid var(--ink);
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 4px 4px 0 var(--ink);
+      transform: rotate(-11deg);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 900;
+      text-align: center;
+      line-height: 1.25;
+    }
+
+    @keyframes rail-flow {
+      to {
+        top: 61%;
+        height: 36%;
+      }
+    }
+
+    @keyframes layer-breathe {
+      0%,
+      100% {
+        transform: translateX(-50%);
+      }
+      50% {
+        transform: translateX(-50%) translateY(-3px);
+      }
+    }
+
+    @keyframes meter {
+      to {
+        width: 92%;
+      }
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, .55fr);
+      align-items: end;
+      gap: 48px;
+      margin-bottom: 42px;
+    }
+
+    .section-head p {
+      margin-bottom: 0;
+      color: var(--ink-2);
+      font-size: 1.03rem;
+    }
+
+    .note-card {
+      padding: 18px 20px;
+      border: 1.5px solid var(--ink);
+      border-radius: 14px;
+      background: var(--lime);
+      box-shadow: 4px 4px 0 var(--ink);
+      font-size: .9rem;
+    }
+
+    .note-card strong {
+      display: block;
+      margin-bottom: 4px;
+      font-family: var(--mono);
+      font-size: .72rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .lab-shell {
+      border: 2px solid var(--ink);
+      border-radius: 28px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .lab-toolbar {
+      padding: 18px;
+      border-bottom: 2px solid var(--ink);
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(180px, .6fr) auto;
+      align-items: end;
+      gap: 18px;
+      background: var(--paper-2);
+    }
+
+    fieldset {
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    legend,
+    .control-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--ink-2);
+      font-family: var(--mono);
+      font-size: .7rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .segment {
+      min-height: 44px;
+      padding: .54rem .7rem;
+      border: 1.5px solid var(--ink);
+      border-radius: 9px;
+      background: var(--white);
+      cursor: pointer;
+      font-size: .83rem;
+      font-weight: 750;
+    }
+
+    .segment[aria-pressed="true"] {
+      color: var(--white);
+      background: var(--ink);
+    }
+
+    .range-line {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      min-height: 44px;
+      accent-color: var(--teal);
+      cursor: pointer;
+    }
+
+    .range-output {
+      min-width: 42px;
+      padding: 4px 7px;
+      border: 1.5px solid var(--ink);
+      border-radius: 7px;
+      background: var(--white);
+      font-family: var(--mono);
+      font-size: .78rem;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .transport {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .icon-button {
+      width: 44px;
+      height: 44px;
+      border: 1.5px solid var(--ink);
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: var(--white);
+      box-shadow: 2px 2px 0 var(--ink);
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: .78rem;
+      font-weight: 900;
+    }
+
+    .icon-button:hover {
+      background: var(--lime);
+    }
+
+    .prompt-strip {
+      min-height: 72px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      background: var(--white);
+    }
+
+    .prompt-strip p {
+      margin: 0;
+    }
+
+    .prompt-kicker {
+      color: var(--ink-2);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 750;
+    }
+
+    #scenarioPrompt {
+      font-weight: 800;
+    }
+
+    .step-chip {
+      flex: 0 0 auto;
+      padding: 5px 9px;
+      border: 1px solid var(--line-dark);
+      border-radius: 999px;
+      background: var(--paper);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 800;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .mix-panel {
+      min-width: 0;
+      padding: clamp(22px, 3.5vw, 38px);
+    }
+
+    .mix-panel + .mix-panel {
+      border-left: 2px solid var(--ink);
+    }
+
+    .panel-topline {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .method-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 8px;
+      color: var(--ink-2);
+      font-family: var(--mono);
+      font-size: .7rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .method-tag::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      background: var(--method-color);
+    }
+
+    .standard-panel {
+      --method-color: var(--amber);
+      background: linear-gradient(150deg, var(--amber-soft), var(--white) 52%);
+    }
+
+    .attention-panel {
+      --method-color: var(--teal);
+      background: linear-gradient(150deg, var(--teal-soft), var(--white) 52%);
+    }
+
+    .sum-badge {
+      flex: 0 0 auto;
+      min-width: 74px;
+      padding: 8px 10px;
+      border: 1.5px solid var(--ink);
+      border-radius: 10px;
+      background: var(--white);
+      box-shadow: 2px 2px 0 var(--ink);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 800;
+      text-align: center;
+      line-height: 1.25;
+    }
+
+    .sum-badge strong {
+      display: block;
+      font-size: 1.08rem;
+    }
+
+    .mix-list {
+      display: grid;
+      gap: 10px;
+      margin: 0 0 24px;
+    }
+
+    .mix-row {
+      position: relative;
+      min-height: 48px;
+      padding: 8px 10px;
+      border: 1.5px solid var(--ink);
+      border-radius: 10px;
+      display: grid;
+      grid-template-columns: minmax(84px, .4fr) minmax(110px, 1fr) 52px;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 253, 248, .78);
+      overflow: hidden;
+      transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease;
+    }
+
+    button.mix-row {
+      width: 100%;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    button.mix-row:hover,
+    .mix-row.is-selected {
+      box-shadow: 3px 3px 0 var(--ink);
+      transform: translate(-1px, -1px);
+    }
+
+    .mix-row.is-current {
+      border-color: var(--coral);
+      box-shadow: inset 4px 0 0 var(--coral);
+    }
+
+    .mix-row.is-future {
+      opacity: .42;
+    }
+
+    .row-label {
+      position: relative;
+      z-index: 2;
+      overflow: hidden;
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 800;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .track {
+      position: relative;
+      height: 12px;
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      background: var(--paper);
+      overflow: hidden;
+    }
+
+    .track-fill {
+      width: var(--weight);
+      height: 100%;
+      border-radius: inherit;
+      background: var(--method-color);
+      transition: width .55s cubic-bezier(.2, .7, .2, 1);
+    }
+
+    .track::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: -10px;
+      width: 7px;
+      height: 7px;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      background: var(--white);
+      opacity: 0;
+      transform: translateY(-50%);
+    }
+
+    .mix-row.is-current .track::after {
+      opacity: 1;
+      animation: signal-travel 1.25s ease-in-out infinite;
+    }
+
+    @keyframes signal-travel {
+      from {
+        left: -10px;
+      }
+      to {
+        left: calc(var(--weight) - 1px);
+      }
+    }
+
+    .row-value {
+      font-family: var(--mono);
+      font-size: .74rem;
+      font-weight: 850;
+      text-align: right;
+    }
+
+    .formula {
+      min-height: 82px;
+      padding: 16px;
+      border: 1px solid var(--line-dark);
+      border-radius: 12px;
+      background: var(--paper);
+    }
+
+    .formula code {
+      display: block;
+      margin-bottom: 6px;
+      font-family: var(--mono);
+      font-size: clamp(.8rem, 1.5vw, .98rem);
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .formula p {
+      margin: 0;
+      color: var(--ink-2);
+      font-size: .82rem;
+    }
+
+    .manual-box {
+      margin: 18px 0 0;
+      padding: 14px;
+      border: 1px dashed var(--line-dark);
+      border-radius: 12px;
+      background: rgba(255, 253, 248, .72);
+    }
+
+    .mode-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .mode-row strong {
+      font-size: .86rem;
+    }
+
+    .mode-toggle {
+      display: flex;
+      gap: 5px;
+    }
+
+    .mode-toggle button {
+      min-height: 44px;
+      padding: .38rem .65rem;
+      border: 1px solid var(--ink);
+      border-radius: 8px;
+      background: var(--white);
+      cursor: pointer;
+      font-size: .72rem;
+      font-weight: 800;
+    }
+
+    .mode-toggle button[aria-pressed="true"] {
+      color: var(--white);
+      background: var(--ink);
+    }
+
+    .manual-box[data-disabled="true"] .manual-range {
+      opacity: .45;
+    }
+
+    .manual-help {
+      margin: 6px 0 0;
+      color: var(--ink-2);
+      font-size: .74rem;
+    }
+
+    .lab-caption {
+      padding: 16px 20px;
+      border-top: 2px solid var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      background: var(--paper-2);
+    }
+
+    .lab-caption p {
+      margin: 0;
+      color: var(--ink-2);
+      font-size: .82rem;
+    }
+
+    .timeline {
+      flex: 0 0 min(260px, 32%);
+      height: 8px;
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      background: var(--white);
+      overflow: hidden;
+    }
+
+    .timeline span {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--coral);
+      transition: width .35s ease;
+    }
+
+    .axis-shell {
+      display: grid;
+      grid-template-columns: minmax(250px, .65fr) minmax(0, 1.35fr);
+      gap: 28px;
+      align-items: stretch;
+    }
+
+    .axis-copy {
+      padding: 30px;
+      border: 2px solid var(--ink);
+      border-radius: var(--radius);
+      background: var(--ink);
+      color: var(--white);
+      box-shadow: 8px 8px 0 var(--teal);
+    }
+
+    .axis-copy p {
+      color: #dbe2e3;
+    }
+
+    .axis-switch {
+      display: grid;
+      gap: 10px;
+      margin-top: 26px;
+    }
+
+    .axis-switch button {
+      min-height: 54px;
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, .58);
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--white);
+      background: transparent;
+      cursor: pointer;
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .axis-switch button::after {
+      content: "→";
+      font-family: var(--mono);
+    }
+
+    .axis-switch button[aria-pressed="true"] {
+      border-color: var(--lime);
+      color: var(--ink);
+      background: var(--lime);
+    }
+
+    .axis-visual {
+      position: relative;
+      min-height: 470px;
+      padding: clamp(22px, 4vw, 42px);
+      border: 2px solid var(--ink);
+      border-radius: var(--radius);
+      background: var(--white);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .axis-visual::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(rgba(23, 36, 44, .08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(23, 36, 44, .08) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none;
+    }
+
+    .axis-title {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 38px;
+    }
+
+    .axis-title code {
+      padding: 5px 8px;
+      border: 1px solid var(--ink);
+      border-radius: 7px;
+      background: var(--paper);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 800;
+    }
+
+    .axis-canvas {
+      position: relative;
+      z-index: 2;
+      min-height: 305px;
+      display: grid;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .axis-canvas.token-axis {
+      grid-template-columns: repeat(5, minmax(54px, 1fr));
+    }
+
+    .axis-canvas.depth-axis {
+      grid-template-columns: 1fr;
+      justify-items: center;
+    }
+
+    .axis-node {
+      position: relative;
+      min-height: 74px;
+      border: 2px solid var(--ink);
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      padding: 10px;
+      background: var(--paper);
+      box-shadow: 3px 3px 0 var(--ink);
+      font-family: var(--mono);
+      font-size: .74rem;
+      font-weight: 850;
+      text-align: center;
+      transition: transform .35s ease, background-color .35s ease;
+    }
+
+    .token-axis .axis-node:nth-child(3),
+    .depth-axis .axis-node:last-child {
+      color: var(--white);
+      background: var(--coral);
+    }
+
+    .token-axis .axis-node:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      top: 50%;
+      left: 100%;
+      width: 18px;
+      height: 3px;
+      background: var(--teal);
+      transform: translateY(-50%);
+    }
+
+    .depth-axis .axis-node {
+      width: min(320px, 80%);
+      min-height: 50px;
+    }
+
+    .depth-axis .axis-node:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      top: 100%;
+      left: 50%;
+      width: 3px;
+      height: 18px;
+      background: var(--teal);
+      transform: translateX(-50%);
+    }
+
+    .axis-caption {
+      position: absolute;
+      z-index: 3;
+      right: 22px;
+      bottom: 18px;
+      padding: 8px 12px;
+      border: 1px solid var(--ink);
+      border-radius: 9px;
+      background: var(--lime);
+      font-family: var(--mono);
+      font-size: .7rem;
+      font-weight: 800;
+    }
+
+    .block-shell {
+      border: 2px solid var(--ink);
+      border-radius: 28px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .block-controls {
+      padding: 22px;
+      border-bottom: 2px solid var(--ink);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, .8fr);
+      align-items: center;
+      gap: 30px;
+      background: var(--paper-2);
+    }
+
+    .block-controls p {
+      margin: 0;
+      color: var(--ink-2);
+      font-size: .88rem;
+    }
+
+    .block-stage {
+      padding: clamp(24px, 5vw, 50px);
+    }
+
+    .block-grid {
+      min-height: 218px;
+      display: grid;
+      grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+      align-items: stretch;
+      gap: 18px;
+    }
+
+    .layer-block {
+      position: relative;
+      min-width: 0;
+      padding: 16px 12px;
+      border: 2px solid var(--ink);
+      border-radius: 15px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--paper);
+      box-shadow: 4px 4px 0 var(--ink);
+      animation: block-in .45s both;
+    }
+
+    .layer-block:not(:last-child)::after {
+      content: "⇢";
+      position: absolute;
+      z-index: 3;
+      top: 50%;
+      left: calc(100% + 5px);
+      width: 10px;
+      color: var(--teal-dark);
+      font-family: var(--mono);
+      font-size: 1.2rem;
+      font-weight: 900;
+      transform: translateY(-50%);
+    }
+
+    .block-index {
+      color: var(--ink-2);
+      font-family: var(--mono);
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+
+    .mini-layers {
+      display: grid;
+      gap: 6px;
+    }
+
+    .mini-layer {
+      min-height: 27px;
+      border: 1px solid var(--ink);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 3px 7px;
+      background: var(--white);
+      font-family: var(--mono);
+      font-size: .63rem;
+      font-weight: 750;
+    }
+
+    .mini-layer::after {
+      content: "+";
+      color: var(--amber-dark);
+    }
+
+    .block-output {
+      padding: 6px 8px;
+      border: 1px solid var(--ink);
+      border-radius: 7px;
+      color: var(--white);
+      background: var(--teal);
+      font-family: var(--mono);
+      font-size: .68rem;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    @keyframes block-in {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+    }
+
+    .complexity-row {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .complexity-card {
+      padding: 18px;
+      border: 1.5px solid var(--ink);
+      border-radius: 13px;
+      background: var(--white);
+    }
+
+    .complexity-card.is-active {
+      background: var(--teal-soft);
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+
+    .complexity-card span {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--ink-2);
+      font-family: var(--mono);
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .complexity-card strong {
+      display: block;
+      margin-bottom: 5px;
+      font-family: var(--mono);
+      font-size: clamp(1.05rem, 2vw, 1.35rem);
+    }
+
+    .complexity-card p {
+      margin: 0;
+      color: var(--ink-2);
+      font-size: .8rem;
+    }
+
+    .takeaway {
+      position: relative;
+      padding: clamp(34px, 7vw, 80px);
+      border: 2px solid var(--ink);
+      border-radius: 32px;
+      background: var(--ink);
+      color: var(--white);
+      box-shadow: 12px 12px 0 var(--teal);
+      overflow: hidden;
+    }
+
+    .takeaway::after {
+      content: "Σα=1";
+      position: absolute;
+      right: -24px;
+      top: -32px;
+      color: rgba(255, 255, 255, .055);
+      font-family: var(--mono);
+      font-size: clamp(7rem, 18vw, 15rem);
+      font-weight: 900;
+      letter-spacing: -.09em;
+      pointer-events: none;
+    }
+
+    .takeaway .eyebrow {
+      color: var(--lime);
+    }
+
+    .takeaway h2 {
+      position: relative;
+      z-index: 2;
+      max-width: 900px;
+      margin-bottom: 32px;
+    }
+
+    .contrast-line {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .contrast-item {
+      padding: 22px;
+      border: 1px solid rgba(255, 255, 255, .34);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .06);
+    }
+
+    .contrast-item span {
+      display: block;
+      margin-bottom: 7px;
+      color: #b9c6ca;
+      font-family: var(--mono);
+      font-size: .7rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .contrast-item strong {
+      font-size: clamp(1.05rem, 2vw, 1.35rem);
+    }
+
+    .contrast-arrow {
+      color: var(--lime);
+      font-family: var(--mono);
+      font-size: 1.5rem;
+      font-weight: 900;
+    }
+
+    .evidence-grid {
+      margin-top: 42px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .evidence-card {
+      padding: 24px;
+      border: 2px solid var(--ink);
+      border-radius: 17px;
+      background: var(--white);
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    .evidence-card:nth-child(1) {
+      border-top: 8px solid var(--teal);
+    }
+
+    .evidence-card:nth-child(2) {
+      border-top: 8px solid var(--amber);
+    }
+
+    .evidence-card:nth-child(3) {
+      border-top: 8px solid var(--coral);
+    }
+
+    .evidence-card h3 {
+      font-size: 1.12rem;
+    }
+
+    .evidence-card ul {
+      margin: 0;
+      padding-left: 1.15rem;
+      color: var(--ink-2);
+      font-size: .88rem;
+    }
+
+    .evidence-card li + li {
+      margin-top: 8px;
+    }
+
+    .source-box {
+      margin-top: 32px;
+      border: 1.5px solid var(--ink);
+      border-radius: 15px;
+      background: var(--paper-2);
+      overflow: hidden;
+    }
+
+    .source-box summary {
+      min-height: 54px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      cursor: pointer;
+      font-weight: 850;
+      list-style: none;
+    }
+
+    .source-box summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .source-box summary::after {
+      content: "+";
+      font-family: var(--mono);
+      font-size: 1.3rem;
+    }
+
+    .source-box[open] summary::after {
+      content: "−";
+    }
+
+    .source-content {
+      padding: 0 18px 18px;
+      color: var(--ink-2);
+      font-size: .86rem;
+    }
+
+    .source-content ol {
+      margin-bottom: 0;
+      padding-left: 1.25rem;
+    }
+
+    .source-content li + li {
+      margin-top: 8px;
+    }
+
+    .source-content a {
+      display: inline-block;
+      min-height: 44px;
+      padding-block: 10px;
+      color: var(--teal-dark);
+      font-weight: 750;
+    }
+
+    .footer {
+      width: min(1180px, calc(100% - 32px));
+      margin-inline: auto;
+      padding: 24px 0 42px;
+      border-top: 1px solid var(--line-dark);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      color: var(--ink-2);
+      font-size: .8rem;
+    }
+
+    .footer code {
+      font-family: var(--mono);
+      font-weight: 800;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 90;
+      right: 20px;
+      bottom: 20px;
+      max-width: min(380px, calc(100% - 40px));
+      padding: 13px 16px;
+      border: 2px solid var(--ink);
+      border-radius: 12px;
+      background: var(--lime);
+      box-shadow: 4px 4px 0 var(--ink);
+      font-size: .82rem;
+      font-weight: 750;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(16px);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    @media (max-width: 980px) {
+      .site-nav {
+        display: none;
+      }
+
+      .hero {
+        min-height: auto;
+        grid-template-columns: 1fr;
+        padding-top: 76px;
+      }
+
+      .hero-copy {
+        max-width: 820px;
+      }
+
+      .hero-machine {
+        width: min(630px, calc(100% - 18px));
+        min-height: 520px;
+        margin-inline: auto;
+      }
+
+      .layer-stage {
+        height: 380px;
+      }
+
+      .hero-layer {
+        top: calc(34px + var(--i) * 39px);
+      }
+
+      .section-head {
+        grid-template-columns: 1fr;
+        gap: 18px;
+      }
+
+      .lab-toolbar {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .transport {
+        grid-column: 1 / -1;
+      }
+
+      .axis-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .block-grid {
+        grid-template-columns: repeat(min(var(--columns), 4), minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        font-size: 15px;
+      }
+
+      .section {
+        width: min(100% - 22px, 620px);
+        padding: 72px 0;
+      }
+
+      .header-inner {
+        width: min(100% - 22px, 620px);
+        min-height: 60px;
+      }
+
+      .brand {
+        font-size: .9rem;
+      }
+
+      .brand small {
+        display: none;
+      }
+
+      .brand-mark {
+        width: 29px;
+        height: 29px;
+      }
+
+      .offline-pill {
+        padding: .36rem .55rem;
+        font-size: .65rem;
+      }
+
+      h1 {
+        font-size: clamp(3rem, 15vw, 5.1rem);
+      }
+
+      h2 {
+        font-size: clamp(2.1rem, 11vw, 3.5rem);
+      }
+
+      .hero {
+        padding-top: 58px;
+      }
+
+      .hero-machine {
+        min-height: 470px;
+        border-radius: 24px;
+        box-shadow: 8px 8px 0 var(--ink);
+        transform: none;
+      }
+
+      .layer-stage {
+        height: 340px;
+        padding-inline: 18px;
+      }
+
+      .hero-layer {
+        top: calc(28px + var(--i) * 35px);
+        width: calc(145px + var(--i) * 12px);
+        height: 31px;
+      }
+
+      .machine-foot {
+        height: 58px;
+      }
+
+      .hero-stamp {
+        right: -4px;
+        bottom: 34px;
+      }
+
+      .lab-shell,
+      .block-shell {
+        border-radius: 20px;
+      }
+
+      .lab-toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .transport {
+        grid-column: auto;
+      }
+
+      .segmented {
+        grid-template-columns: 1fr;
+      }
+
+      .segment {
+        min-height: 46px;
+      }
+
+      .prompt-strip {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .compare-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .mix-panel + .mix-panel {
+        border-top: 2px solid var(--ink);
+        border-left: 0;
+      }
+
+      .mix-row {
+        grid-template-columns: 76px minmax(80px, 1fr) 46px;
+      }
+
+      .lab-caption {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .timeline {
+        width: 100%;
+        flex-basis: auto;
+      }
+
+      .axis-canvas.token-axis {
+        grid-template-columns: 1fr;
+      }
+
+      .token-axis .axis-node {
+        width: min(320px, 80%);
+        justify-self: center;
+      }
+
+      .token-axis .axis-node:not(:last-child)::after {
+        top: 100%;
+        left: 50%;
+        width: 3px;
+        height: 18px;
+        transform: translateX(-50%);
+      }
+
+      .axis-caption {
+        position: relative;
+        right: auto;
+        bottom: auto;
+        width: fit-content;
+        margin: 20px 0 0 auto;
+      }
+
+      .block-controls {
+        grid-template-columns: 1fr;
+      }
+
+      .block-grid {
+        min-height: 0;
+        grid-template-columns: 1fr;
+      }
+
+      .layer-block {
+        min-height: 0;
+      }
+
+      .layer-block:not(:last-child)::after {
+        content: "⇣";
+        top: calc(100% + 2px);
+        left: 50%;
+        width: auto;
+        transform: translateX(-50%);
+      }
+
+      .complexity-row,
+      .evidence-grid,
+      .contrast-line {
+        grid-template-columns: 1fr;
+      }
+
+      .contrast-arrow {
+        transform: rotate(90deg);
+        text-align: center;
+      }
+
+      .takeaway {
+        border-radius: 22px;
+        box-shadow: 7px 7px 0 var(--teal);
+      }
+
+      .footer {
+        width: min(100% - 22px, 620px);
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .offline-pill span {
+        display: none;
+      }
+
+      .offline-pill::after {
+        content: "离线";
+      }
+
+      .actions .button {
+        width: 100%;
+      }
+
+      .machine-head {
+        padding-inline: 14px;
+      }
+
+      .meter {
+        width: 90px;
+      }
+
+      .mix-row {
+        grid-template-columns: 68px minmax(62px, 1fr) 42px;
+        gap: 7px;
+        padding-inline: 8px;
+      }
+
+      .row-label,
+      .row-value {
+        font-size: .66rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: .001ms !important;
+      }
+    }
+
+    @media print {
+      .site-header,
+      .actions,
+      .lab-toolbar,
+      .mode-toggle,
+      .toast {
+        display: none !important;
+      }
+
+      body {
+        background: white;
+      }
+
+      .section {
+        width: 100%;
+        padding: 36px 0;
+        break-inside: avoid;
+      }
+
+      .hero {
+        min-height: auto;
+      }
+
+      .hero-machine,
+      .lab-shell,
+      .block-shell,
+      .takeaway,
+      .evidence-card {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="top-progress" aria-hidden="true"><span id="scrollProgress"></span></div>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#intro" aria-label="返回开场">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>深度调音台<small>ATTENTION RESIDUALS</small></span>
+      </a>
+      <nav class="site-nav" aria-label="章节导航">
+        <a href="#experiment" data-nav>固定 vs 按需</a>
+        <a href="#two-attentions" data-nav>两个注意力</a>
+        <a href="#block" data-nav>分块方案</a>
+        <a href="#evidence" data-nav>证据边界</a>
+      </nav>
+      <span class="offline-pill"><span>100% LOCAL</span></span>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="section hero" id="intro" data-section>
+      <div class="hero-copy">
+        <p class="eyebrow">90 秒交互实验 · Kimi K3 架构概念</p>
+        <h1>过去的每一层，<span class="title-accent">都要一样大声吗？</span></h1>
+        <p class="lead">
+          把 Transformer 想成一张多轨调音台：每经过一层，都会留下新的表示。
+          <strong>Attention Residuals</strong> 让当前层不再只做固定累加，而是沿模型深度，
+          按内容重新混合此前表示。
+        </p>
+        <div class="actions">
+          <button class="button primary" id="startExperiment" type="button">开始 90 秒实验 →</button>
+          <button class="button" id="jumpConclusion" type="button">先看一句话结论</button>
+        </div>
+        <p class="local-note">无需联网、无需安装；动画与数据全部封装在本文件中</p>
+      </div>
+
+      <div class="hero-machine" aria-label="八层 Transformer 表示沿深度流动的示意动画">
+        <div class="machine-head">
+          <span class="machine-title">DEPTH MIXER / 08 CH</span>
+          <span class="machine-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+        </div>
+        <div class="layer-stage" aria-hidden="true">
+          <div class="layer-rail"></div>
+          <div class="hero-layer" style="--i:0"><span>INPUT</span></div>
+          <div class="hero-layer" style="--i:1"><span>LAYER 01</span></div>
+          <div class="hero-layer" style="--i:2"><span>LAYER 02</span></div>
+          <div class="hero-layer" style="--i:3"><span>LAYER 03</span></div>
+          <div class="hero-layer" style="--i:4"><span>LAYER 04</span></div>
+          <div class="hero-layer" style="--i:5"><span>LAYER 05</span></div>
+          <div class="hero-layer" style="--i:6"><span>LAYER 06</span></div>
+          <div class="hero-layer" style="--i:7"><span>CURRENT</span></div>
+        </div>
+        <div class="machine-foot">
+          <span>DEPTH SIGNAL</span>
+          <span class="meter" aria-hidden="true"><span></span></span>
+        </div>
+        <span class="hero-stamp" aria-hidden="true">SELECT<br>THE PAST</span>
+      </div>
+    </section>
+
+    <section class="section" id="experiment" data-section>
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">01 · 亲手比较</p>
+          <h2>全部累加，还是按需回看？</h2>
+        </div>
+        <div>
+          <p>
+            左侧保持标准 PreNorm 残差的固定单位权重；右侧用归一化权重混合此前层输出。
+            切换输入，观察右侧如何改变、左侧如何保持。
+          </p>
+        </div>
+      </div>
+
+      <aside class="note-card">
+        <strong>先排除一个常见误会</strong>
+        这里的“注意力”发生在网络的层与层之间，不是句子里词与词之间。下方权重是教学用确定性示意，不是 Kimi K3 的真实内部读数。
+      </aside>
+
+      <div class="lab-shell" style="margin-top: 30px">
+        <div class="lab-toolbar">
+          <fieldset>
+            <legend>选择一段输入</legend>
+            <div class="segmented" id="scenarioButtons">
+              <button class="segment" type="button" data-scenario="recall" aria-pressed="true">事实召回</button>
+              <button class="segment" type="button" data-scenario="reason" aria-pressed="false">多步推理</button>
+              <button class="segment" type="button" data-scenario="dialogue" aria-pressed="false">回看约束</button>
+            </div>
+          </fieldset>
+
+          <label>
+            <span class="control-label">当前层深度</span>
+            <span class="range-line">
+              <input id="layerCount" type="range" min="4" max="8" value="6" step="1" aria-describedby="layerHelp">
+              <output class="range-output" id="layerOutput" for="layerCount">L6</output>
+            </span>
+            <span class="sr-only" id="layerHelp">用方向键调整当前层深度，范围四到八层</span>
+          </label>
+
+          <div>
+            <span class="control-label">动画控制</span>
+            <div class="transport">
+              <button class="icon-button" id="playPause" type="button" aria-label="播放动画" title="播放或暂停">▶</button>
+              <button class="icon-button" id="stepForward" type="button" aria-label="前进一步" title="前进一步">+1</button>
+              <button class="icon-button" id="resetLab" type="button" aria-label="重置实验" title="重置">↺</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="prompt-strip">
+          <div>
+            <p class="prompt-kicker">当前示意输入</p>
+            <p id="scenarioPrompt">“请回答：海王星为何呈蓝色？”</p>
+          </div>
+          <span class="step-chip" id="stepChip">观察：输入表示</span>
+        </div>
+
+        <div class="compare-grid">
+          <article class="mix-panel standard-panel">
+            <div class="panel-topline">
+              <div>
+                <span class="method-tag">Standard residual</span>
+                <h3>固定累加</h3>
+              </div>
+              <span class="sum-badge">每一路<strong>1×</strong></span>
+            </div>
+
+            <div class="mix-list" id="standardRows" aria-label="标准残差的固定权重列表"></div>
+
+            <div class="formula">
+              <code>xₗ = x₀ + Σᵢ₌₀ˡ⁻¹ Fᵢ(…)</code>
+              <p>从展开后的视角看，此前各层的更新以固定单位系数进入残差流。</p>
+            </div>
+          </article>
+
+          <article class="mix-panel attention-panel">
+            <div class="panel-topline">
+              <div>
+                <span class="method-tag">Attention residuals</span>
+                <h3>按需混合</h3>
+              </div>
+              <span class="sum-badge">权重总和<strong id="weightSum">100%</strong></span>
+            </div>
+
+            <div class="mix-list" id="attentionRows" aria-label="Attention Residuals 的示意权重列表"></div>
+
+            <div class="formula">
+              <code>xₗ = Σᵢ&lt;ₗ αᵢ→ₗ · vᵢ　且　Σα = 1</code>
+              <p>softmax 权重随当前内容与位置而变，当前层得到的是此前表示的加权混合。</p>
+            </div>
+
+            <div class="manual-box" id="manualBox" data-disabled="true">
+              <div class="mode-row">
+                <strong>权重是谁调的？</strong>
+                <div class="mode-toggle" aria-label="权重模式">
+                  <button type="button" id="modelMode" aria-pressed="true">模型示意</button>
+                  <button type="button" id="manualMode" aria-pressed="false">我来调</button>
+                </div>
+              </div>
+              <label class="manual-range">
+                <span class="control-label" id="manualLabel">选中一路，再调整它的权重</span>
+                <span class="range-line">
+                  <input id="manualWeight" type="range" min="5" max="70" value="20" step="1" disabled>
+                  <output class="range-output" id="manualOutput" for="manualWeight">20%</output>
+                </span>
+              </label>
+              <p class="manual-help">手动模式会自动重分配其余权重，始终保持总和 100%。真实模型的权重来自训练后的计算。</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="lab-caption">
+          <p id="labExplanation">
+            标准路径的每一路仍是 1×；Attention Residuals 会针对“事实召回”重新分配深度权重。
+          </p>
+          <div class="timeline" aria-label="当前动画进度"><span id="timelineFill"></span></div>
+        </div>
+      </div>
+      <p class="sr-only" id="liveRegion" aria-live="polite"></p>
+    </section>
+
+    <section class="section" id="two-attentions" data-section>
+      <div class="axis-shell">
+        <div class="axis-copy">
+          <p class="eyebrow">02 · 概念辨析</p>
+          <h2>两个“注意力”，方向不同</h2>
+          <p>
+            它们都在做加权聚合，但选择发生在不同轴上。点按按钮，让同一张图换一个观察方向。
+          </p>
+          <div class="axis-switch" aria-label="选择注意力发生的方向">
+            <button type="button" data-axis="token" aria-pressed="true">
+              <span>词与词之间<br><small>沿 token / position 轴</small></span>
+            </button>
+            <button type="button" data-axis="depth" aria-pressed="false">
+              <span>层与层之间<br><small>沿 layer / depth 轴</small></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="axis-visual">
+          <div class="axis-title">
+            <h3 id="axisHeading">常见的词间注意力</h3>
+            <code id="axisCode">AXIS = TOKEN</code>
+          </div>
+          <div class="axis-canvas token-axis" id="axisCanvas" aria-label="词间注意力示意">
+          </div>
+          <div class="axis-caption" id="axisCaption">问：这个词参考哪些词？</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="block" data-section>
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">03 · 从 Full 到 Block</p>
+          <h2>把楼层先分成街区</h2>
+        </div>
+        <div>
+          <p>
+            Full AttnRes 回看此前各层表示；Block AttnRes 先把层分组，块内继续常规累加，
+            再在块级表示之间做选择，以控制额外存储和通信。
+          </p>
+        </div>
+      </div>
+
+      <div class="block-shell">
+        <div class="block-controls">
+          <div>
+            <span class="control-label">拖动查看分块效果</span>
+            <div class="range-line">
+              <span class="range-output">逐层</span>
+              <input id="blockSize" type="range" min="1" max="4" value="3" step="1" aria-label="每个块包含的层数">
+              <output class="range-output" id="blockOutput" for="blockSize">3 层/块</output>
+            </div>
+          </div>
+          <p id="blockSummary">
+            当前把 12 层分为 4 个块：块内固定累加，块间用 Attention Residuals 聚合。
+          </p>
+        </div>
+
+        <div class="block-stage">
+          <div class="block-grid" id="blockGrid" aria-label="十二层模型的分块示意"></div>
+
+          <div class="complexity-row">
+            <article class="complexity-card" id="fullCard">
+              <span>Full AttnRes</span>
+              <strong>保存 12 份层级表示</strong>
+              <p>概念量级 O(Ld)，这里 L = 12。用于说明额外的深度聚合状态。</p>
+            </article>
+            <article class="complexity-card is-active" id="blockCard">
+              <span>Block AttnRes</span>
+              <strong id="blockComplexity">保存 4 份块级表示</strong>
+              <p id="blockComplexityNote">概念量级 O(Nd)，这里 N = 4 个块；并非总训练成本。</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="evidence" data-section>
+      <div class="takeaway">
+        <p class="eyebrow">04 · 一句话带走</p>
+        <h2>不是让模型“记得更多”，而是让当前层更有选择地使用过去。</h2>
+        <div class="contrast-line">
+          <div class="contrast-item">
+            <span>标准残差</span>
+            <strong>过去的更新持续固定累加</strong>
+          </div>
+          <span class="contrast-arrow" aria-hidden="true">→</span>
+          <div class="contrast-item">
+            <span>Attention Residuals</span>
+            <strong>当前层按内容重新混合过去表示</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="evidence-grid">
+        <article class="evidence-card">
+          <h3>论文提出了什么</h3>
+          <ul>
+            <li>沿网络深度对先前表示做 softmax 加权聚合。</li>
+            <li>权重由学习得到，并可随输入内容和位置改变。</li>
+            <li>用分块版本控制扩展到大模型时的额外开销。</li>
+          </ul>
+        </article>
+        <article class="evidence-card">
+          <h3>论文报告了什么</h3>
+          <ul>
+            <li>在论文列出的缩放实验和 Kimi Linear 实验中得到改进。</li>
+            <li>论文分析报告深度方向上的表示幅度与梯度分布更均衡。</li>
+            <li>Block 版本在论文设置中保留了 Full 版本的大部分收益。</li>
+          </ul>
+        </article>
+        <article class="evidence-card">
+          <h3>不能直接推出什么</h3>
+          <ul>
+            <li>不等于更长的上下文窗口，也不保证“永不遗忘”。</li>
+            <li>不代表所有模型、数据与任务都一定提升。</li>
+            <li>本页是机制示意，不是模型推理器或内部权重读取器。</li>
+          </ul>
+        </article>
+      </div>
+
+      <details class="source-box">
+        <summary>资料来源与阅读入口</summary>
+        <div class="source-content">
+          <p>
+            本页以官方论文与官方项目仓库为事实主线；效果描述均限定在论文报告的实验设置内。
+            外部链接仅在你主动点击时访问网络，不影响本页离线运行。
+          </p>
+          <ol>
+            <li>
+              <a href="https://arxiv.org/abs/2603.15031" target="_blank" rel="noreferrer">
+                Attention Residuals（arXiv:2603.15031）
+              </a>
+              —— 机制定义、Full / Block 方案与实验结论。
+            </li>
+            <li>
+              <a href="https://github.com/MoonshotAI/Attention-Residuals" target="_blank" rel="noreferrer">
+                MoonshotAI / Attention-Residuals 官方仓库
+              </a>
+              —— 公式、图示、伪代码与实现说明。
+            </li>
+            <li>
+              <a href="https://github.com/MoonshotAI/Kimi-K3" target="_blank" rel="noreferrer">
+                MoonshotAI / Kimi-K3 官方仓库
+              </a>
+              —— Kimi K3 技术报告与架构上下文。
+            </li>
+          </ol>
+        </div>
+      </details>
+
+      <div class="actions" style="margin-top: 28px">
+        <button class="button teal" id="restartExperience" type="button">重新体验</button>
+        <button class="button" id="openSources" type="button">展开资料来源</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>深度调音台 · Attention Residuals 交互讲解</span>
+    <code>ONE FILE · ZERO RUNTIME · OFFLINE READY</code>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const scenarios = {
+        recall: {
+          name: "事实召回",
+          prompt: "“请回答：海王星为何呈蓝色？”",
+          explanation: "中后段层在这个示意中更突出，表示当前层选择性使用较成熟的语义特征。",
+          weights: [0.08, 0.09, 0.11, 0.15, 0.25, 0.32, 0.18, 0.12]
+        },
+        reason: {
+          name: "多步推理",
+          prompt: "“先归纳三条线索，再判断哪个条件矛盾。”",
+          explanation: "示意权重分散到多个深度，表现当前层组合早期线索与后期加工结果。",
+          weights: [0.15, 0.18, 0.13, 0.19, 0.14, 0.21, 0.16, 0.11]
+        },
+        dialogue: {
+          name: "回看约束",
+          prompt: "“仍按开头约定：只给结论，不展开步骤。”",
+          explanation: "较早表示在这个示意中被重新强调，表现对前面约束的选择性回看。",
+          weights: [0.32, 0.22, 0.14, 0.11, 0.09, 0.12, 0.08, 0.07]
+        }
+      };
+
+      const axisData = {
+        token: {
+          heading: "常见的词间注意力",
+          code: "AXIS = TOKEN",
+          caption: "问：这个词参考哪些词？",
+          label: "词间注意力：沿 token 或位置轴选择",
+          nodes: ["海王星", "为何", "呈现", "蓝色", "？"]
+        },
+        depth: {
+          heading: "Attention Residuals",
+          code: "AXIS = DEPTH",
+          caption: "问：当前层参考哪些先前层？",
+          label: "Attention Residuals：沿 layer 或深度轴选择",
+          nodes: ["输入表示", "第 1 层输出", "第 2 层输出", "第 3 层输出", "当前层"]
+        }
+      };
+
+      const state = {
+        scenario: "recall",
+        layerCount: 6,
+        activeStep: 0,
+        selectedLayer: 0,
+        playing: false,
+        manual: false,
+        manualWeights: null,
+        timer: null,
+        toastTimer: null,
+        axis: "token"
+      };
+
+      const $ = (selector, root = document) => root.querySelector(selector);
+      const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
+      const standardRows = $("#standardRows");
+      const attentionRows = $("#attentionRows");
+      const weightSum = $("#weightSum");
+      const layerCount = $("#layerCount");
+      const layerOutput = $("#layerOutput");
+      const scenarioPrompt = $("#scenarioPrompt");
+      const stepChip = $("#stepChip");
+      const timelineFill = $("#timelineFill");
+      const labExplanation = $("#labExplanation");
+      const liveRegion = $("#liveRegion");
+      const playPause = $("#playPause");
+      const manualBox = $("#manualBox");
+      const manualWeight = $("#manualWeight");
+      const manualOutput = $("#manualOutput");
+      const manualLabel = $("#manualLabel");
+      const modelMode = $("#modelMode");
+      const manualMode = $("#manualMode");
+      const blockSize = $("#blockSize");
+      const blockOutput = $("#blockOutput");
+      const blockGrid = $("#blockGrid");
+      const blockSummary = $("#blockSummary");
+      const blockComplexity = $("#blockComplexity");
+      const blockComplexityNote = $("#blockComplexityNote");
+      const fullCard = $("#fullCard");
+      const blockCard = $("#blockCard");
+      const axisCanvas = $("#axisCanvas");
+      const axisHeading = $("#axisHeading");
+      const axisCode = $("#axisCode");
+      const axisCaption = $("#axisCaption");
+      const toast = $("#toast");
+
+      function normalizeWeights(raw, count) {
+        const values = raw.slice(0, count);
+        while (values.length < count) values.push(1);
+        const sum = values.reduce((total, value) => total + value, 0) || 1;
+        const exact = values.map(value => value / sum * 100);
+        const whole = exact.map(Math.floor);
+        let remaining = 100 - whole.reduce((total, value) => total + value, 0);
+        const order = exact
+          .map((value, index) => ({ index, fraction: value - whole[index] }))
+          .sort((a, b) => b.fraction - a.fraction);
+        for (let i = 0; i < remaining; i += 1) whole[order[i % order.length].index] += 1;
+        return whole;
+      }
+
+      function getWeights() {
+        if (state.manual && Array.isArray(state.manualWeights) && state.manualWeights.length === state.layerCount) {
+          return state.manualWeights.slice();
+        }
+        return normalizeWeights(scenarios[state.scenario].weights, state.layerCount);
+      }
+
+      function sourceLabel(index) {
+        return index === 0 ? "输入表示" : `第 ${index} 层输出`;
+      }
+
+      function makeStandardRow(index) {
+        const row = document.createElement("div");
+        row.className = "mix-row";
+        row.dataset.index = String(index);
+        row.style.setProperty("--weight", "100%");
+        row.innerHTML = `
+          <span class="row-label">${sourceLabel(index)}</span>
+          <span class="track" aria-hidden="true"><span class="track-fill"></span></span>
+          <span class="row-value">1×</span>
+        `;
+        return row;
+      }
+
+      function makeAttentionRow(index, value) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "mix-row";
+        row.dataset.index = String(index);
+        row.style.setProperty("--weight", `${value}%`);
+        row.setAttribute("aria-label", `${sourceLabel(index)}，示意权重 ${value}%`);
+        row.setAttribute("aria-pressed", String(index === state.selectedLayer));
+        row.innerHTML = `
+          <span class="row-label">${sourceLabel(index)}</span>
+          <span class="track" aria-hidden="true"><span class="track-fill"></span></span>
+          <span class="row-value">${value}%</span>
+        `;
+        row.addEventListener("click", () => selectLayer(index, true));
+        return row;
+      }
+
+      function renderLab(announce = false) {
+        state.activeStep = Math.min(state.activeStep, state.layerCount - 1);
+        state.selectedLayer = Math.min(state.selectedLayer, state.layerCount - 1);
+        const weights = getWeights();
+        const fragmentStandard = document.createDocumentFragment();
+        const fragmentAttention = document.createDocumentFragment();
+
+        for (let index = 0; index < state.layerCount; index += 1) {
+          fragmentStandard.appendChild(makeStandardRow(index));
+          fragmentAttention.appendChild(makeAttentionRow(index, weights[index]));
+        }
+
+        standardRows.replaceChildren(fragmentStandard);
+        attentionRows.replaceChildren(fragmentAttention);
+
+        $$(".mix-row", standardRows).forEach((row, index) => {
+          row.classList.toggle("is-current", index === state.activeStep);
+          row.classList.toggle("is-future", index > state.activeStep);
+        });
+        $$(".mix-row", attentionRows).forEach((row, index) => {
+          row.classList.toggle("is-current", index === state.activeStep);
+          row.classList.toggle("is-future", index > state.activeStep);
+          row.classList.toggle("is-selected", index === state.selectedLayer);
+        });
+
+        const total = weights.reduce((sum, value) => sum + value, 0);
+        weightSum.textContent = `${total}%`;
+        layerOutput.textContent = `L${state.layerCount}`;
+        scenarioPrompt.textContent = scenarios[state.scenario].prompt;
+        stepChip.textContent = `观察：${sourceLabel(state.activeStep)}`;
+        timelineFill.style.width = `${((state.activeStep + 1) / state.layerCount) * 100}%`;
+        labExplanation.textContent = `标准路径的每一路仍是 1×；${scenarios[state.scenario].explanation}`;
+
+        const selectedWeight = weights[state.selectedLayer];
+        manualWeight.value = String(selectedWeight);
+        manualOutput.textContent = `${selectedWeight}%`;
+        manualLabel.textContent = `调整「${sourceLabel(state.selectedLayer)}」的权重`;
+
+        if (announce) {
+          liveRegion.textContent = `${scenarios[state.scenario].name}，当前观察${sourceLabel(state.activeStep)}。Attention Residuals 示意权重总和 ${total}%。`;
+        }
+      }
+
+      function selectLayer(index, announce = false) {
+        state.selectedLayer = index;
+        renderLab(false);
+        if (announce) {
+          const weights = getWeights();
+          liveRegion.textContent = `已选中${sourceLabel(index)}，当前示意权重 ${weights[index]}%。`;
+        }
+      }
+
+      function stopPlayback() {
+        state.playing = false;
+        if (state.timer !== null) {
+          window.clearInterval(state.timer);
+          state.timer = null;
+        }
+        playPause.textContent = "▶";
+        playPause.setAttribute("aria-label", "播放动画");
+      }
+
+      function startPlayback() {
+        stopPlayback();
+        state.playing = true;
+        playPause.textContent = "Ⅱ";
+        playPause.setAttribute("aria-label", "暂停动画");
+        state.timer = window.setInterval(() => {
+          state.activeStep = (state.activeStep + 1) % state.layerCount;
+          renderLab(false);
+        }, 900);
+      }
+
+      function togglePlayback() {
+        if (state.playing) {
+          stopPlayback();
+          showToast("动画已暂停，可用“+1”逐层观察。");
+        } else {
+          startPlayback();
+          showToast("动画播放中：两种路径正在同步推进。");
+        }
+      }
+
+      function setScenario(key) {
+        if (!scenarios[key]) return;
+        state.scenario = key;
+        state.activeStep = 0;
+        state.selectedLayer = 0;
+        state.manualWeights = null;
+        $$("#scenarioButtons .segment").forEach(button => {
+          button.setAttribute("aria-pressed", String(button.dataset.scenario === key));
+        });
+        renderLab(true);
+      }
+
+      function setManualMode(enabled) {
+        state.manual = enabled;
+        if (enabled && !state.manualWeights) state.manualWeights = getWeights();
+        modelMode.setAttribute("aria-pressed", String(!enabled));
+        manualMode.setAttribute("aria-pressed", String(enabled));
+        manualBox.dataset.disabled = String(!enabled);
+        manualWeight.disabled = !enabled;
+        renderLab(false);
+        showToast(enabled
+          ? "手动模式已开启。选择任一路，再拖动权重。"
+          : "已回到模型示意权重。");
+      }
+
+      function adjustSelectedWeight(nextValue) {
+        const current = getWeights();
+        const selected = state.selectedLayer;
+        const next = Number(nextValue);
+        const remainingTarget = 100 - next;
+        const otherIndices = current.map((_, index) => index).filter(index => index !== selected);
+        const otherSum = otherIndices.reduce((sum, index) => sum + current[index], 0) || otherIndices.length;
+        const rawOthers = otherIndices.map(index => (current[index] || 1) / otherSum * remainingTarget);
+        const floorOthers = rawOthers.map(Math.floor);
+        let rest = remainingTarget - floorOthers.reduce((sum, value) => sum + value, 0);
+        const order = rawOthers
+          .map((value, position) => ({ position, fraction: value - floorOthers[position] }))
+          .sort((a, b) => b.fraction - a.fraction);
+        for (let i = 0; i < rest; i += 1) floorOthers[order[i % order.length].position] += 1;
+
+        const updated = new Array(state.layerCount).fill(0);
+        updated[selected] = next;
+        otherIndices.forEach((index, position) => {
+          updated[index] = floorOthers[position];
+        });
+        state.manualWeights = updated;
+        renderLab(false);
+      }
+
+      function renderAxis(axis, announce = false) {
+        const data = axisData[axis];
+        state.axis = axis;
+        axisHeading.textContent = data.heading;
+        axisCode.textContent = data.code;
+        axisCaption.textContent = data.caption;
+        axisCanvas.className = `axis-canvas ${axis}-axis`;
+        axisCanvas.setAttribute("aria-label", data.label);
+        const nodes = data.nodes.map(text => {
+          const node = document.createElement("div");
+          node.className = "axis-node";
+          node.textContent = text;
+          return node;
+        });
+        axisCanvas.replaceChildren(...nodes);
+        $$("[data-axis]").forEach(button => {
+          button.setAttribute("aria-pressed", String(button.dataset.axis === axis));
+        });
+        if (announce) liveRegion.textContent = data.label;
+      }
+
+      function renderBlocks() {
+        const size = Number(blockSize.value);
+        const totalLayers = 12;
+        const count = Math.ceil(totalLayers / size);
+        const blocks = [];
+
+        for (let start = 1, blockIndex = 1; start <= totalLayers; start += size, blockIndex += 1) {
+          const end = Math.min(start + size - 1, totalLayers);
+          const block = document.createElement("div");
+          block.className = "layer-block";
+          block.style.animationDelay = `${(blockIndex - 1) * 45}ms`;
+          const miniLayers = [];
+          for (let layer = start; layer <= end; layer += 1) {
+            miniLayers.push(`<span class="mini-layer"><span>L${layer}</span></span>`);
+          }
+          block.innerHTML = `
+            <span class="block-index">BLOCK ${String(blockIndex).padStart(2, "0")}</span>
+            <span class="mini-layers">${miniLayers.join("")}</span>
+            <span class="block-output">块级表示 B${blockIndex}</span>
+          `;
+          blocks.push(block);
+        }
+
+        blockGrid.style.setProperty("--columns", String(count));
+        blockGrid.replaceChildren(...blocks);
+        blockOutput.textContent = size === 1 ? "1 层/块" : `${size} 层/块`;
+        blockSummary.textContent = size === 1
+          ? "当前每层各成一块，等价于逐层回看：Attention Residuals 在所有层级表示之间聚合。"
+          : `当前把 12 层分为 ${count} 个块：块内固定累加，块间用 Attention Residuals 聚合。`;
+        blockComplexity.textContent = `保存 ${count} 份块级表示`;
+        blockComplexityNote.textContent = `概念量级 O(Nd)，这里 N = ${count} 个块；并非总训练成本。`;
+        fullCard.classList.toggle("is-active", size === 1);
+        blockCard.classList.toggle("is-active", size !== 1);
+      }
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add("is-visible");
+        window.clearTimeout(state.toastTimer);
+        state.toastTimer = window.setTimeout(() => {
+          toast.classList.remove("is-visible");
+        }, 2600);
+      }
+
+      function scrollToId(id) {
+        const target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      $$("#scenarioButtons .segment").forEach(button => {
+        button.addEventListener("click", () => setScenario(button.dataset.scenario));
+      });
+
+      layerCount.addEventListener("input", event => {
+        state.layerCount = Number(event.target.value);
+        state.activeStep = Math.min(state.activeStep, state.layerCount - 1);
+        state.selectedLayer = Math.min(state.selectedLayer, state.layerCount - 1);
+        state.manualWeights = null;
+        renderLab(true);
+      });
+
+      playPause.addEventListener("click", togglePlayback);
+
+      $("#stepForward").addEventListener("click", () => {
+        stopPlayback();
+        state.activeStep = (state.activeStep + 1) % state.layerCount;
+        renderLab(true);
+      });
+
+      $("#resetLab").addEventListener("click", () => {
+        stopPlayback();
+        state.scenario = "recall";
+        state.layerCount = 6;
+        state.activeStep = 0;
+        state.selectedLayer = 0;
+        state.manual = false;
+        state.manualWeights = null;
+        layerCount.value = "6";
+        modelMode.setAttribute("aria-pressed", "true");
+        manualMode.setAttribute("aria-pressed", "false");
+        manualBox.dataset.disabled = "true";
+        manualWeight.disabled = true;
+        $$("#scenarioButtons .segment").forEach(button => {
+          button.setAttribute("aria-pressed", String(button.dataset.scenario === "recall"));
+        });
+        renderLab(true);
+        showToast("实验已重置。");
+      });
+
+      modelMode.addEventListener("click", () => setManualMode(false));
+      manualMode.addEventListener("click", () => setManualMode(true));
+
+      manualWeight.addEventListener("input", event => {
+        if (!state.manual) return;
+        adjustSelectedWeight(event.target.value);
+      });
+
+      manualWeight.addEventListener("change", () => {
+        liveRegion.textContent = `${sourceLabel(state.selectedLayer)}已调整为 ${manualWeight.value}%，其余权重已自动归一化，总和 100%。`;
+      });
+
+      $$("[data-axis]").forEach(button => {
+        button.addEventListener("click", () => renderAxis(button.dataset.axis, true));
+      });
+
+      blockSize.addEventListener("input", renderBlocks);
+
+      $("#startExperiment").addEventListener("click", () => {
+        scrollToId("experiment");
+        window.setTimeout(startPlayback, 450);
+      });
+
+      $("#jumpConclusion").addEventListener("click", () => scrollToId("evidence"));
+
+      $("#restartExperience").addEventListener("click", () => {
+        stopPlayback();
+        state.activeStep = 0;
+        renderLab(false);
+        scrollToId("experiment");
+      });
+
+      $("#openSources").addEventListener("click", () => {
+        const details = $(".source-box");
+        details.open = true;
+        details.scrollIntoView({ behavior: "smooth", block: "center" });
+        showToast("资料来源已展开。外链只会在主动点击后联网。");
+      });
+
+      window.addEventListener("scroll", () => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        const progress = max > 0 ? window.scrollY / max * 100 : 0;
+        $("#scrollProgress").style.width = `${Math.min(100, Math.max(0, progress))}%`;
+      }, { passive: true });
+
+      const navLinks = $$("[data-nav]");
+      const sectionObserver = new IntersectionObserver(entries => {
+        const visible = entries
+          .filter(entry => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        navLinks.forEach(link => {
+          link.setAttribute("aria-current", String(link.getAttribute("href") === `#${visible.target.id}`));
+        });
+      }, { rootMargin: "-25% 0px -60% 0px", threshold: [0, .2, .5] });
+
+      $$("[data-section]").forEach(section => sectionObserver.observe(section));
+
+      document.addEventListener("keydown", event => {
+        const target = event.target;
+        if (
+          target instanceof HTMLButtonElement
+          && !target.disabled
+          && (event.key === "Enter" || event.key === " " || event.key === "Space")
+        ) {
+          event.preventDefault();
+          target.click();
+          return;
+        }
+        if (
+          target instanceof HTMLInputElement
+          && target.type === "range"
+          && ["ArrowRight", "ArrowUp", "ArrowLeft", "ArrowDown"].includes(event.key)
+        ) {
+          event.preventDefault();
+          const direction = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1 : -1;
+          const step = Number(target.step) || 1;
+          const min = Number(target.min);
+          const max = Number(target.max);
+          const next = Math.min(max, Math.max(min, Number(target.value) + direction * step));
+          target.value = String(next);
+          target.dispatchEvent(new Event("input", { bubbles: true }));
+          target.dispatchEvent(new Event("change", { bubbles: true }));
+          return;
+        }
+        const isTypingControl = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+        if (isTypingControl) return;
+        if (event.key === "ArrowRight" && $("#experiment").getBoundingClientRect().top < window.innerHeight) {
+          event.preventDefault();
+          stopPlayback();
+          state.activeStep = (state.activeStep + 1) % state.layerCount;
+          renderLab(true);
+        }
+        if (event.key === "ArrowLeft" && $("#experiment").getBoundingClientRect().top < window.innerHeight) {
+          event.preventDefault();
+          stopPlayback();
+          state.activeStep = (state.activeStep - 1 + state.layerCount) % state.layerCount;
+          renderLab(true);
+        }
+      });
+
+      renderLab(false);
+      renderAxis("token", false);
+      renderBlocks();
+
+      window.__ATTN_RES_TEST__ = {
+        version: "1.0.0",
+        getState: () => ({
+          scenario: state.scenario,
+          layerCount: state.layerCount,
+          activeStep: state.activeStep,
+          selectedLayer: state.selectedLayer,
+          manual: state.manual,
+          weights: getWeights(),
+          weightSum: getWeights().reduce((sum, value) => sum + value, 0),
+          blockSize: Number(blockSize.value),
+          axis: state.axis
+        }),
+        stopPlayback
+      };
+    })();
+  </script>
+</body>
+</html>

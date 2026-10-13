@@ -12,7 +12,7 @@
 |---|---|
 | `zcode/` | ZCode 产出：WebGL/GLSL 3D 场景、霓虹小游戏、鹈鹕骑车 SVG 系列、密室 3D 游戏、诺奖化学科普交互页、星际水族箱、后室游戏等 |
 | `workbuddy/` | WorkBuddy 产出：Buckshot Roulette 网页复刻、Eaves 数值沙盘、Tideline 潮汐游戏、tidewater-fish 网页版、火箭发射模拟（含完整 GDD 设计文档工程）、Token 消耗看板等 |
-| `codex/` | Codex 产出：星门纪元深空放置游戏、MIMIC 潜色行动、AIR COURT Vision Pro 空间篮球挑战 |
+| `codex/` | Codex 产出：星门纪元深空放置游戏、MIMIC 潜色行动、AIR COURT Vision Pro 空间篮球挑战；Attention Residuals 注意力残差交互科普（逐层动画、权重调节、分块实验，单文件离线运行） |
 | `trae/` | Trae 产出：AURORA-9 火箭入轨全流程模拟、GLSL 霓虹轨道海报 |
 
 每个案例目录内含可独立运行的 `index.html`（直接打开即用）与相应的设计文档 / 源码 / 测试脚本。
@@ -20,7 +20,7 @@
 ## 结构
 
 ```
-index.html            ← 画廊首页(自动生成, 31 个案例入口)
+index.html            ← 画廊首页(自动生成, 32 个案例入口)
 codex/  zcode/  workbuddy/  trae/  codex/
 ```
 
