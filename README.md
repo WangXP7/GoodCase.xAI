@@ -20,8 +20,8 @@
 ## 结构
 
 ```
-index.html            ← 画廊首页(自动生成, 30 个案例入口)
-zcode/  workbuddy/  trae/  codex/
+index.html            ← 画廊首页(自动生成, 31 个案例入口)
+codex/  zcode/  workbuddy/  trae/  codex/
 ```
 
 案例持续补充中。所有页面均为纯静态实现，可直接在浏览器中运行。
