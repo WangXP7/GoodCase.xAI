@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>星门纪元：深空放置</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="starfield" aria-hidden="true"></canvas>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">SG</div>
+        <div>
+          <h1>星门纪元</h1>
+          <p>深空放置</p>
+        </div>
+      </div>
+      <div class="captain">
+        <span id="captainName">克隆飞行员</span>
+        <strong id="netWorth">0 ISK</strong>
+      </div>
+      <nav class="tabs" id="tabs"></nav>
+      <div class="sidebar-footer">
+        <button id="saveBtn" title="保存">保存</button>
+        <button id="exportBtn" title="导出存档">导出</button>
+        <button id="resetBtn" title="重置">重置</button>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div class="clock">
+          <span>星历</span>
+          <strong id="stardate">YC 126.00</strong>
+        </div>
+        <div class="ticker" id="ticker"></div>
+      </header>
+
+      <section class="resource-grid" id="resources"></section>
+
+      <section class="view active" data-view="overview">
+        <div class="section-head">
+          <h2>总览</h2>
+          <p>舰队会持续执行任务，技能、制造和市场共同决定长期产能。</p>
+        </div>
+        <div class="overview-grid">
+          <div class="panel map-panel">
+            <div class="panel-title">
+              <h3>星域态势</h3>
+              <span id="riskBadge">风险稳定</span>
+            </div>
+            <div class="map-wrap">
+              <svg id="regionMap" viewBox="0 0 600 340" role="img" aria-label="星域地图"></svg>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">
+              <h3>当前行动</h3>
+              <span id="fleetPower">0 战力</span>
+            </div>
+            <div id="activeJobs" class="job-list"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">
+              <h3>飞行员成长</h3>
+              <span id="spRate">0 SP/分钟</span>
+            </div>
+            <div id="skillQueue" class="compact-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" data-view="fleet">
+        <div class="section-head">
+          <h2>舰队</h2>
+          <p>购买船体、分配行动。低安和零安收益更高，也会吞掉粗心的舰船。</p>
+        </div>
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-title"><h3>机库</h3><span id="hangarCount">0 艘</span></div>
+            <div id="ships" class="card-grid"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title"><h3>可购船体</h3><span>蓝图解锁</span></div>
+            <div id="shipMarket" class="card-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" data-view="systems">
+        <div class="section-head">
+          <h2>星系与行动</h2>
+          <p>星系安全等级影响产出、敌对活动和损耗概率。</p>
+        </div>
+        <div id="systems" class="system-grid"></div>
+      </section>
+
+      <section class="view" data-view="skills">
+        <div class="section-head">
+          <h2>技能</h2>
+          <p>技能自动训练，等级越高训练越慢。一个方向精深通常胜过样样浅尝。</p>
+        </div>
+        <div id="skills" class="skill-grid"></div>
+      </section>
+
+      <section class="view" data-view="industry">
+        <div class="section-head">
+          <h2>工业</h2>
+          <p>用矿物、残骸和数据核心制造舰船与基础设施。</p>
+        </div>
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-title"><h3>制造队列</h3><span id="jobSlots">0/0 槽</span></div>
+            <div id="industryJobs" class="compact-list"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title"><h3>蓝图</h3><span>制造</span></div>
+            <div id="blueprints" class="card-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" data-view="market">
+        <div class="section-head">
+          <h2>市场</h2>
+          <p>价格会随时间波动，贸易技能降低税率。囤货能救命，也会占用现金流。</p>
+        </div>
+        <div id="market" class="market-grid"></div>
+      </section>
+
+      <section class="view" data-view="doctrine">
+        <div class="section-head">
+          <h2>研究与设施</h2>
+          <p>升级空间站设施，形成长期乘区。</p>
+        </div>
+        <div id="upgrades" class="upgrade-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="game.js"></script>
+</body>
+</html>
