@@ -1,0 +1,1994 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="AAJKAm6LvjKAzC9km13FB3">
+<head data-page-node-id="Fr0JRh5HvO3zpVZcmoa6SL">
+<meta charset="UTF-8" data-page-node-id="FTSXQvyP1Ehs21gJTfQ8ta" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" data-page-node-id="WB7mgPHOE7hdWGfnCRe8kT" />
+<title>断裂桥梁 · 列车脱轨坠水 物理仿真</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#05070b;}
+  body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:#ffcf8a;
+       -webkit-user-select:none;user-select:none;}
+  #stage{position:fixed;inset:0;}
+  canvas{display:block;width:100%;height:100%;touch-action:none;}
+  .panel{
+    position:absolute;background:rgba(10,8,6,.72);border:1px solid rgba(255,168,64,.28);
+    border-radius:10px;padding:10px 13px;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);
+    box-shadow:0 6px 26px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,190,110,.08);
+    font-size:12px;line-height:1.5;letter-spacing:.3px;
+  }
+  #hud{top:14px;left:14px;min-width:214px;}
+  #hud h1{font-size:14px;letter-spacing:1.5px;color:#ffb34a;margin-bottom:8px;
+          text-shadow:0 0 14px rgba(255,140,40,.55);font-weight:600;}
+  .row{display:flex;justify-content:space-between;gap:12px;}
+  .row span:last-child{font-family:ui-monospace,"SF Mono",Consolas,monospace;color:#ffe6bd;}
+  .hl{color:#ff7a45 !important;}
+  .ok{color:#7fd6a0 !important;}
+  #legend{top:14px;right:14px;min-width:152px;}
+  #legend .bar{height:9px;border-radius:5px;margin:6px 0 4px;
+    background:linear-gradient(90deg,#5f7fa8,#4fa2a8,#8fbf5a,#e8c04a,#e8662c,#ff3b30);}
+  #legend .lb{display:flex;justify-content:space-between;font-size:10.5px;color:#c8a374;}
+  #ctl{bottom:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;
+       padding:9px 12px;flex-wrap:wrap;justify-content:center;max-width:96vw;}
+  button{
+    font:inherit;font-size:12px;color:#ffcf8a;background:rgba(255,150,50,.07);
+    border:1px solid rgba(255,168,64,.35);border-radius:7px;padding:7px 13px;cursor:pointer;
+    transition:.16s;white-space:nowrap;letter-spacing:.5px;
+  }
+  button:hover{background:rgba(255,150,50,.2);border-color:#ffb34a;box-shadow:0 0 14px rgba(255,140,40,.35)}
+  button.on{background:rgba(255,150,50,.3);border-color:#ffb34a;color:#fff2dc;
+            box-shadow:0 0 14px rgba(255,140,40,.45)}
+  button:active{transform:translateY(1px)}
+  .sep{width:1px;height:22px;background:rgba(255,168,64,.22);margin:0 2px}
+  .sl{display:flex;align-items:center;gap:7px;font-size:11.5px;color:#d8b48a}
+  input[type=range]{width:104px;accent-color:#ff9a32;cursor:pointer;background:transparent}
+  #tip{bottom:14px;right:14px;font-size:11px;color:#b9906a;max-width:252px;line-height:1.6}
+  kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 5px;margin:0 1px;
+      border:1px solid rgba(255,168,64,.35);border-radius:4px;font-size:10px;color:#ffcf8a;
+      font-family:ui-monospace,Consolas,monospace;background:rgba(255,150,50,.08)}
+  #banner{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);
+    font-size:26px;letter-spacing:6px;color:#ff6a2a;text-shadow:0 0 26px rgba(255,80,20,.75);
+    opacity:0;pointer-events:none;font-weight:600;white-space:nowrap;transition:opacity .35s}
+  @media (max-width:760px){
+    #hud,#legend{font-size:11px;padding:8px 10px}
+    #legend,#tip{display:none}
+    #ctl{gap:6px;padding:7px 8px}
+    button{padding:6px 10px;font-size:11px}
+    input[type=range]{width:72px}
+  }
+</style>
+</head>
+<body data-page-node-id="emS1Dd0nEiZ52ukDG9AtOk">
+<div id="stage" data-page-node-id="1hERN76HerWwL6n83Obbkf">
+  <canvas id="cv" data-page-node-id="IL70cwFhX67SAhUEjpylRe"></canvas>
+
+  <div class="panel" id="hud" data-page-node-id="qZtKNtvb9uNXAT0dcTCYAc">
+    <h1 data-page-node-id="kv6RPBLVQD9mlVzk23E5aV">⛓ 断裂桥梁 · 列车脱轨坠水</h1>
+    <div class="row" data-page-node-id="joHN3VzryICcMWrMWjLOOY"><span data-page-node-id="BaGdBvBRbCtuu6nP8ofFLL">仿真时间</span><span id="st-t" data-page-node-id="DEGFQIiY0zpSVsnhqUfF2p">0.00 s</span></div>
+    <div class="row" data-page-node-id="4R7wDo4aHm2pv3ueqGLMmZ"><span data-page-node-id="TVNTWeCuuSat8MfrHOM4vk">列车速度</span><span id="st-v" data-page-node-id="oLa6aLgH6UB0skpf4VDEPb">0 km/h</span></div>
+    <div class="row" data-page-node-id="WWGzn1P92XlqURSNLi7JOb"><span data-page-node-id="A3DF5N7w2iQsvyE3SLhTTm">结构完整度</span><span id="st-int" class="ok" data-page-node-id="CmelsVX3blwcL48ArEHBWj">100%</span></div>
+    <div class="row" data-page-node-id="VJDwRu9g6mxL4dX1wmbO7h"><span data-page-node-id="RG2o3q0EKLJFCFQy0VnFsV">断裂构件</span><span id="st-brk" data-page-node-id="d3GJnrwjGIXWAennnNGhFZ">0</span></div>
+    <div class="row" data-page-node-id="YefGm1IDH0Ah85m2sBNteD"><span data-page-node-id="vFNbXQUCwyehtL7kqDTi3Y">峰值利用率</span><span id="st-util" data-page-node-id="1JWWGFrupQ5CP25qVv8U5m">0.00</span></div>
+    <div class="row" data-page-node-id="1GFk0VnHW4oVADBrrAt1c4"><span data-page-node-id="KC8ENtQmPCzyhGvljGUTyi">落水车厢</span><span id="st-wet" class="hl" data-page-node-id="edDcfJnrvlF43FDO0EvWlE">0 / 5</span></div>
+    <div class="row" data-page-node-id="9Vd94eiBkJS30bQKsgiKVa"><span data-page-node-id="2XO47V1QSCdMpf5wZ8yi1g">状态</span><span id="st-st" data-page-node-id="GOAJmC6fEvuAPoZfNUqB6d">行驶中</span></div>
+  </div>
+
+  <div class="panel" id="legend" data-page-node-id="f1BLbrMibO4qyPbyFgN1uS">
+    <div style="color:#ffb34a;letter-spacing:1px" data-page-node-id="c9EwHTnCPA6GzlF1yeFokH">杆件轴力利用率</div>
+    <div class="bar" data-page-node-id="Xi0GfCFP0swqCLbWmJuKpB"></div>
+    <div class="lb" data-page-node-id="Edj6ZgMYNMOcgfU5gucT0Y"><span data-page-node-id="ydlJV8EBz7lNvW8Pzmt89G">受压 −1</span><span data-page-node-id="Isw8R6FnNbZhVCXWPxD13E">0</span><span data-page-node-id="wRr0wwcKGZVUopnYs9nkSF">+1 受拉</span></div>
+    <div style="margin-top:6px;font-size:10.5px;color:#c8a374" data-page-node-id="7oaf7cW3FCFyfIr8cffoFA">
+      利用率 = 轴力 / 承载能力<br data-page-node-id="yBDSXAf6ITr4sluk6Leqdl">
+      受损杆件承载力按 13% 计<br data-page-node-id="IsFJ7Ypw7IqNTJwUVO1Vjp">
+      超限即断裂并生成自由碎块
+    </div>
+  </div>
+
+  <div class="panel" id="ctl" data-page-node-id="RahM9jpoA16APyFRjN3G2Q">
+    <button id="b-play" data-page-node-id="gqPPYMrcrF93B0A4aO4816">⏸ 暂停</button>
+    <button id="b-reset" data-page-node-id="C6syjUukG62iQF709PPUsD">⟲ 重置</button>
+    <button id="b-slow" data-page-node-id="0lF1hpP78eVVhfGNlQmzUE">🐢 慢动作</button>
+    <div class="sep" data-page-node-id="HdEAnRTKZiAlCzmuIKpwpG"></div>
+    <button id="b-stress" class="on" data-page-node-id="03BWR2rRzryC67FkijKoe0">应力着色</button>
+    <button id="b-auto" data-page-node-id="fhmmaIFtCCxAJiyY71XE7D">自动循环</button>
+    <button id="b-sound" data-page-node-id="wjEGlBhRGxswLQL6BuHgfr">🔇 音效</button>
+    <div class="sep" data-page-node-id="zH17GQIv0jtxdWEEHcw1PM"></div>
+    <div class="sl" data-page-node-id="LIO4VfziP9evnUBNvEYd8x"><span data-page-node-id="8T165M7QCPuGlVRHCbBc33">车速</span><input type="range" id="r-v" min="12" max="38" step="1" value="26" data-page-node-id="doKjNUlGrIynWWcFZ3Qhcr"><span id="v-v" style="font-family:Consolas,monospace;width:32px" data-page-node-id="vH1Gjv0lhA8cd8tlvlHCiv">26</span></div>
+  </div>
+
+  <div class="panel" id="tip" data-page-node-id="xaDrwZIdwHBRISSokLGvDM">
+    点击任意<b style="color:#ffb34a" data-page-node-id="hSYFOj7DB6ZtgA1p4AWTbk">杆件</b>可将其剪断，观察载荷重分布<br data-page-node-id="kN1zXrB2ypytTkdayJvFNW">
+    <kbd data-page-node-id="7K8bgmK2P3Gon0Zz3quaNg">空格</kbd> 播放/暂停 &nbsp; <kbd data-page-node-id="EfXxxJQEsz767Zr6cKHdqj">R</kbd> 重置 &nbsp; <kbd data-page-node-id="l4s3poBSNi2KsR6YelCmiL">S</kbd> 慢动作
+  </div>
+
+  <div id="banner" data-page-node-id="hABgg5RuZbPHFaZHDEYAAM">结 构 失 效</div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   断裂桥梁 · 列车脱轨坠水 —— 自包含 HTML5 Canvas 物理仿真
+   ════════════════════════════════════════════════════════════════════════════
+   零外部依赖（无 CDN / 无图片 / 无字体文件），全部几何与贴图均程序化生成。
+
+   ▍物理模型
+   1. 约束求解：XPBD（柔度 α 参与求解，子步内累积拉格朗日乘子 λ）
+      · 6 子步/帧 @60Hz，每子步 8 次 Gauss-Seidel 迭代
+      · 桁架杆件为线弹性距离约束；车体 / 车轮 / 碎块为刚性约束（α = 0）
+   2. 内力测量：本构式 F = Δ / α（在求解前读取当前弹性伸长）
+      · 关键：不可用 λ/h² 反推内力——实测会被 3~5 倍的迭代顺序噪声污染
+      · 平滑 0.1 s 得稳态轴力作"持续超载"判据，另设瞬时冲击判据（×2.6 裕度）
+   3. 失效判据：利用率 = 轴力 / 承载能力，|利用率| > 1 即断裂
+      · 受损杆件承载力按 DMG_CAP 折减；裂缝前沿按半径渐进削弱承载力，形成
+        「局部超载 → 断裂 → 内力重分布 → 邻近杆件相继失效」的渐进倒塌
+      · 断裂速率限 1 根 / 0.03 s（≈33 根/s），使倒塌过程肉眼可见
+   4. 接触：点-线段（桥面系 / 下弦 / 地形）；面区取杆件法向、端部走圆角，
+      避免大半径车轮在 40px 节间上产生法线锯齿而耗散能量
+      · 摩擦按「粒子类型 × 地面类型」查表：轮轨≈滚动；脱轨后啃地/刮擦为强摩擦
+   5. 水：按浸没比例施加浮力（阿基米德）+ 二次阻力；车厢进水后浮力衰减 → 下沉
+      · 一维浅水波场（弹簧-阻尼格式）生成水面几何，溅水按冲击能量注入波速
+   6. 数值稳定：速度钳制（1500 px/s）+ 穿透修正钳制，抑制「约束图突变 → 位置修正
+      → 隐式极大速度」的爆炸伪影（实测曾出现 11.7 g 上抛把整列车抛出世界）
+
+   ▍标定依据（实测，单位：仿真力）
+   恒载内力 ≈ 5,000 │ 列车满载 ≈ 10,000~30,000 │ 贯通冲击瞬态峰值 ≈ 45,000
+   → 完好杆件承载力 66,000~88,000（贯通工况利用率 ≈ 0.5~0.7，明显"吃力"但不失效）
+   → 受损杆件 ≈ 8,000（恒载之上、满载之下，故「列车荷载一到即超载」）
+
+   ▍可调参数：CFG（时间步 / 子步 / 迭代 / 上下限）、MEMBER（柔度与承载力）、FMU（摩擦表）
+   ════════════════════════════════════════════════════════════════════════════ */
+
+'use strict';
+/* ==========================================================================
+   断裂桥梁 · 列车脱轨坠水 —— 真实物理仿真（单文件 / 无外部资源）
+   物理内核：PBD（Position Based Dynamics）
+     · Verlet 积分 + 子步 (substepping)
+     · 距离约束 Gauss-Seidel 迭代（桁架 / 刚体盒 / 车钩）
+     · 点-线段接触 + 库仑摩擦（车轮↔桥面、刚体↔地形）
+     · 杆件轴向应变监测 → 超限断裂 → 碎块自由体
+     · 浮力（按浸没体积分数）+ 渐进进水沉没 + 粘滞阻力
+     · 一维浅水方程波浪场，撞击耦合波高
+   尺度：1 m = 8 px ；重力 9.81 m/s²（真实值，未夸张）
+   ========================================================================== */
+
+// ───────────────────────── 配置 ─────────────────────────
+const CFG = {
+  PPM: 8,                    // 像素 / 米
+  G: 9.81 * 8,               // 重力加速度 px/s²
+  DT: 1 / 60,
+  SUB: 6,                    // 每帧子步数
+  ITER: 8,                   // 每子步约束迭代（XPBD 需要更多迭代以收敛轴力）
+  VMAX: 1500,                // 速度上限 px/s（≈187 m/s）：仅用于钳制"约束突变→位置修正→隐式速度"造成的爆炸伪影
+  PENMAX: 4,                 // 单次接触穿透修正上限 px
+  AIR: 0.99995,               // 空气阻尼（每子步速度保留率）
+  WW: 1600, WH: 900,         // 世界尺寸
+  DECK_Y: 340,               // 桥面（上弦）标高
+  WATER_Y: 600,              // 静水面
+  BED_Y: 830,                // 河床
+  X0: 300, X1: 1300,         // 桥梁起止
+  PANELS: 25,                // 桁架节间数
+  TRUSS_H: 58,               // 桁高
+  PIERS: [560, 1040],        // 桥墩横坐标
+};
+const PANEL_W = (CFG.X1 - CFG.X0) / CFG.PANELS;
+
+// 杆件力学属性：柔度 α（=1/轴向刚度，XPBD）、承载力 cap（轴向力，拉压同值）、线宽、基色
+//   柔度取值：压到「像素尺度下仍可见微挠、但数值稳定」，使 (d-rest)/α 成为干净的轴力读数。
+//   cap 标定依据（实测，见交付说明）：
+//     · 恒载（自重）轴力 ≈ 5,000；列车满载轴力 ≈ 15,000~30,000；贯通冲击瞬态峰值 ≈ 45,000
+//     · 取 cap ≈ 2.5× 满载轴力 → 完好桥在贯通工况下利用率约 0.4~0.6，不会失效但会明显"吃力"变色
+const MEMBER = {
+  deck:  { comp: 3.0e-5, cap: 88000, w: 7.0, col: '#6d7787' },
+  chord: { comp: 2.4e-5, cap: 82000, w: 6.0, col: '#5d6675' },
+  vert:  { comp: 4.2e-5, cap: 66000, w: 4.0, col: '#58606e' },
+  diag:  { comp: 3.4e-5, cap: 74000, w: 4.4, col: '#5a6371' },
+};
+// 既有损伤杆件承载力折减（裂缝 / 锈蚀截面）：低到「列车荷载一进入该跨即超载」。
+// 该折减与上面的 cap 成反比配平，使受损杆件的绝对承载力 ≈ 8,000（恒载 5,000 / 满载 10,000~30,000 之间）。
+const DMG_CAP = 0.092;
+
+// ───────────────────────── 工具 ─────────────────────────
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp  = (a, b, t) => a + (b - a) * t;
+const rnd   = (a, b) => a + Math.random() * (b - a);
+let SEED = 20260828;
+function srnd() { SEED = (SEED * 1103515245 + 12345) & 0x7fffffff; return SEED / 0x7fffffff; }
+
+// ───────────────────────── 画布 ─────────────────────────
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d', { alpha: false });
+let VW = 0, VH = 0, DPR = 1;
+
+// ───────────────────────── 状态 ─────────────────────────
+let S = null;      // 仿真状态
+let bg = null;     // 预烘焙背景层
+const sprites = {};
+let vignette = null;      // 预渲染暗角
+let deckTile = null;      // 预烘焙桥面系（道砟 + 枕木 + 钢轨）
+const DECK_TILE_W = 40;   // = 一个桁架节间
+
+function newState() {
+  return {
+    t: 0, frame: 0,
+    run: true, slow: false, stress: true, auto: false, sound: false,
+    targetV: 26 * CFG.PPM,
+    P: [], C: [], deck: [], chords: [], debris: [], pending: [],
+    cars: [], terrain: [], terrainPts: [], bridge: null,
+    wave: { h: new Float32Array(180), v: new Float32Array(180), sp: CFG.WW / 179 },
+    crack: { on: false, x: 0, t: 0 },
+    broke: 0, total: 0, wet: 0, maxWet: 0,
+    firstBreak: null,
+    collapseT: -1, firstSplash: -1, quiet: 0,
+    cam: { x: CFG.WW / 2, y: 430, z: 1, tx: CFG.WW / 2, ty: 430, tz: 1, sh: 0 },
+    fx: { smoke: [], drop: [], bub: [], spark: [], mist: [] },
+  };
+}
+
+// ───────────────────────── 粒子 / 约束 ─────────────────────────
+function Particle(x, y, mass, r, opt) {
+  this.x = x; this.y = y; this.px = x; this.py = y;
+  this.im = mass > 0 ? 1 / mass : 0;
+  this.r = r || 3;
+  this.ax = 0; this.ay = CFG.G;
+  this.damp = CFG.AIR;
+  this.buoy = opt && opt.buoy !== undefined ? opt.buoy : 0.4;
+  this.sub = 0;
+  this.owner = (opt && opt.owner) || null;
+  this.kind = (opt && opt.kind) || 'node';
+}
+function Constraint(a, b, type, stiff, opt) {
+  this.a = a; this.b = b;
+  this.rest = Math.hypot(b.x - a.x, b.y - a.y);
+  this.type = type;
+  this.stiff = stiff === undefined ? 1 : stiff;
+  this.brk = !(opt && opt.nobrk);
+  this.dmg = !!(opt && opt.dmg);
+  this.sm = 0;              // 平滑后的利用率（拉为正，压为负，±1 = 达承载力）
+  this.s = 0;               // 瞬时利用率
+  this.broken = false;
+  this.w = (opt && opt.w) || (MEMBER[type] ? MEMBER[type].w : 4);
+  // ── XPBD：柔度 α（=1/轴向刚度）、本子步累积乘子 λ、轴向力 F（拉力为正） ──
+  // 非桁架约束（车体/车轮/碎块）默认 α=0 → 刚性；桁架杆件用 MEMBER 表内的柔度
+  this.comp = (opt && opt.comp !== undefined) ? opt.comp
+            : (MEMBER[type] ? MEMBER[type].comp : 0);
+  this.lam = 0;
+  this.F = 0;
+  this.Fs = 0;              // 平滑轴力（失效判据用）
+  this.cap = MEMBER[type] ? MEMBER[type].cap : Infinity;   // 轴向承载力
+}
+
+// ───────────────────────── 地形 ─────────────────────────
+function buildTerrain() {
+  const pts = [
+    [-3000, 340], [CFG.X0, 340], [CFG.X0 + 68, CFG.BED_Y],
+    [CFG.X1 - 68, CFG.BED_Y], [CFG.X1, 340], [CFG.WW + 3000, 340],
+  ];
+  S.terrainPts = pts;
+  S.terrain = [];
+  for (let i = 0; i < pts.length - 1; i++)
+    S.terrain.push([pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]]);
+}
+function groundY(x) {
+  const p = S.terrainPts;
+  if (x <= p[0][0]) return p[0][1];
+  for (let i = 0; i < p.length - 1; i++) {
+    if (x >= p[i][0] && x <= p[i + 1][0]) {
+      const t = (x - p[i][0]) / Math.max(1e-6, p[i + 1][0] - p[i][0]);
+      return lerp(p[i][1], p[i + 1][1], t);
+    }
+  }
+  return p[p.length - 1][1];
+}
+
+// ───────────────────────── 桁架桥 ─────────────────────────
+function buildBridge() {
+  const N = CFG.PANELS, X0 = CFG.X0, dy = CFG.DECK_Y, dy2 = CFG.DECK_Y + CFG.TRUSS_H;
+  const top = [], bot = [];
+  const dmgFrom = 9, dmgTo = 16;                 // 损伤区：中段
+  const isDmg = i => i >= dmgFrom && i <= dmgTo;
+
+  for (let i = 0; i <= N; i++) {
+    const x = X0 + i * PANEL_W;
+    // 损伤跨的几何下沉：控制到极缓（1.4px/节间 ≈ 2° 坡），避免高速通过时形成"跳台"把列车弹飞
+    const sag = isDmg(i) ? 1.4 * Math.sin(Math.PI * (i - dmgFrom) / (dmgTo - dmgFrom)) : 0;
+    top.push(new Particle(x, dy + sag, 5.5, 4, { kind: 'node', buoy: 0.28 }));
+    bot.push(new Particle(x, dy2 + sag * 1.7, 5.5, 4, { kind: 'node', buoy: 0.28 }));
+  }
+  S.P.push(...top, ...bot);
+
+  const link = (a, b, type, opt) => {
+    const c = new Constraint(a, b, type, 1, opt);
+    S.C.push(c);
+    if (type === 'deck') S.deck.push(c);
+    if (type === 'chord') S.chords.push(c);
+    return c;
+  };
+  for (let i = 0; i < N; i++) {
+    link(top[i], top[i + 1], 'deck',  { dmg: isDmg(i) });
+    link(bot[i], bot[i + 1], 'chord', { dmg: isDmg(i) });
+  }
+  for (let i = 0; i <= N; i++) link(top[i], bot[i], 'vert', { dmg: isDmg(i) });
+  for (let i = 0; i < N; i++) {
+    link(top[i], bot[i + 1], 'diag', { dmg: isDmg(i) });
+    link(bot[i], top[i + 1], 'diag', { dmg: isDmg(i) });
+  }
+  // 支承：两端桥台 + 桥墩（固结）
+  const pin = p => { p.im = 0; };
+  pin(top[0]); pin(bot[0]); pin(top[N]); pin(bot[N]);
+  for (const px of CFG.PIERS) {
+    const i = Math.round((px - X0) / PANEL_W);
+    pin(bot[i]);
+    S.C.push(new Constraint(bot[i], bot[Math.min(N, i + 1)], 'chord', 1, { nobrk: true }));
+    S.C.push(new Constraint(bot[i], top[i], 'vert', 1, { nobrk: true }));
+  }
+  // 预存损伤：中跨下弦两处已断 + 一根斜撑失效（视觉上可见的"断桥"）
+  const pre = [];
+  for (const c of S.C) {
+    if (c.type === 'chord' && c.dmg &&
+        ((c.a === bot[11] && c.b === bot[12]) || (c.a === bot[12] && c.b === bot[13]))) pre.push(c);
+    if (c.type === 'diag' && c.a === top[12] && c.b === bot[13]) pre.push(c);
+  }
+  for (const c of pre) breakMember(c, true);
+
+  S.total = S.C.filter(c => c.brk).length;
+  S.bridge = { top, bot, N };
+}
+
+// ───────────────────────── 列车 ─────────────────────────
+// 车轮布局：[沿车体中心的纵向偏移 u, 半径]（+u 为车头方向）
+const LOCO = { L: 132, H: 52, mass: 62, wheels: [[-52, 8], [-6, 13], [14, 13], [34, 13], [54, 8]] };
+const CAR  = { L: 104, H: 44, mass: 30, wheels: [[-34, 7], [-12, 7], [12, 7], [34, 7]] };
+const COUPLER_CAP = 45000;      // 车钩承载力（轴向力）
+
+function buildBody(cx, cy, spec, kind, idx) {
+  const { L, H, mass, wheels } = spec;
+  const hx = L / 2;
+  const p0 = new Particle(cx - hx, cy,     mass / 4, 5, { kind: 'body' });
+  const p1 = new Particle(cx + hx, cy,     mass / 4, 5, { kind: 'body' });
+  const p2 = new Particle(cx + hx, cy - H, mass / 4, 5, { kind: 'body' });
+  const p3 = new Particle(cx - hx, cy - H, mass / 4, 5, { kind: 'body' });
+  const car = {
+    kind, idx, spec, L, H, mass,
+    c: [p0, p1, p2, p3], wheels: [], flood: 0, contact: 0,
+    wet: false, derailed: false, sunk: false, dt: 0,
+  };
+  for (const p of car.c) { p.owner = car; p.buoy = 1.02; S.P.push(p); }
+  const mk = (a, b) => S.C.push(new Constraint(a, b, 'body', 1, { nobrk: true }));
+  mk(p0, p1); mk(p1, p2); mk(p2, p3); mk(p3, p0); mk(p0, p2); mk(p1, p3);
+  // 车轮：与底边两角双距约束 → 固连于车体。
+  // 轨面标高 = 上弦线 - 3（见 drawDeck 的钢轨绘制），故轮心 = DECK_Y - 3 - r，初始即精确贴合，避免起步弹跳
+  for (const [u, r] of wheels) {
+    const w = new Particle(cx + u, CFG.DECK_Y - 3 - r, Math.max(1.2, mass / 26), r,
+                           { owner: car, kind: 'wheel', buoy: 0.3 });
+    S.C.push(new Constraint(p0, w, 'wheel', 1, { nobrk: true }));
+    S.C.push(new Constraint(p1, w, 'wheel', 1, { nobrk: true }));
+    S.P.push(w);
+    car.wheels.push(w);
+  }
+  return car;
+}
+
+function buildTrain() {
+  S.cars = [];
+  const y0 = CFG.DECK_Y - 16;
+  let x = 150, half = LOCO.L / 2;
+  S.cars.push(buildBody(x, y0, LOCO, 'loco', 0));
+  for (let i = 1; i <= 4; i++) {
+    x -= half + 18 + CAR.L / 2;                 // 车钩间隙 18px
+    S.cars.push(buildBody(x, y0, CAR, 'car', i));
+    half = CAR.L / 2;
+  }
+  // 车钩：相邻车体之间的销接（可拉断）。承载力按「能拖动后部车列、但受冲击时会被拉断」标定
+  for (let i = 0; i < S.cars.length - 1; i++) {
+    const c = new Constraint(S.cars[i].c[0], S.cars[i + 1].c[1], 'coupler', 1, { w: 5, comp: 6e-5 });
+    c.cap = COUPLER_CAP;
+    S.C.push(c);
+  }
+  S.loco = S.cars[0];
+  // 初速度
+  for (const car of S.cars) for (const p of car.c.concat(car.wheels))
+    p.px = p.x - S.targetV * CFG.DT;
+}
+
+// ───────────────────────── 初始化 ─────────────────────────
+function initSim() {
+  S = newState();
+  buildTerrain();
+  buildBridge();
+  buildTrain();
+  bakeBackground();
+  settle(90);            // 自重下的静置平衡（不可见的预处理）
+  S.t = 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   第一部分：物理内核
+   ══════════════════════════════════════════════════════════════ */
+
+// 水面标高（含波浪）
+function waterYAt(x) {
+  const w = S.wave;
+  let i = Math.round(x / w.sp);
+  if (i < 0) i = 0; else if (i > w.h.length - 1) i = w.h.length - 1;
+  return CFG.WATER_Y + w.h[i];
+}
+
+// ── 积分（Verlet + 子步） ──
+function integrate(h) {
+  const hh = h * h;
+  for (let i = 0; i < S.P.length; i++) {
+    const p = S.P[i];
+    if (p.im === 0) { p.px = p.x; p.py = p.y; continue; }
+    const vx = (p.x - p.px) * p.damp;
+    const vy = (p.y - p.py) * p.damp;
+    p.px = p.x; p.py = p.y;
+    p.x += vx + p.ax * hh;
+    p.y += vy + p.ay * hh;
+    p.ax = 0; p.ay = CFG.G; p.damp = CFG.AIR;
+  }
+}
+
+// ── 水：浮力 / 阻力 / 入水冲击 ──
+function applyWater(h) {
+  const inv = 1 / h;
+  let splashBudget = 3;
+  for (let i = 0; i < S.P.length; i++) {
+    const p = S.P[i];
+    if (p.im === 0) continue;
+    const wy = waterYAt(p.x);
+    const depth = p.y + p.r - wy;                 // 球体底部入水深度
+    const f = clamp(depth / (2 * p.r), 0, 1);
+    const was = p.sub;
+    p.sub = f;
+    if (f <= 0) continue;
+    // 浮力：随车厢进水而衰减
+    const scale = p.owner ? (1 - 0.94 * p.owner.flood) : 1;
+    p.ay -= CFG.G * p.buoy * f * scale;
+    p.damp = lerp(CFG.AIR, 0.985, f);
+    // 粘滞阻力（与速度平方同量级）
+    const vx = (p.x - p.px) * inv, vy = (p.y - p.py) * inv;
+    const sp = Math.sqrt(vx * vx + vy * vy);
+    if (sp > 1) {
+      const k = 0.008 * f;
+      p.ax -= vx * sp * k;
+      p.ay -= vy * sp * k;
+    }
+    // 入水瞬间：溅水 + 波浪激励
+    if (was === 0 && f > 0 && splashBudget > 0) {
+      const m = 1 / p.im;
+      if (m > 2.2 && vy > 20) {
+        splash(p.x, wy, m * vy / 90, vy);
+        splashBudget--;
+        if (p.owner && !p.owner.wet) {
+          p.owner.wet = true;
+          S.wet = Math.min(5, S.wet + 1);
+          S.maxWet = Math.max(S.maxWet, S.wet);
+        }
+      }
+    }
+  }
+}
+
+// ── 机车牵引：司机控制器维持目标速度，仅当动轮有接触时有效 ──
+function applyDrive(h) {
+  const loco = S.loco;
+  if (!loco || loco.wet) return;
+  const a = loco.c[0], b = loco.c[1];
+  let dx = b.x - a.x, dy = b.y - a.y;
+  const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+  let vx = 0, vy = 0;
+  for (const p of loco.c) { vx += (p.x - p.px); vy += (p.y - p.py); }
+  vx /= 4 * h; vy /= 4 * h;
+  const v = vx * dx + vy * dy;
+  if (loco.contact > 0) {
+    // 正常牵引：司机控制器维持目标速度；结构失效后紧急制动（仅在仍有轮轨接触时有效）
+    const acc = S.collapseT < 0
+      ? clamp((S.targetV - v) * 3.0, -6 * CFG.PPM, 3.0 * CFG.PPM)
+      : (v > 2 ? -3.6 * CFG.PPM : 0);
+    for (const p of loco.c) { p.ax += dx * acc; p.ay += dy * acc; }
+    for (const p of loco.wheels) { p.ax += dx * acc * 0.5; p.ay += dy * acc * 0.5; }
+  }
+}
+
+// ── 轴力测量（本构式） ──
+// 线弹性杆件：F = Δ/α（Δ 为弹性伸长，α 为柔度）。
+// 在求解前读取当前伸长，得到与「迭代次数、约束求解顺序」无关的干净内力读数——
+// 若改用 XPBD 的 λ/h² 反推内力，稳态信号会被 3~5 倍的迭代顺序噪声污染（实测）。
+function measureForces() {
+  const C = S.C;
+  for (let i = 0; i < C.length; i++) {
+    const c = C[i];
+    if (c.broken || c.comp <= 0) { c.F = 0; continue; }
+    const dx = c.b.x - c.a.x, dy = c.b.y - c.a.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    c.F = (d - c.rest) / c.comp;              // 拉力为正、压力为负
+  }
+}
+
+// ── 距离约束：XPBD（子步开始时重置 λ，迭代内累积乘子） ──
+// λ 仅用于求解器本身的收敛（XPBD 无条件稳定），内力读数走 measureForces()。
+function resetLambda() {
+  const C = S.C;
+  for (let i = 0; i < C.length; i++) C[i].lam = 0;
+}
+function solveConstraints(h) {
+  const C = S.C, inv_h2 = 1 / (h * h);
+  for (let i = 0; i < C.length; i++) {
+    const c = C[i];
+    if (c.broken) continue;
+    const a = c.a, b = c.b;
+    const wsum = a.im + b.im;
+    if (wsum === 0) continue;
+    let dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < 1e-9) continue;
+    const Cv = d - c.rest;
+    const alpha = c.comp * inv_h2;
+    const dl = (-Cv - alpha * c.lam) / (wsum + alpha);
+    c.lam += dl;
+    const s = dl / d;
+    a.x -= dx * s * a.im; a.y -= dy * s * a.im;
+    b.x += dx * s * b.im; b.y += dy * s * b.im;
+  }
+}
+
+// ── 点 vs 线段：位置修正 + 库仑摩擦 ──
+// 接触容差：位置式求解器在「恰好贴合」时接触判定会在 d≈R 处闪烁，
+// 导致轮轨接触计数断续（牵引力随之断续）。故用 R+tol 判定接触、用 R 判定穿透。
+const CT_TOL = 1.8;
+// 面区 / 端部圆角区分离：大半径粒子（车轮 r=13）在 40px 节间的粗网格上，
+// 若一律取「到最近点」的法线，法线会在节点附近左右摆动，产生锯齿状水平抽吸与能量耗散。
+// 故在 |t| 落在端点容差内时一律采用杆件法向（相邻共线杆件法线连续），仅超出时才按端点圆角处理。
+function contactSeg(p, ax, ay, bx, by, ht, mu, A, B, useFric) {
+  const ex = bx - ax, ey = by - ay;
+  const L2 = ex * ex + ey * ey;
+  if (L2 < 1e-9) return 0;
+  const L = Math.sqrt(L2);
+  const R = p.r + ht;
+  const tu = ((p.x - ax) * ex + (p.y - ay) * ey) / L2;   // 未截断投影参数
+  const cap = R / L;                                      // 端部圆角区半宽（参数空间）
+  let dx, dy, d;
+  if (tu >= -cap && tu <= 1 + cap) {
+    // ── 面区：与无限直线接触，法线恒为杆件法向 ──
+    let nx = -ey / L, ny = ex / L;
+    let sd = (p.x - ax) * nx + (p.y - ay) * ny;
+    if (sd < 0) { nx = -nx; ny = -ny; sd = -sd; }
+    dx = nx; dy = ny; d = sd;
+  } else {
+    // ── 端部圆角区：与最近端点做圆-点接触 ──
+    const te = tu < 0 ? 0 : 1;
+    const qx = ax + ex * te, qy = ay + ey * te;
+    let vx = p.x - qx, vy = p.y - qy;
+    d = Math.sqrt(vx * vx + vy * vy);
+    if (d < 1e-6) { vx = 0; vy = -1; d = 1e-6; }
+    dx = vx / d; dy = vy / d;
+  }
+  if (d >= R + CT_TOL) return 0;
+  if (d >= R) {                                   // 临界接触：只计接触，不做穿透修正
+    if (p.owner && p.kind === 'wheel') p.owner.contact++;
+    return 0;
+  }
+  const pen = Math.min(R - d, CFG.PENMAX);   // 穿透修正钳制：深埋粒子不会被"瞬移"弹出
+  // 位置修正按截断后的参数分配质量权重（避免负权重）
+  const tw = tu < 0 ? 0 : tu > 1 ? 1 : tu;
+  const wp = p.im;
+  const wA = A ? A.im * (1 - tw) : 0;
+  const wB = B ? B.im * tw : 0;
+  const tot = wp + wA + wB;
+  if (tot <= 1e-9) return 0;
+  const s = pen / tot;
+  p.x += dx * s * wp; p.y += dy * s * wp;
+  if (A) { const k = s * wA; A.x -= dx * k; A.y -= dy * k; }
+  if (B) { const k = s * wB; B.x -= dx * k; B.y -= dy * k; }
+  // 摩擦：按质量权重消除部分相对切向位移（每子步仅施加一次，避免迭代内累积）
+  if (!useFric) { if (p.owner && p.kind === 'wheel') p.owner.contact++; return pen; }
+  const tx = -dy, ty = dx;
+  let rvx = p.x - p.px, rvy = p.y - p.py;
+  if (A) { rvx -= (A.x - A.px) * (1 - tw); rvy -= (A.y - A.py) * (1 - tw); }
+  if (B) { rvx -= (B.x - B.px) * tw;       rvy -= (B.y - B.py) * tw; }
+  const rel = rvx * tx + rvy * ty;
+  const corr = -rel * mu / tot;
+  p.px -= tx * corr * wp; p.py -= ty * corr * wp;
+  if (A) { const k = corr * wA; A.px += tx * k; A.py += ty * k; }
+  if (B) { const k = corr * wB; B.px += tx * k; B.py += ty * k; }
+  if (p.owner && p.kind === 'wheel') p.owner.contact++;
+  return pen;
+}
+
+// ── 摩擦系数按"每帧保留率"给定，换算到每子步（否则迭代内会被反复施加） ──
+const muSub = m => 1 - Math.pow(1 - m, 1 / CFG.SUB);
+// 摩擦系数表（按"每帧切向速度保留率"给定，即摩擦系数 μ），接触时按「粒子类型 × 地面类型」查表
+const FMU = {
+  roll:   0.0005,   // 车轮踏面在钢轨上：滚动（真实滚动阻力约 0.1% 轮重）
+  wheelG: 0.58,     // 脱轨后车轮啃地/道砟
+  body:   0.50,     // 车体侧墙 / 转向架与地面、桥面刮擦
+  node:   0.72,     // 桥体杆件端节点与地面
+};
+// 断裂带：裂缝张开成熟后，带内的轨排（桥面系 / 下弦）已被摧毁，不再提供支撑与导向。
+// 若让变形中的残存杆件继续参与碰撞，车轮会被两侧杆端"挤住"并向上挤出（实测可产生约 6g 的持续上抛），
+// 与真实"轨排随跨塌落、列车随即失稳坠落"不符。故成熟后取消该区域的接触面。
+function inFailedZone(x) {
+  return S.crack.on && S.crack.t > 0.35 && Math.abs(x - S.crack.x) < S.crack.r;
+}
+let cSegs = [];
+function rebuildContactSegs() {
+  cSegs.length = 0;
+  for (const c of S.deck) {
+    if (c.broken || inFailedZone((c.a.x + c.b.x) * 0.5)) continue;
+    cSegs.push({ ax: c.a.x, ay: c.a.y, bx: c.b.x, by: c.b.y, A: c.a, B: c.b, ht: 3, rail: true });
+  }
+  for (const c of S.chords) {
+    if (c.broken || inFailedZone((c.a.x + c.b.x) * 0.5)) continue;
+    cSegs.push({ ax: c.a.x, ay: c.a.y, bx: c.b.x, by: c.b.y, A: c.a, B: c.b, ht: 3, rail: false });
+  }
+  for (const t of S.terrain) {
+    // 桥台引道顶部与轨面同高，铺有轨道 → 车轮在其上同样是「滚动」，
+    // 且轨面厚度必须与桥面一致（ht 相同），否则接缝处形成台阶，208px/s 通过时会把列车弹起数十像素
+    const isRail = Math.abs(t[1] - CFG.DECK_Y) < 0.5 && Math.abs(t[3] - CFG.DECK_Y) < 0.5;
+    cSegs.push({ ax: t[0], ay: t[1], bx: t[2], by: t[3], A: null, B: null,
+                 ht: isRail ? 3 : 1, rail: isRail, ground: true });
+  }
+  for (const s of cSegs) {
+    s.minx = Math.min(s.ax, s.bx) - 20; s.maxx = Math.max(s.ax, s.bx) + 20;
+    s.miny = Math.min(s.ay, s.by) - 20; s.maxy = Math.max(s.ay, s.by) + 20;
+  }
+}
+
+function solveContacts(useFric) {
+  const segs = cSegs;
+  for (let i = 0; i < S.P.length; i++) {
+    const p = S.P[i];
+    if (p.im === 0) continue;
+    const isWheel = p.kind === 'wheel';
+    for (let j = 0; j < segs.length; j++) {
+      const s = segs[j];
+      if (p === s.A || p === s.B) continue;             // 杆件自身端点不参与碰撞
+      if (p.x < s.minx || p.x > s.maxx || p.y < s.miny || p.y > s.maxy) continue;
+      const mu = isWheel ? (s.rail ? FMU.roll : FMU.wheelG)
+               : (p.owner ? FMU.body : FMU.node);
+      contactSeg(p, s.ax, s.ay, s.bx, s.by, s.ht, muSub(mu), s.A, s.B, useFric);
+    }
+  }
+}
+
+// ── 杆件断裂 ──
+function breakMember(c, silent) {
+  if (c.broken) return;
+  c.broken = true;
+  if (silent) return;                 // 预存损伤不计入实时断裂数
+  if (c.brk) S.broke++;
+  if (!S.firstBreak) S.firstBreak = {
+    t: +S.t.toFixed(2), type: c.type, x: +((c.a.x + c.b.x) / 2).toFixed(0),
+    F: Math.round(c.Fs), cap: Math.round(c.cap * (c.dmg ? DMG_CAP : 1)),
+    util: +(c.util || 0).toFixed(2), dmg: !!c.dmg,
+  };
+  // 兜底：若因其它原因先发生断裂而裂缝尚未开启，则以该断裂处作为裂缝起点
+  if (!S.crack.on) {
+    S.crack.on = true;
+    S.crack.x = (c.a.x + c.b.x) / 2;
+    S.crack.t = 0;
+    S.crack.r = 40;
+  }
+  spawnDebris(c);
+  const mx = (c.a.x + c.b.x) / 2, my = (c.a.y + c.b.y) / 2;
+  const n = 7;
+  for (let i = 0; i < n; i++) {
+    S.fx.spark.push({
+      x: mx, y: my, vx: rnd(-90, 90), vy: rnd(-110, 40),
+      life: rnd(0.25, 0.6), max: 0.6, sz: rnd(1.2, 2.6),
+    });
+  }
+  S.fx.mist.push({ x: mx, y: my, r: 6, vr: 34, life: 0.5, max: 0.5, a: 0.28 });
+  S.cam.sh = Math.min(S.cam.sh + 5.5, 24);
+  sfx('snap');
+  if (S.collapseT < 0 && S.t > 0.3) {
+    S.collapseT = S.t;
+    banner('结 构 失 效');
+    sfx('rumble');
+  }
+}
+
+function spawnDebris(c) {
+  const mk = q => {
+    const p = new Particle(q.x, q.y, 2.6, 3.2, { kind: 'debris', buoy: 0.2 });
+    p.px = q.px; p.py = q.py;
+    S.P.push(p);
+    return p;
+  };
+  const a = mk(c.a), b = mk(c.b);
+  const con = new Constraint(a, b, 'debris', 1, { nobrk: true, w: c.w });
+  S.C.push(con);
+  S.debris.push(con);
+  if (S.debris.length > 90) {
+    const old = S.debris.shift();
+    old.broken = true;
+    let i = S.P.indexOf(old.a); if (i >= 0) S.P.splice(i, 1);
+    i = S.P.indexOf(old.b);     if (i >= 0) S.P.splice(i, 1);
+  }
+}
+
+// ── 内力监测与失效判定 ──
+// 判据：轴力 F 的平滑幅值超过杆件承载力 cap（损伤杆件按 DMG_CAP 折减）；
+// 裂缝前沿（crack）继续向前扩展时，附近杆件承载力按退化系数降低，
+// 从而形成「局部超载 → 断裂 → 内力重分布 → 邻近杆件相继失效」的渐进式倒塌（真实失效机理）。
+// 每帧最多断裂 1 根、且带冷却 → 失效以有限速率传播（≈33 根/秒）。
+// 关键：裂缝前沿的推进速度必须快于列车前进速度，否则列车会"骑"着塌陷形成的 V 形坡道被抛出去；
+//       故裂缝半径在 0.40 s 内从 40px 扩到 170px（≈325 px/s > 列车 208 px/s）。
+const BREAK_CD = 0.03;
+function checkBreaking() {
+  if (S.crack.on) {
+    S.crack.t += CFG.DT;
+    S.crack.r = 40 + 130 * Math.min(1, S.crack.t / 0.40);
+  }
+  const C = S.C;
+  S.pending.length = 0;
+  for (let i = 0; i < C.length; i++) {
+    const c = C[i];
+    if (c.broken || !c.brk || !isFinite(c.cap)) continue;
+    const F = c.F;                        // 已由 measureForces() 按本构式测得
+    // 轴力平滑（≈0.1 s 时间常数）：抑制子步离散带来的瞬时尖峰，取稳态内力作为持续超载判据
+    c.Fs = c.Fs + (F - c.Fs) * 0.25;
+    let cap = c.cap * (c.dmg ? DMG_CAP : 1);
+    if (S.crack.on) {
+      const mx = (c.a.x + c.b.x) * 0.5;
+      const dd = Math.abs(mx - S.crack.x);
+      if (dd < S.crack.r) {
+        const near = 1 - dd / S.crack.r;
+        // 裂缝影响带内承载力快速退化（0.25 s 内到位），形成"前沿附近最弱、逐环向外扩展"的次序
+        cap *= clamp(1 - 0.45 * near * Math.min(1, S.crack.t / 0.25), 0.55, 1);
+      }
+    }
+    const util = c.Fs / cap;              // 拉为正、压为负；±1 = 达到承载能力
+    c.s = F / cap;
+    c.sm = c.sm * 0.80 + util * 0.20;
+    c.util = util;
+    // 双判据：持续超载（平滑值）或严重瞬时冲击（原始值 ×2.6 安全裕度）
+    if (Math.abs(util) > 1.0 || Math.abs(c.s) > 2.6) { c._u = Math.abs(util); S.pending.push(c); }
+  }
+  if (S.pending.length) {
+    if (S.breakCd === undefined) S.breakCd = 0;
+    S.breakCd -= CFG.DT;
+    if (S.breakCd <= 0) {
+      S.pending.sort((a, b) => b._u - a._u);      // 利用率最高者先断
+      breakMember(S.pending[0]);
+      S.breakCd = BREAK_CD;
+    }
+  }
+}
+
+// ── 一维浅水波（波浪场） ──
+function waveStep(dt) {
+  const w = S.wave, h = w.h, v = w.v, n = h.length;
+  for (let i = 1; i < n - 1; i++) {
+    v[i] += (h[i - 1] + h[i + 1] - 2 * h[i]) * 0.30;
+  }
+  for (let i = 0; i < n; i++) {
+    v[i] += Math.sin(S.t * 1.7 + i * 0.42) * 0.010;
+    v[i] *= 0.9915;
+    h[i] = clamp(h[i] + v[i], -30, 30) * 0.9975;
+  }
+  h[0] = h[1] * 0.55; h[n - 1] = h[n - 2] * 0.55;
+  v[0] *= 0.5; v[n - 1] *= 0.5;
+}
+
+// ── 溅水事件 ──
+function splash(x, wy, E, vy) {
+  if (S.firstSplash < 0) S.firstSplash = S.t;
+  const w = S.wave;
+  const ci = clamp(Math.round(x / w.sp), 2, w.h.length - 3);
+  for (let k = -4; k <= 4; k++) {
+    const g = Math.exp(-(k * k) / 5);
+    w.v[ci + k] -= E * 0.30 * g;
+    w.h[ci + k] -= E * 0.16 * g;
+  }
+  const n = clamp(Math.round(E * 0.85), 5, 48);
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + rnd(-1.05, 1.05);
+    const sp = 70 + Math.abs(vy) * rnd(0.28, 0.72);
+    S.fx.drop.push({
+      x: x + rnd(-22, 22), y: wy - rnd(0, 8),
+      vx: Math.cos(a) * sp * rnd(0.55, 1.15), vy: Math.sin(a) * sp,
+      life: rnd(0.5, 1.25), max: 1.25, sz: rnd(1.4, 3.4),
+    });
+  }
+  for (let i = 0; i < clamp(n / 4, 2, 12); i++) {
+    S.fx.mist.push({ x: x + rnd(-30, 30), y: wy - rnd(4, 26), r: rnd(8, 20), vr: rnd(16, 40),
+                     life: rnd(0.8, 1.8), max: 1.8, a: rnd(0.16, 0.34) });
+  }
+  for (let i = 0; i < clamp(n / 3, 2, 14); i++) {
+    S.fx.bub.push({ x: x + rnd(-26, 26), y: wy + rnd(4, 60), r: rnd(1.5, 4.2),
+                    vy: -rnd(18, 46), life: rnd(0.8, 2.0), max: 2.0 });
+  }
+  S.cam.sh = Math.min(S.cam.sh + clamp(E * 0.30, 3, 20), 26);
+  sfx('splash', clamp(E / 40, 0.3, 1.4));
+}
+
+// ── 车厢状态：进水、姿态、脱轨判定 ──
+function updateCars(dt) {
+  for (const car of S.cars) {
+    let sub = 0, low = 1e9;
+    for (const p of car.c) { sub += p.sub; low = Math.min(low, p.y); }
+    sub /= 4;
+    if (sub > 0.06) car.flood = Math.min(1, car.flood + sub * 0.215 * dt);
+    car.flood = Math.min(1, car.flood);
+    if (car.flood > 0.985) car.sunk = true;
+    // 姿态角
+    const dx = car.c[1].x - car.c[0].x, dy = car.c[1].y - car.c[0].y;
+    const ang = Math.atan2(dy, dx);
+    car.ang = ang;
+    // 脱轨判定：姿态超限或失去轮轨接触后自由下落，均需持续一段时间才认定（避免瞬态误判）
+    const off = Math.abs(ang) > 0.26;
+    const falling = car.contact === 0 && low > CFG.DECK_Y + 26;
+    if (!car.derailed) {
+      if (off || falling) { car.dt += dt; if (car.dt > 0.12) car.derailed = true; }
+      else car.dt = 0;
+    }
+    car.contact = 0;
+  }
+}
+
+// ── 粒子系统 ──
+function emitSmoke() {
+  const loco = S.loco;
+  if (!loco || loco.wet) return;
+  if (S.frame % 3) return;
+  const p = toWorld(loco, 50, loco.H + 30);       // 烟囱口
+  const g = carFrame(loco);
+  const heavy = S.collapseT >= 0 ? 1.5 : 1;       // 失效后锅炉超负荷，浓烟
+  S.fx.smoke.push({
+    x: p.x, y: p.y,
+    // 相对气流：列车前进时烟被带向车后（−前进方向），再叠加随机扰动
+    vx: -g.fx * 20 + rnd(-12, 12), vy: -rnd(30, 62),
+    r: rnd(7, 13) * heavy, vr: rnd(11, 22),
+    life: rnd(1.8, 3.2), max: 3.2,
+    dark: 0.5 + Math.random() * 0.35,
+  });
+}
+function updateFX(dt) {
+  const F = S.fx;
+  // 烟
+  for (let i = F.smoke.length - 1; i >= 0; i--) {
+    const p = F.smoke[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy -= 12 * dt; p.vx *= 0.985;
+    p.r += p.vr * dt; p.life -= dt;
+    if (p.life <= 0) F.smoke.splice(i, 1);
+  }
+  if (F.smoke.length > 220) F.smoke.splice(0, F.smoke.length - 220);
+  if (F.drop.length > 170) F.drop.splice(0, F.drop.length - 170);   // 上限：控制绘制开销
+  // 水滴
+  for (let i = F.drop.length - 1; i >= 0; i--) {
+    const p = F.drop[i];
+    p.vy += 620 * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt;
+    const wy = waterYAt(p.x);
+    if (p.y > wy && p.vy > 0) {
+      const ci = clamp(Math.round(p.x / S.wave.sp), 1, S.wave.h.length - 2);
+      S.wave.v[ci] += 0.10;
+      if (Math.random() < 0.16) S.fx.bub.push({ x: p.x, y: wy + rnd(2, 16), r: rnd(1, 2.6), vy: -rnd(14, 34), life: rnd(0.6, 1.4), max: 1.4 });
+      F.drop.splice(i, 1); continue;
+    }
+    if (p.life <= 0) F.drop.splice(i, 1);
+  }
+  // 气泡
+  for (let i = F.bub.length - 1; i >= 0; i--) {
+    const p = F.bub[i];
+    p.y += p.vy * dt; p.x += Math.sin(p.y * 0.06 + p.r) * 12 * dt;
+    p.life -= dt;
+    if (p.y < waterYAt(p.x) + 1 || p.life <= 0) F.bub.splice(i, 1);
+  }
+  // 火花
+  for (let i = F.spark.length - 1; i >= 0; i--) {
+    const p = F.spark[i];
+    p.vy += 520 * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt;
+    if (p.life <= 0) F.spark.splice(i, 1);
+  }
+  // 尘雾
+  for (let i = F.mist.length - 1; i >= 0; i--) {
+    const p = F.mist[i];
+    p.y -= 8 * dt; p.r += p.vr * dt; p.life -= dt;
+    if (p.life <= 0) F.mist.splice(i, 1);
+  }
+  if (F.mist.length > 90) F.mist.splice(0, F.mist.length - 90);
+}
+
+// ── 车体局部坐标系（用于绘制与点位换算） ──
+function carFrame(car) {
+  const p0 = car.c[0], p1 = car.c[1];
+  let fx = p1.x - p0.x, fy = p1.y - p0.y;
+  const L = Math.hypot(fx, fy) || 1; fx /= L; fy /= L;
+  return { cx: (p0.x + p1.x) / 2, cy: (p0.y + p1.y) / 2, fx, fy, ux: -fy, uy: fx, uy2: fx, len: L };
+}
+// 车体局部坐标 (u: 沿车长, v: 向上为正) → 世界坐标
+function toWorld(car, u, v) {
+  const p0 = car.c[0], p1 = car.c[1];
+  let fx = p1.x - p0.x, fy = p1.y - p0.y;
+  const L = Math.hypot(fx, fy) || 1; fx /= L; fy /= L;
+  const ux = -fy, uy = fx;               // 车体"下"方向
+  return { x: p0.x + fx * (u + car.L / 2) - ux * v, y: p0.y + fy * (u + car.L / 2) - uy * v };
+}
+
+// ── 自重静置平衡 ──
+function settle(n) {
+  const h = CFG.DT / CFG.SUB;
+  for (const p of S.P) { p.px = p.x; p.py = p.y; p.ax = 0; p.ay = CFG.G; }
+  for (let i = 0; i < n; i++) {
+    integrate(h);
+    measureForces();
+    rebuildContactSegs();
+    resetLambda();
+    for (let it = 0; it < CFG.ITER; it++) { solveConstraints(h); solveContacts(it === CFG.ITER - 1); }
+    clampVelocity();
+  }
+  for (const p of S.P) { p.px = p.x; p.py = p.y; }
+}
+function setTrainVelocity() {
+  // 注意：Verlet 存储的位移 (x - px) 是「每子步」位移，故必须用子步时长 h 而非 DT，
+  // 否则初速度会被放大 SUB 倍（列车直接飞出世界）。
+  const h = CFG.DT / CFG.SUB;
+  for (const car of S.cars) for (const p of car.c.concat(car.wheels)) {
+    p.px = p.x - S.targetV * h; p.py = p.y;
+  }
+}
+
+// ── 速度钳制（数值稳定用） ──
+// 位置式求解器在约束图突变（杆件断裂、接触拓扑跳变）时，会把一次很大的位置修正
+// 隐式转化为极大速度（实测出现过 11.7 g 的向上弹射，把整列车抛出世界）。
+// 真实物理中本场景的合法速度上限约 25 m/s（=200 px/s），故在求解后钳制隐含速度。
+function clampVelocity() {
+  const maxD = CFG.VMAX * (CFG.DT / CFG.SUB);
+  for (let i = 0; i < S.P.length; i++) {
+    const p = S.P[i];
+    if (p.im === 0) continue;
+    const dx = p.x - p.px, dy = p.y - p.py;
+    const d2 = dx * dx + dy * dy;
+    if (d2 <= maxD * maxD) continue;
+    const k = maxD / Math.sqrt(d2);
+    p.px = p.x - dx * k;
+    p.py = p.y - dy * k;
+  }
+}
+
+// ── 单帧推进 ──
+function step(dt) {
+  const h = dt / CFG.SUB;
+  for (let s = 0; s < CFG.SUB; s++) {
+    applyWater(h);
+    applyDrive(h);
+    integrate(h);
+    measureForces();
+    rebuildContactSegs();
+    resetLambda();
+    for (let it = 0; it < CFG.ITER; it++) { solveConstraints(h); solveContacts(it === CFG.ITER - 1); }
+    clampVelocity();
+  }
+  // 裂缝起裂：机车车头接近既有损伤跨时，列车动载把已存在的断裂打开（裂缝定点于既有断裂处，
+  // 之后按 checkBreaking 的半径扩展自行向前推进）。刻意让起裂早于机车抵达损伤跨，
+  // 使"前方轨道先消失"，列车随即俯冲入水，而不是骑着塌陷段形成的坡道被抛出去。
+  if (!S.crack.on && S.loco && !S.loco.wet) {
+    const nose = S.loco.c[1].x;
+    if (nose > CFG.X0 + PANEL_W * 8) {
+      S.crack.on = true;
+      S.crack.x = CFG.X0 + PANEL_W * 12;    // 既有断裂位置（下弦已断的节间）
+      S.crack.t = 0;
+      S.crack.r = 40;
+      sfx('snap', 0.55);
+    }
+  }
+  checkBreaking();
+  waveStep(dt);
+  updateCars(dt);
+  updateSilt(dt);
+  emitSmoke();
+  updateFX(dt);
+  S.t += dt;
+  S.frame++;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   第二部分：渲染
+   ══════════════════════════════════════════════════════════════ */
+
+// ── 画布尺寸 ──
+function resize() {
+  const st = document.getElementById('stage');
+  VW = st.clientWidth; VH = st.clientHeight;
+  // 上限 1.5：本场景有多次全屏渐变/合成，DPR=2 时像素量翻倍，低端机与移动端会明显掉帧
+  DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  cv.width = Math.round(VW * DPR); cv.height = Math.round(VH * DPR);
+  ctx.imageSmoothingEnabled = true;
+  makeSprites();
+  makeVignette();
+  if (S) bakeBackground();
+}
+
+// ── 精灵（软烟 / 蒸汽 / 光晕） ──
+function makeSprites() {
+  const mk = (c0) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const rg = g.createRadialGradient(64, 64, 2, 64, 64, 62);
+    rg.addColorStop(0, c0[0]); rg.addColorStop(0.45, c0[1]); rg.addColorStop(1, c0[2]);
+    g.fillStyle = rg; g.fillRect(0, 0, 128, 128);
+    return c;
+  };
+  sprites.smoke = mk(['rgba(58,56,60,0.62)', 'rgba(46,44,48,0.34)', 'rgba(40,38,42,0)']);
+  sprites.steam = mk(['rgba(236,244,255,0.60)', 'rgba(210,228,248,0.30)', 'rgba(200,220,245,0)']);
+  sprites.glow  = mk(['rgba(255,190,110,0.75)', 'rgba(255,140,50,0.28)', 'rgba(255,120,30,0)']);
+  makeDeckTile();
+}
+
+// ── 预烘焙静态背景（天空 / 远山 / 地形 / 桥墩 / 引桥轨道） ──
+function bakeBackground() {
+  const Q = 1.25;
+  const c = document.createElement('canvas');
+  c.width = Math.round(CFG.WW * Q); c.height = Math.round(CFG.WH * Q);
+  const g = c.getContext('2d');
+  g.setTransform(Q, 0, 0, Q, 0, 0);
+  SEED = 20260828;
+
+  // 天空
+  const sky = g.createLinearGradient(0, -40, 0, CFG.WATER_Y + 60);
+  sky.addColorStop(0.00, '#070a1a');
+  sky.addColorStop(0.22, '#161c40');
+  sky.addColorStop(0.44, '#3a2a56');
+  sky.addColorStop(0.62, '#7b3f66');
+  sky.addColorStop(0.80, '#c96a4f');
+  sky.addColorStop(1.00, '#e79a52');
+  g.fillStyle = sky; g.fillRect(-600, -40, CFG.WW + 1200, CFG.WATER_Y + 100);
+
+  // 落日
+  const sunX = 1146, sunY = 318;
+  const sg = g.createRadialGradient(sunX, sunY, 4, sunX, sunY, 300);
+  sg.addColorStop(0, 'rgba(255,236,190,0.95)');
+  sg.addColorStop(0.08, 'rgba(255,196,110,0.62)');
+  sg.addColorStop(0.34, 'rgba(255,132,60,0.24)');
+  sg.addColorStop(1, 'rgba(255,110,40,0)');
+  g.fillStyle = sg; g.beginPath(); g.arc(sunX, sunY, 300, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(255,240,205,0.92)';
+  g.beginPath(); g.arc(sunX, sunY, 21, 0, Math.PI * 2); g.fill();
+
+  // 云带
+  for (let i = 0; i < 16; i++) {
+    const cy = 60 + srnd() * 250;
+    const cx = -400 + srnd() * (CFG.WW + 800);
+    const w = 90 + srnd() * 300, h = 8 + srnd() * 20;
+    const t = clamp((cy - 60) / 250, 0, 1);
+    g.fillStyle = `rgba(${Math.round(lerp(150, 255, t))},${Math.round(lerp(110, 190, t))},${Math.round(lerp(140, 150, t))},${0.06 + srnd() * 0.14})`;
+    g.beginPath(); g.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2); g.fill();
+  }
+
+  // 远山三层
+  const ridges = [
+    { amp: 152, base: 348, col: '#453a5e', f: 0.0055, ph: 0.0 },
+    { amp: 104, base: 352, col: '#332b4a', f: 0.0092, ph: 2.1 },
+    { amp: 62,  base: 356, col: '#241f36', f: 0.0165, ph: 4.7 },
+  ];
+  for (const r of ridges) {
+    g.fillStyle = r.col;
+    g.beginPath(); g.moveTo(-620, CFG.WH);
+    for (let x = -620; x <= CFG.WW + 620; x += 8) {
+      const y = r.base - r.amp * (0.55 + 0.45 * Math.sin(x * r.f + r.ph))
+                       - r.amp * 0.30 * Math.sin(x * r.f * 2.7 + r.ph * 1.7);
+      g.lineTo(x, y);
+    }
+    g.lineTo(CFG.WW + 620, CFG.WH); g.closePath(); g.fill();
+  }
+
+  // 对岸林带
+  g.fillStyle = '#1b1830';
+  for (let x = -620; x < CFG.WW + 620; x += 11) {
+    const h = 8 + srnd() * 16;
+    g.beginPath();
+    g.moveTo(x, 348); g.lineTo(x + 5, 348 - h); g.lineTo(x + 11, 348); g.closePath(); g.fill();
+  }
+  g.fillStyle = 'rgba(20,17,32,0.85)';
+  g.fillRect(-620, 344, CFG.WW + 1240, 10);
+
+  // 地面 / 岩岸
+  const tp = S.terrainPts;
+  g.beginPath();
+  g.moveTo(tp[0][0], tp[0][1]);
+  for (const p of tp) g.lineTo(p[0], p[1]);
+  g.lineTo(tp[tp.length - 1][0], CFG.WH + 40);
+  g.lineTo(tp[0][0], CFG.WH + 40);
+  g.closePath();
+  const gg = g.createLinearGradient(0, 300, 0, CFG.BED_Y + 60);
+  gg.addColorStop(0, '#3b2c22');
+  gg.addColorStop(0.28, '#2a2019');
+  gg.addColorStop(0.62, '#191419');
+  gg.addColorStop(1, '#0c0c14');
+  g.fillStyle = gg; g.fill();
+
+  // 高原草皮 + 岩块
+  g.fillStyle = '#2f2a1c';
+  g.fillRect(-620, 336, CFG.X0 + 620, 6);
+  g.fillRect(CFG.X1, 336, CFG.WW + 620 - CFG.X1, 6);
+  for (let i = 0; i < 260; i++) {
+    const x = -600 + srnd() * (CFG.WW + 1200);
+    if (x > CFG.X0 - 4 && x < CFG.X1 + 4) continue;
+    if (srnd() < 0.35) {
+      g.fillStyle = `rgba(${90 + srnd() * 30 | 0},${80 + srnd() * 30 | 0},${52 + srnd() * 24 | 0},0.5)`;
+      g.fillRect(x, 332 - srnd() * 5, 1 + srnd() * 2, 5);
+    }
+  }
+  // 岸坡岩块
+  for (let i = 0; i < 300; i++) {
+    const onLeft = srnd() < 0.5;
+    const x = onLeft ? CFG.X0 + srnd() * 72 : CFG.X1 - srnd() * 72;
+    const gy = groundY(x);
+    if (gy < 400) continue;
+    const s = 5 + srnd() * 20;
+    g.fillStyle = `rgba(${44 + srnd() * 40 | 0},${38 + srnd() * 34 | 0},${36 + srnd() * 30 | 0},${0.35 + srnd() * 0.4})`;
+    g.beginPath();
+    g.moveTo(x, gy - s); g.lineTo(x + s * (0.6 + srnd()), gy - s * 0.2);
+    g.lineTo(x + s * 0.3, gy + s * 0.5); g.closePath(); g.fill();
+  }
+  // 河床卵石
+  for (let i = 0; i < 200; i++) {
+    const x = CFG.X0 + 70 + srnd() * (CFG.X1 - CFG.X0 - 140);
+    const y = CFG.BED_Y - 4 + srnd() * 34;
+    g.fillStyle = `rgba(${30 + srnd() * 26 | 0},${30 + srnd() * 24 | 0},${34 + srnd() * 28 | 0},0.5)`;
+    g.beginPath(); g.ellipse(x, y, 3 + srnd() * 9, 2 + srnd() * 4, srnd() * 3, 0, Math.PI * 2); g.fill();
+  }
+
+  // 桥墩（砌石）
+  for (const px of CFG.PIERS) drawPier(g, px);
+
+  // 引桥轨道（路堤）
+  drawApproachTrack(g, -600, CFG.X0 + 2);
+  drawApproachTrack(g, CFG.X1 - 2, CFG.WW + 600);
+
+  bg = c;
+}
+
+function drawPier(g, px) {
+  const topY = CFG.DECK_Y + CFG.TRUSS_H - 10;
+  const bedY = groundY(px);
+  const wT = 30, wB = 44;
+  // 墩帽
+  g.fillStyle = '#4a4640';
+  g.fillRect(px - wT / 2 - 7, topY, wT + 14, 12);
+  g.fillStyle = 'rgba(255,220,170,0.10)';
+  g.fillRect(px - wT / 2 - 7, topY, wT + 14, 3);
+  // 墩身（下宽上窄）
+  g.beginPath();
+  g.moveTo(px - wT / 2, topY + 12);
+  g.lineTo(px + wT / 2, topY + 12);
+  g.lineTo(px + wB / 2, bedY);
+  g.lineTo(px - wB / 2, bedY);
+  g.closePath();
+  const pg = g.createLinearGradient(px - wB / 2, 0, px + wB / 2, 0);
+  pg.addColorStop(0, '#2b2924'); pg.addColorStop(0.42, '#575249');
+  pg.addColorStop(0.72, '#3d3931'); pg.addColorStop(1, '#211f1b');
+  g.fillStyle = pg; g.fill();
+  // 砌石缝
+  g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;
+  for (let y = topY + 20; y < bedY; y += 17) {
+    const t = (y - topY) / (bedY - topY);
+    const w = lerp(wT, wB, t);
+    g.beginPath(); g.moveTo(px - w / 2, y); g.lineTo(px + w / 2, y); g.stroke();
+    const off = ((y / 17) | 0) % 2 ? w * 0.25 : -w * 0.25;
+    g.beginPath(); g.moveTo(px + off, y); g.lineTo(px + off, y + 17); g.stroke();
+  }
+  // 水线苔痕
+  g.fillStyle = 'rgba(38,70,56,0.45)';
+  g.fillRect(px - wB / 2, CFG.WATER_Y - 12, wB, 22);
+}
+
+function drawApproachTrack(g, x0, x1) {
+  const y = CFG.DECK_Y;
+  g.fillStyle = '#39332b';                      // 道砟
+  g.beginPath();
+  g.moveTo(x0, y + 12); g.lineTo(x1, y + 12);
+  g.lineTo(x1 + 10, y + 34); g.lineTo(x0 - 10, y + 34);
+  g.closePath(); g.fill();
+  g.fillStyle = '#4a4238'; g.fillRect(x0, y + 8, x1 - x0, 5);
+  for (let x = x0; x < x1; x += 11) {           // 枕木
+    g.fillStyle = '#2e2419'; g.fillRect(x, y + 3, 7, 8);
+    g.fillStyle = 'rgba(255,200,140,0.07)'; g.fillRect(x, y + 3, 7, 2);
+  }
+  g.fillStyle = '#8e9aa6'; g.fillRect(x0, y - 1, x1 - x0, 3);   // 钢轨
+  g.fillStyle = 'rgba(255,245,225,0.55)'; g.fillRect(x0, y - 1, x1 - x0, 1);
+}
+
+// ── 水面几何 ──
+function waterPoly() {
+  const p = new Path2D();
+  const w = S.wave;
+  const xs = [];
+  for (let x = -600; x <= CFG.WW + 600; x += 10) {
+    if (groundY(x) > waterYAt(x) + 1) xs.push(x);
+  }
+  if (xs.length < 2) return p;
+  p.moveTo(xs[0], waterYAt(xs[0]));
+  for (let i = 1; i < xs.length; i++) p.lineTo(xs[i], waterYAt(xs[i]));
+  for (let i = xs.length - 1; i >= 0; i--) p.lineTo(xs[i], groundY(xs[i]));
+  p.closePath();
+  return p;
+}
+
+// ── 应力配色（按内力利用率着色：<0 受压，>0 受拉，±1 达承载力） ──
+const STOPS = [
+  [-1.20, [63, 111, 216]],
+  [-0.50, [79, 162, 168]],
+  [ 0.00, [125, 135, 152]],
+  [ 0.60, [232, 192, 74]],
+  [ 1.15, [255, 59, 48]],
+];
+function stressColor(c) {
+  const t = clamp(c.sm, -1.2, 1.2);
+  for (let i = 0; i < STOPS.length - 1; i++) {
+    const a = STOPS[i], b = STOPS[i + 1];
+    if (t <= b[0] || i === STOPS.length - 2) {
+      const u = clamp((t - a[0]) / (b[0] - a[0]), 0, 1);
+      const r = Math.round(lerp(a[1][0], b[1][0], u));
+      const g = Math.round(lerp(a[1][1], b[1][1], u));
+      const bl = Math.round(lerp(a[1][2], b[1][2], u));
+      return `rgb(${r},${g},${bl})`;
+    }
+  }
+  return '#7d8798';
+}
+
+// ── 桁架 ──
+function drawBridge() {
+  const C = S.C;
+  // 杆件
+  for (let i = 0; i < C.length; i++) {
+    const c = C[i];
+    if (c.broken || c.type === 'body' || c.type === 'wheel' || c.type === 'coupler' || c.type === 'debris') continue;
+    const col = S.stress ? stressColor(c) : (c.dmg ? '#8a5a33' : MEMBER[c.type].col);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.lineWidth = c.w + 2.4;
+    ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); ctx.stroke();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = c.w;
+    ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); ctx.stroke();
+    if (c.w > 5) {                                     // 高光
+      ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+      ctx.lineWidth = c.w * 0.32;
+      const dx = c.b.x - c.a.x, dy = c.b.y - c.a.y, L = Math.hypot(dx, dy) || 1;
+      ctx.beginPath();
+      ctx.moveTo(c.a.x - dy / L * c.w * 0.26, c.a.y + dx / L * c.w * 0.26);
+      ctx.lineTo(c.b.x - dy / L * c.w * 0.26, c.b.y + dx / L * c.w * 0.26);
+      ctx.stroke();
+    }
+  }
+  // 节点板
+  for (const p of S.bridge.top) nodePlate(p);
+  for (const p of S.bridge.bot) nodePlate(p);
+}
+function nodePlate(p) {
+  ctx.fillStyle = '#20242c';
+  ctx.beginPath(); ctx.arc(p.x, p.y, 3.4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(190,205,225,0.35)';
+  ctx.beginPath(); ctx.arc(p.x - 0.8, p.y - 0.8, 1.5, 0, Math.PI * 2); ctx.fill();
+}
+// 桥面系：道砟 / 枕木 / 钢轨（仅未断裂段）。
+// 预制为一个节间宽度的贴图（2× 分辨率保证缩放后清晰），逐节间贴图代替数百次 fillRect。
+function makeDeckTile() {
+  const S2 = 2, W = DECK_TILE_W * S2, H = 16 * S2;
+  deckTile = document.createElement('canvas');
+  deckTile.width = W; deckTile.height = H;
+  const g = deckTile.getContext('2d');
+  g.setTransform(S2, 0, 0, S2, 0, 3 * S2);        // 局部 y = -3 对齐贴图顶边
+  g.fillStyle = '#3b342a'; g.fillRect(0, 0, DECK_TILE_W, 12);          // 道砟槽
+  g.fillStyle = '#4a4238'; g.fillRect(0, 1, DECK_TILE_W, 4);
+  for (let x = 2; x < DECK_TILE_W; x += 9) {                            // 枕木
+    g.fillStyle = '#2c2317'; g.fillRect(x, 1, 5.5, 9);
+    g.fillStyle = 'rgba(255,200,140,0.06)'; g.fillRect(x, 1, 5.5, 2);
+  }
+  g.fillStyle = '#9aa6b2'; g.fillRect(0, -3, DECK_TILE_W, 3);           // 钢轨（轨面 = 弦线 -3）
+  g.fillStyle = 'rgba(255,248,230,0.62)'; g.fillRect(0, -3, DECK_TILE_W, 1);
+}
+function drawDeck() {
+  if (!deckTile) return;
+  for (const c of S.deck) {
+    if (c.broken) continue;
+    const dx = c.b.x - c.a.x, dy = c.b.y - c.a.y;
+    const L = Math.hypot(dx, dy) || 1;
+    ctx.save();
+    ctx.translate(c.a.x, c.a.y);
+    ctx.rotate(Math.atan2(dy, dx));
+    ctx.drawImage(deckTile, 0, -3, L, 15);
+    ctx.restore();
+  }
+}
+
+// ── 碎块 ──
+function drawDebris() {
+  for (const c of S.debris) {
+    if (c.broken) continue;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = c.w + 2;
+    ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); ctx.stroke();
+    ctx.strokeStyle = '#7a4a2c'; ctx.lineWidth = c.w;
+    ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,190,120,0.14)'; ctx.lineWidth = c.w * 0.3;
+    ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); ctx.stroke();
+  }
+}
+
+// ── 列车 ──
+function drawCouplers() {
+  for (const c of S.C) {
+    if (c.type !== 'coupler' || c.broken) continue;
+    ctx.strokeStyle = '#2a2622'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(200,190,170,0.2)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y - 1); ctx.lineTo(c.b.x, c.b.y - 1); ctx.stroke();
+  }
+}
+
+function drawTrain() {
+  for (const car of S.cars) {
+    const p0 = car.c[0], p1 = car.c[1];
+    let fx = p1.x - p0.x, fy = p1.y - p0.y;
+    const L = Math.hypot(fx, fy) || 1; fx /= L; fy /= L;
+    ctx.save();
+    ctx.translate(p0.x, p0.y);
+    // 局部系：x 沿车长、y 向下（原点在底边中点 p0）。
+    // 必须是旋转矩阵 [[fx,-fy],[fy,fx]]（det=+1）；若写成 [[fx,fy],[fy,-fx]]（det=−1）则为镜像，
+    // 整个车体会被沿底边翻转（车体跑到车轮下方）——车轮定位 wheelLocal 的逆变换按旋转系推导，两者必须一致。
+    ctx.transform(fx, fy, -fy, fx, 0, 0);
+    if (car.kind === 'loco') drawLoco(car, p0, fx, fy);
+    else drawCar(car, p0, fx, fy);
+    ctx.restore();
+    drawWheels(car, p0, fx, fy);
+  }
+}
+function wheelLocal(car, p0, fx, fy, w) {
+  const dx = w.x - p0.x, dy = w.y - p0.y;
+  // 旋转矩阵的逆：把世界偏移换算到「x 沿车长、y 向下」的局部系（与 drawTrain 的变换互逆）
+  return { lx: dx * fx + dy * fy, ly: dy * fx - dx * fy };
+}
+function drawWheels(car, p0, fx, fy) {
+  ctx.save();
+  ctx.translate(p0.x, p0.y);
+  ctx.transform(fx, fy, -fy, fx, 0, 0);
+  for (const w of car.wheels) {
+    const p = wheelLocal(car, p0, fx, fy, w);
+    const spin = (w.x / w.r) * 1.0;
+    ctx.save(); ctx.translate(p.lx, p.ly); ctx.rotate(spin);
+    ctx.fillStyle = '#15130f';
+    ctx.beginPath(); ctx.arc(0, 0, w.r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#6b6257'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(0, 0, w.r - 0.8, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(190,180,160,0.30)'; ctx.lineWidth = 1;
+    for (let k = 0; k < 6; k++) {
+      const a = k * Math.PI / 3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * w.r * 0.22, Math.sin(a) * w.r * 0.22);
+      ctx.lineTo(Math.cos(a) * w.r * 0.82, Math.sin(a) * w.r * 0.82);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#8a8074';
+    ctx.beginPath(); ctx.arc(0, 0, w.r * 0.24, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawLoco(car, p0, fx, fy) {
+  const L = car.L, H = car.H;
+  // 底盘
+  ctx.fillStyle = '#1b1a17'; ctx.fillRect(2, -16, L - 4, 15);
+  ctx.fillStyle = 'rgba(255,220,160,0.08)'; ctx.fillRect(2, -16, L - 4, 2);
+  // 锅炉
+  const bgd = ctx.createLinearGradient(0, -H + 4, 0, -12);
+  bgd.addColorStop(0, '#3c3f3a'); bgd.addColorStop(0.35, '#22261f');
+  bgd.addColorStop(1, '#14160f');
+  ctx.fillStyle = bgd;
+  ctx.beginPath();
+  ctx.moveTo(44, -14); ctx.lineTo(44, -H + 6);
+  ctx.quadraticCurveTo(46, -H, 54, -H); ctx.lineTo(104, -H);
+  ctx.quadraticCurveTo(112, -H, 112, -H + 8); ctx.lineTo(112, -14);
+  ctx.closePath(); ctx.fill();
+  // 锅炉箍
+  ctx.strokeStyle = 'rgba(215,190,140,0.30)'; ctx.lineWidth = 2;
+  for (const x of [58, 76, 94]) {
+    ctx.beginPath(); ctx.moveTo(x, -H + 3); ctx.lineTo(x, -13); ctx.stroke();
+  }
+  // 烟箱
+  ctx.fillStyle = '#191b16';
+  ctx.beginPath(); ctx.arc(118, -H / 2 - 3, 17, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(220,200,150,0.22)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(118, -H / 2 - 3, 13, 0, Math.PI * 2); ctx.stroke();
+  // 烟囱
+  ctx.fillStyle = '#15150f'; ctx.fillRect(110, -H - 24, 12, 26);
+  ctx.fillStyle = '#26241b'; ctx.fillRect(108, -H - 28, 16, 6);
+  ctx.fillStyle = 'rgba(255,220,160,0.12)'; ctx.fillRect(110, -H - 24, 3, 26);
+  // 汽包 / 汽笛
+  ctx.fillStyle = '#2a2b22';
+  ctx.beginPath(); ctx.ellipse(70, -H - 2, 8, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillRect(84, -H - 9, 4, 9);
+  // 司机室
+  ctx.fillStyle = '#3a2b22'; ctx.fillRect(6, -H - 4, 40, H - 8);
+  ctx.fillStyle = '#4a3527'; ctx.fillRect(2, -H - 9, 50, 9);   // 车顶
+  ctx.fillStyle = 'rgba(255,220,160,0.10)'; ctx.fillRect(2, -H - 9, 50, 2);
+  ctx.fillStyle = '#0e1418'; ctx.fillRect(13, -H + 4, 22, 15);  // 窗
+  ctx.fillStyle = 'rgba(255,196,110,0.35)'; ctx.fillRect(13, -H + 4, 22, 6);
+  // 排障器
+  ctx.fillStyle = '#232019';
+  ctx.beginPath();
+  ctx.moveTo(L - 2, -14); ctx.lineTo(L + 14, -3); ctx.lineTo(L + 14, 1); ctx.lineTo(L - 2, 1);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(220,200,150,0.2)'; ctx.lineWidth = 1;
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath(); ctx.moveTo(L - 2 + i * 4, -13 + i * 3); ctx.lineTo(L + 12, -1); ctx.stroke();
+  }
+  // 前照灯 + 光锥
+  ctx.fillStyle = '#c9a24a';
+  ctx.beginPath(); ctx.arc(L - 6, -H + 14, 4, 0, Math.PI * 2); ctx.fill();
+  const lg = ctx.createLinearGradient(L, -H + 14, L + 150, -H + 14);
+  lg.addColorStop(0, 'rgba(255,214,140,0.34)'); lg.addColorStop(1, 'rgba(255,200,120,0)');
+  ctx.fillStyle = lg;
+  ctx.beginPath();
+  ctx.moveTo(L - 2, -H + 11); ctx.lineTo(L + 160, -H - 12);
+  ctx.lineTo(L + 160, -H + 40); ctx.lineTo(L - 2, -H + 18); ctx.closePath(); ctx.fill();
+  // 进水表现
+  if (car.flood > 0.02) {
+    ctx.fillStyle = `rgba(30,90,140,${0.22 + car.flood * 0.4})`;
+    ctx.fillRect(2, -H - 4, L - 4, (H + 2) * car.flood * 0.6);
+  }
+}
+
+function drawCar(car, p0, fx, fy) {
+  const L = car.L, H = car.H;
+  const hue = [188, 28, 148, 8, 320][car.idx % 5];
+  // 底架
+  ctx.fillStyle = '#1a1815'; ctx.fillRect(0, -14, L, 13);
+  ctx.fillStyle = 'rgba(255,220,160,0.07)'; ctx.fillRect(0, -14, L, 2);
+  // 车体
+  const bgd = ctx.createLinearGradient(0, -H, 0, -12);
+  bgd.addColorStop(0, `hsl(${hue},26%,34%)`);
+  bgd.addColorStop(0.55, `hsl(${hue},30%,24%)`);
+  bgd.addColorStop(1, `hsl(${hue},26%,16%)`);
+  ctx.fillStyle = bgd;
+  ctx.beginPath();
+  ctx.moveTo(2, -12); ctx.lineTo(2, -H + 4);
+  ctx.quadraticCurveTo(3, -H, 9, -H); ctx.lineTo(L - 9, -H);
+  ctx.quadraticCurveTo(L - 3, -H, L - 2, -H + 4); ctx.lineTo(L - 2, -12);
+  ctx.closePath(); ctx.fill();
+  // 车顶
+  ctx.fillStyle = '#2b2a26'; ctx.fillRect(0, -H - 5, L, 7);
+  ctx.fillStyle = 'rgba(255,220,160,0.10)'; ctx.fillRect(0, -H - 5, L, 1.6);
+  for (let i = 0; i < 3; i++) {                      // 通风器
+    ctx.fillStyle = '#22211d';
+    ctx.fillRect(16 + i * 30, -H - 9, 12, 5);
+  }
+  // 涂装腰线
+  ctx.fillStyle = `hsla(${hue},45%,52%,0.55)`;
+  ctx.fillRect(2, -H * 0.42, L - 4, 3);
+  // 窗
+  for (let i = 0; i < 4; i++) {
+    const x = 10 + i * 23;
+    ctx.fillStyle = '#0d1418';
+    ctx.fillRect(x, -H + 9, 16, 15);
+    ctx.fillStyle = 'rgba(255,198,110,0.30)';
+    ctx.fillRect(x, -H + 9, 16, 5);
+    ctx.strokeStyle = 'rgba(230,220,190,0.18)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, -H + 9.5, 15, 14);
+  }
+  // 车门 + 端梯
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(L - 20, -H + 6, 13, H - 16);
+  ctx.strokeStyle = 'rgba(220,210,180,0.16)'; ctx.lineWidth = 1;
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath(); ctx.moveTo(2, -20 + i * 4); ctx.lineTo(9, -20 + i * 4); ctx.stroke();
+  }
+  // 缓冲器
+  ctx.fillStyle = '#2a2721';
+  ctx.fillRect(-3, -12, 6, 6); ctx.fillRect(L - 3, -12, 6, 6);
+  // 进水表现：舱内水位线随进水上升；灌满后水位线淡出、车体整体压暗（浸水钢体）
+  if (car.flood > 0.02) {
+    if (car.flood < 0.60) {
+      const h = (H + 2) * car.flood;
+      const a = 0.44 * (1 - car.flood / 0.60) + 0.10;
+      ctx.fillStyle = `rgba(30,92,142,${a})`;
+      ctx.fillRect(2, -12 - h, L - 4, h);
+      ctx.fillStyle = 'rgba(198,232,255,0.26)';
+      ctx.fillRect(2, -12 - h, L - 4, 1.5);
+    }
+    const t = clamp((car.flood - 0.45) / 0.55, 0, 1);
+    if (t > 0) {
+      ctx.fillStyle = `rgba(7,18,32,${0.50 * t})`;
+      ctx.fillRect(0, -H - 6, L, H + 8);
+    }
+  }
+}
+
+// ── 水 ──
+function drawWater(wp) {
+  // 水体
+  const wg = ctx.createLinearGradient(0, CFG.WATER_Y, 0, CFG.BED_Y + 70);
+  wg.addColorStop(0.00, 'rgba(58,116,168,0.74)');
+  wg.addColorStop(0.18, 'rgba(34,84,134,0.82)');
+  wg.addColorStop(0.55, 'rgba(16,48,86,0.90)');
+  wg.addColorStop(1.00, 'rgba(7,22,44,0.96)');
+  ctx.fillStyle = wg; ctx.fill(wp);
+  // 天空映色（近水面亮带）
+  ctx.save(); ctx.clip(wp);
+  const rg = ctx.createLinearGradient(0, CFG.WATER_Y - 6, 0, CFG.WATER_Y + 90);
+  rg.addColorStop(0, 'rgba(255,178,110,0.24)');
+  rg.addColorStop(1, 'rgba(255,150,90,0)');
+  ctx.fillStyle = rg; ctx.fillRect(-600, CFG.WATER_Y - 6, CFG.WW + 1200, 100);
+  // 焦散光带
+  for (let i = 0; i < 7; i++) {
+    const y = CFG.WATER_Y + 24 + i * 22;
+    ctx.fillStyle = `rgba(150,205,255,${0.05 - i * 0.006})`;
+    for (let k = 0; k < 5; k++) {
+      const x = ((S.t * (14 + i * 5) + k * 340 + i * 90) % (CFG.WW + 400)) - 200;
+      ctx.fillRect(x + Math.sin(S.t * 1.4 + k) * 20, y, 70 + k * 12, 3);
+    }
+  }
+  ctx.restore();
+}
+
+function drawReflections(wp) {
+  ctx.save();
+  ctx.clip(wp);
+  ctx.globalAlpha = 0.20;
+  ctx.translate(0, CFG.WATER_Y);
+  ctx.scale(1, -0.55);
+  ctx.transform(1, 0, 0.09, 1, 0, 0);
+  ctx.translate(0, -CFG.WATER_Y);
+  ctx.fillStyle = '#0f2c4e';
+  // 桥面段
+  for (const c of S.deck) {
+    if (c.broken) continue;
+    const mx = (c.a.x + c.b.x) / 2, my = (c.a.y + c.b.y) / 2;
+    const dx = c.b.x - c.a.x, dy = c.b.y - c.a.y;
+    const ang = Math.atan2(dy, dx), len = Math.hypot(dx, dy);
+    ctx.save(); ctx.translate(mx, my); ctx.rotate(ang);
+    ctx.fillRect(-len / 2, -10, len, 20);
+    ctx.restore();
+  }
+  // 车厢
+  for (const car of S.cars) {
+    const p0 = car.c[0], p1 = car.c[1];
+    let fx = p1.x - p0.x, fy = p1.y - p0.y;
+    const L = Math.hypot(fx, fy) || 1; fx /= L; fy /= L;
+    ctx.save();
+    ctx.translate(p0.x, p0.y);
+    ctx.transform(fx, fy, -fy, fx, 0, 0);      // 与 drawTrain 同一局部系（y 向下），保证倒影轮廓贴合车体
+    ctx.fillRect(0, -car.H - 4, car.L, car.H + 6);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawSurface() {
+  const xs = [];
+  for (let x = -600; x <= CFG.WW + 600; x += 10)
+    if (groundY(x) > waterYAt(x) + 1) xs.push(x);
+  if (xs.length < 2) return;
+  // 水面亮线
+  ctx.beginPath();
+  ctx.moveTo(xs[0], waterYAt(xs[0]));
+  for (let i = 1; i < xs.length; i++) ctx.lineTo(xs[i], waterYAt(xs[i]));
+  ctx.strokeStyle = 'rgba(198,232,255,0.62)'; ctx.lineWidth = 2.2; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,214,160,0.22)'; ctx.lineWidth = 5; ctx.stroke();
+  // 泡沫（波速大处）
+  const w = S.wave;
+  for (let i = 0; i < w.h.length; i += 2) {
+    const x = i * w.sp;
+    if (x < xs[0] || x > xs[xs.length - 1]) continue;
+    const e = Math.abs(w.v[i]);
+    if (e < 0.55) continue;
+    const a = clamp((e - 0.55) / 4.5, 0, 0.55);
+    ctx.fillStyle = `rgba(226,244,255,${a})`;
+    ctx.beginPath();
+    ctx.ellipse(x, waterYAt(x) + 1, 5 + e * 2.2, 1.6 + e * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 波光碎点
+  for (let i = 0; i < 30; i++) {
+    const x = ((i * 173.7 + S.t * (12 + (i % 5) * 6)) % (CFG.WW + 200)) - 100;
+    if (x < xs[0] || x > xs[xs.length - 1]) continue;
+    const y = waterYAt(x) + 3 + Math.sin(S.t * 2.2 + i) * 4;
+    ctx.fillStyle = `rgba(255,232,190,${0.10 + 0.16 * Math.abs(Math.sin(S.t * 3 + i))})`;
+    ctx.fillRect(x, y, 12 + (i % 4) * 7, 1.4);
+  }
+}
+
+// ── 水下光柱与悬浮泥沙（氛围，纯程序化） ──
+function drawShafts() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 5; i++) {
+    const bx = 250 + i * 275 + Math.sin(S.t * 0.32 + i * 1.7) * 24;
+    const w0 = 30 + (i % 3) * 14;
+    const lean = 34 + Math.sin(S.t * 0.22 + i) * 15;
+    const g = ctx.createLinearGradient(bx, CFG.WATER_Y, bx + lean, CFG.BED_Y + 40);
+    g.addColorStop(0.00, 'rgba(170,216,255,0.15)');
+    g.addColorStop(0.50, 'rgba(138,190,240,0.065)');
+    g.addColorStop(1.00, 'rgba(120,170,220,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(bx - w0 * 0.5, CFG.WATER_Y - 8);
+    ctx.lineTo(bx + w0 * 0.5, CFG.WATER_Y - 8);
+    ctx.lineTo(bx + w0 * 1.8 + lean, CFG.BED_Y + 40);
+    ctx.lineTo(bx - w0 * 0.9 + lean, CFG.BED_Y + 40);
+    ctx.closePath(); ctx.fill();
+  }
+  // 悬浮泥沙：近底床缓慢漂移的细颗粒
+  if (!S.silt) {
+    S.silt = [];
+    for (let i = 0; i < 64; i++)
+      S.silt.push({ x: rnd(300, 1350), y: rnd(CFG.WATER_Y + 30, CFG.BED_Y + 10), r: rnd(0.5, 1.8), ph: rnd(0, 6.28) });
+  }
+  for (const p of S.silt) {
+    const a = 0.10 + 0.14 * (0.5 + 0.5 * Math.sin(p.ph + S.t * 0.7));
+    ctx.fillStyle = `rgba(206,222,232,${a})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function updateSilt(dt) {
+  if (!S.silt) return;
+  for (const p of S.silt) {
+    p.x += Math.sin(S.t * 0.35 + p.ph) * 4.5 * dt + 2.2 * dt;
+    p.y += Math.cos(S.t * 0.27 + p.ph * 1.7) * 3.2 * dt;
+    if (p.x > 1360) p.x = 290;
+  }
+}
+
+// ── 粒子 ──
+function drawFX(underwater) {
+  const F = S.fx;
+  if (!underwater) {
+    for (const p of F.smoke) {
+      const a = clamp(p.life / p.max, 0, 1) * 0.85;
+      ctx.globalAlpha = a * (0.55 + 0.45 * p.dark);
+      ctx.drawImage(sprites.smoke, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+    }
+    ctx.globalAlpha = 1;
+    for (const p of F.spark) {
+      const a = clamp(p.life / p.max, 0, 1);
+      ctx.fillStyle = `rgba(255,${170 + 60 * a | 0},80,${a})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.sz * a, 0, Math.PI * 2); ctx.fill();
+    }
+  } else {
+    for (const p of F.bub) {
+      const a = clamp(p.life / p.max, 0, 1) * 0.55;
+      ctx.strokeStyle = `rgba(200,235,255,${a})`; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(220,245,255,${a * 0.4})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.7, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  for (const p of F.drop) {
+    const a = clamp(p.life / p.max, 0, 1);
+    ctx.fillStyle = `rgba(214,240,255,${0.35 + a * 0.5})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.sz, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const p of F.mist) {
+    const a = clamp(p.life / p.max, 0, 1) * p.a;
+    ctx.globalAlpha = a;
+    ctx.drawImage(sprites.steam, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ── 主绘制 ──
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#05070b';
+  ctx.fillRect(0, 0, VW, VH);
+
+  const cam = S.cam;
+  let s = Math.max(VW / CFG.WW, VH / CFG.WH) * cam.z;
+  const vw = VW / s, vh = VH / s;
+  let cx = cam.x, cy = cam.y;
+  if (vw >= CFG.WW) cx = CFG.WW / 2; else cx = clamp(cx, vw / 2, CFG.WW - vw / 2);
+  if (vh >= CFG.WH) cy = CFG.WH / 2; else cy = clamp(cy, vh / 2, CFG.WH - vh / 2);
+  const shx = (Math.random() - 0.5) * cam.sh, shy = (Math.random() - 0.5) * cam.sh;
+
+  ctx.save();
+  ctx.translate(VW / 2, VH / 2);
+  ctx.scale(s, s);
+  ctx.translate(-cx + shx / s, -cy + shy / s);
+
+  // 背景
+  if (bg) ctx.drawImage(bg, 0, 0, CFG.WW, CFG.WH);
+
+  const wp = waterPoly();
+  drawWater(wp);
+  drawReflections(wp);
+
+  drawDebris();
+  drawBridge();
+  drawDeck();
+  drawCouplers();
+  drawTrain();
+
+  // 水下压暗
+  ctx.save();
+  ctx.clip(wp);
+  ctx.fillStyle = 'rgba(14,52,96,0.34)';
+  ctx.fillRect(-600, CFG.WATER_Y - 40, CFG.WW + 1200, 400);
+  const dg = ctx.createLinearGradient(0, CFG.WATER_Y, 0, CFG.BED_Y + 60);
+  dg.addColorStop(0, 'rgba(10,40,80,0)');
+  dg.addColorStop(1, 'rgba(4,16,38,0.62)');
+  ctx.fillStyle = dg;
+  ctx.fillRect(-600, CFG.WATER_Y - 40, CFG.WW + 1200, 500);
+  drawShafts();          // 水下光柱
+  ctx.restore();
+
+  drawFX(true);      // 气泡（水下）
+  drawSurface();
+  drawFX(false);     // 烟 / 火花 / 水滴 / 雾
+
+  ctx.restore();
+
+  // 暗角（预渲染精灵，避免每帧对全屏做一次径向渐变求值）
+  if (vignette) ctx.drawImage(vignette, 0, 0, VW, VH);
+}
+// 暗角精灵：按 1/2 分辨率预渲染一次，绘制时放大
+function makeVignette() {
+  const w = Math.max(64, Math.round(VW / 2)), h = Math.max(64, Math.round(VH / 2));
+  vignette = document.createElement('canvas');
+  vignette.width = w; vignette.height = h;
+  const g2 = vignette.getContext('2d');
+  const vg = g2.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.34,
+                                     w / 2, h / 2, Math.max(w, h) * 0.78);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+  g2.fillStyle = vg;
+  g2.fillRect(0, 0, w, h);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   第三部分：镜头 / 交互 / 音效 / 主循环
+   ══════════════════════════════════════════════════════════════ */
+
+// ── 镜头 ──
+function updateCam(dt) {
+  const cam = S.cam;
+  let fx = CFG.WW / 2, fy = 432, tz = 1.0;
+  const loco = S.loco;
+  if (S.collapseT < 0) {
+    // 分镜 1（接近）：跟随机车并略偏前，让观众先看到前方的桥垮
+    if (loco) fx = (loco.c[0].x + loco.c[1].x) / 2 + 210;
+    fy = 400; tz = 1.0;
+  } else {
+    const age = S.t - S.collapseT;
+    // 分镜 2/3（失效 → 坠落 → 入水 → 下沉）：始终框住整列车队的形心
+    let sx = 0, sy = 0, n = 0;
+    for (const car of S.cars) {
+      sx += (car.c[0].x + car.c[1].x) / 2; sy += (car.c[0].y + car.c[1].y) / 2; n++;
+    }
+    fx = sx / n; fy = sy / n;
+    if (age < 3.2) { tz = 1.55; fy = Math.min(fy + 40, 620); }      // 脱轨坠落：推近特写
+    else           { tz = 1.45; fy = clamp(fy - 30, 470, 700); }    // 入水下沉：带上水面
+  }
+  const k = 1 - Math.pow(0.0025, dt);
+  cam.x += (fx - cam.x) * k;
+  cam.y += (fy - cam.y) * k;
+  cam.z += (tz - cam.z) * (1 - Math.pow(0.06, dt));
+  cam.sh *= Math.pow(0.02, dt);
+  if (cam.sh < 0.05) cam.sh = 0;
+}
+
+// ── 程序化音效（WebAudio，无外部资源） ──
+let AC = null, noiseBuf = null, sfxBudget = 0;
+function audioInit() {
+  if (AC) return;
+  try {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    AC = new Ctor();
+    const len = AC.sampleRate * 1.0;
+    noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  } catch (e) { AC = null; }
+}
+function sfx(kind, g) {
+  if (!S || !S.sound || !AC || !noiseBuf) return;
+  if (sfxBudget <= 0) return;
+  sfxBudget--;
+  const t = AC.currentTime;
+  const src = AC.createBufferSource(); src.buffer = noiseBuf;
+  const flt = AC.createBiquadFilter();
+  const gn = AC.createGain();
+  src.connect(flt); flt.connect(gn); gn.connect(AC.destination);
+  const vol = (g === undefined ? 1 : clamp(g, 0.1, 1.5)) * 0.5;
+  if (kind === 'snap') {
+    flt.type = 'bandpass'; flt.frequency.value = 1500; flt.Q.value = 3.2;
+    gn.gain.setValueAtTime(0.0001, t);
+    gn.gain.exponentialRampToValueAtTime(0.40 * vol, t + 0.006);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.20);
+    src.start(t); src.stop(t + 0.22);
+    const o = AC.createOscillator(), og = AC.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(880, t);
+    o.frequency.exponentialRampToValueAtTime(320, t + 0.18);
+    og.gain.setValueAtTime(0.16 * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    o.connect(og); og.connect(AC.destination); o.start(t); o.stop(t + 0.24);
+  } else if (kind === 'splash') {
+    flt.type = 'lowpass';
+    flt.frequency.setValueAtTime(300, t);
+    flt.frequency.exponentialRampToValueAtTime(3600, t + 0.09);
+    flt.frequency.exponentialRampToValueAtTime(420, t + 0.65);
+    gn.gain.setValueAtTime(0.0001, t);
+    gn.gain.exponentialRampToValueAtTime(0.55 * vol, t + 0.03);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.75);
+    src.start(t); src.stop(t + 0.8);
+  } else if (kind === 'rumble') {
+    flt.type = 'lowpass'; flt.frequency.value = 130; flt.Q.value = 1.2;
+    gn.gain.setValueAtTime(0.0001, t);
+    gn.gain.exponentialRampToValueAtTime(0.5 * vol, t + 0.12);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    src.start(t); src.stop(t + 1.7);
+  }
+}
+
+// ── 横幅 ──
+let bannerT = 0;
+const bannerEl = document.getElementById('banner');
+function banner(txt) {
+  bannerEl.textContent = txt;
+  bannerEl.style.opacity = '1';
+  bannerT = 1.5;
+}
+function bannerOff() { bannerEl.style.opacity = '0'; bannerT = 0; }
+
+// ── HUD ──
+const EL = {};
+['st-t', 'st-v', 'st-int', 'st-brk', 'st-util', 'st-wet', 'st-st'].forEach(k => EL[k] = document.getElementById(k));
+function updateHUD(dt) {
+  const loco = S.loco;
+  let v = 0;
+  if (loco) {
+    const a = loco.c[0], b = loco.c[1];
+    let dx = b.x - a.x, dy = b.y - a.y; const L = Math.hypot(dx, dy) || 1;
+    dx /= L; dy /= L;
+    let vx = 0, vy = 0;
+    for (const p of loco.c) { vx += (p.x - p.px); vy += (p.y - p.py); }
+    v = (vx * dx + vy * dy) / (4 * (CFG.DT / CFG.SUB)) / CFG.PPM * 3.6;
+  }
+  EL['st-t'].textContent = S.t.toFixed(2) + ' s';
+  EL['st-v'].textContent = Math.abs(v).toFixed(0) + ' km/h';
+  const integ = Math.max(0, 100 * (1 - S.broke / Math.max(1, S.total)));
+  EL['st-int'].textContent = integ.toFixed(0) + '%';
+  EL['st-int'].className = integ > 80 ? 'ok' : (integ > 45 ? '' : 'hl');
+  EL['st-brk'].textContent = S.broke + ' 根';
+  // 峰值轴力利用率：全场杆件中 |F|/承载力 的最大值（>1 即超载失效）
+  let umax = 0;
+  for (const c of S.C) {
+    if (c.broken || !c.brk || !isFinite(c.cap)) continue;
+    const u = Math.abs(c.util || 0);
+    if (u > umax) umax = u;
+  }
+  EL['st-util'].textContent = umax.toFixed(2);
+  EL['st-util'].className = umax > 0.95 ? 'hl' : (umax > 0.6 ? '' : 'ok');
+  EL['st-wet'].textContent = S.wet + ' / 5';
+  let stt = '行驶中', cls = '';
+  if (S.collapseT >= 0) {
+    stt = '结构失效';
+    cls = 'hl';
+    if (S.wet > 0) stt = '车厢落水';
+    const sunk = S.cars.filter(c => c.sunk).length;
+    if (sunk >= 3) stt = '沉没中';
+    if (S.quiet > 1.2) { stt = '已终止'; cls = 'ok'; }
+  }
+  EL['st-st'].textContent = stt;
+  EL['st-st'].className = cls;
+}
+
+// ── 静止判定 & 自动循环 ──
+function checkQuiet(dt) {
+  let e = 0;
+  for (const car of S.cars) for (const p of car.c) e += Math.hypot(p.x - p.px, p.y - p.py);
+  const still = e < 2.2;
+  if (still && S.t > (S.collapseT >= 0 ? S.collapseT + 4 : 8)) S.quiet += dt;
+  else S.quiet = 0;
+  if (S.auto && S.quiet > 2.6) restart();
+}
+
+function restart() {
+  initSim();
+  setTrainVelocity();
+  bannerOff();
+  S.cam.x = CFG.WW / 2; S.cam.y = 432; S.cam.z = 1; S.cam.sh = 0;
+}
+
+// ── 交互 ──
+function screenToWorld(sx, sy) {
+  const s = Math.max(VW / CFG.WW, VH / CFG.WH) * S.cam.z;
+  const vw = VW / s, vh = VH / s;
+  let cx = S.cam.x, cy = S.cam.y;
+  if (vw >= CFG.WW) cx = CFG.WW / 2; else cx = clamp(cx, vw / 2, CFG.WW - vw / 2);
+  if (vh >= CFG.WH) cy = CFG.WH / 2; else cy = clamp(cy, vh / 2, CFG.WH - vh / 2);
+  return { x: (sx - VW / 2) / s + cx, y: (sy - VH / 2) / s + cy };
+}
+function nearestMember(x, y) {
+  let best = null, bd = 18;
+  for (const c of S.C) {
+    if (c.broken || c.type === 'body' || c.type === 'wheel' || c.type === 'debris') continue;
+    const ax = c.a.x, ay = c.a.y, bx = c.b.x, by = c.b.y;
+    const ex = bx - ax, ey = by - ay, L2 = ex * ex + ey * ey;
+    if (L2 < 1e-6) continue;
+    let t = ((x - ax) * ex + (y - ay) * ey) / L2;
+    t = clamp(t, 0, 1);
+    const d = Math.hypot(x - (ax + ex * t), y - (ay + ey * t));
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+cv.addEventListener('pointerdown', e => {
+  audioInit();
+  const r = cv.getBoundingClientRect();
+  const w = screenToWorld(e.clientX - r.left, e.clientY - r.top);
+  const c = nearestMember(w.x, w.y);
+  if (c) {
+    breakMember(c);
+    S.crack.on = true; S.crack.x = (c.a.x + c.b.x) / 2; S.crack.t = 0;
+  }
+});
+
+const btn = (id, fn) => {
+  const el = document.getElementById(id);
+  el.addEventListener('click', () => { audioInit(); fn(el); });
+};
+btn('b-play', el => { S.run = !S.run; el.textContent = S.run ? '⏸ 暂停' : '▶ 播放'; el.classList.toggle('on', !S.run); });
+btn('b-reset', () => restart());
+btn('b-slow', el => { S.slow = !S.slow; el.classList.toggle('on', S.slow); });
+btn('b-stress', el => { S.stress = !S.stress; el.classList.toggle('on', S.stress); });
+btn('b-auto', el => { S.auto = !S.auto; el.classList.toggle('on', S.auto); });
+btn('b-sound', el => {
+  audioInit();
+  S.sound = !S.sound;
+  el.classList.toggle('on', S.sound);
+  el.textContent = S.sound ? '🔊 音效' : '🔇 音效';
+});
+const rv = document.getElementById('r-v');
+rv.addEventListener('input', () => {
+  document.getElementById('v-v').textContent = rv.value;
+  S.targetV = (+rv.value) * CFG.PPM;
+});
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); document.getElementById('b-play').click(); }
+  else if (e.key === 'r' || e.key === 'R') restart();
+  else if (e.key === 's' || e.key === 'S') document.getElementById('b-slow').click();
+  else if (e.key === 'c' || e.key === 'C') document.getElementById('b-stress').click();
+});
+window.addEventListener('resize', () => resize());
+
+// ── 主循环 ──
+let acc = 0, lastTs = 0;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  if (!lastTs) lastTs = ts;
+  let dt = (ts - lastTs) / 1000;
+  lastTs = ts;
+  if (dt > 0.06) dt = 0.06;
+  sfxBudget = 3;
+  if (S.run) {
+    const sc = S.slow ? 0.26 : 1;
+    acc += dt * sc;
+    let n = 0;
+    while (acc >= CFG.DT && n < 4) { step(CFG.DT); acc -= CFG.DT; n++; }
+    if (acc > CFG.DT * 6) acc = 0;
+    checkQuiet(dt * sc);
+  }
+  if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) bannerOff(); }
+  updateCam(dt);
+  draw();
+  updateHUD(dt);
+}
+
+// ── 启动 ──
+resize();
+initSim();
+setTrainVelocity();
+requestAnimationFrame(frame);
+
+</script>
+</body>
+</html>
