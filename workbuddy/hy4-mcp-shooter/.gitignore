@@ -1,0 +1,11 @@
+# 依赖（案例只保留源码，不提交 node_modules）
+node_modules/
+
+# 测试脚本运行时产出的临时截图
+tools/smoke-screenshot.png
+
+# 本地环境
+.DS_Store
+Thumbs.db
+*.log
+.env

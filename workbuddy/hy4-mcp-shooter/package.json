@@ -1,0 +1,25 @@
+{
+  "name": "nexus-breach-mcp",
+  "version": "1.0.0",
+  "description": "通过 MCP 协议驱动 Three.js 射击游戏的完整 Demo —— 复现 Hy4 preview 接入 UE5 的同类思路",
+  "type": "module",
+  "scripts": {
+    "serve": "node tools/serve.js",
+    "mcp": "node server/mcp-server.js",
+    "demo": "node tools/demo-agent.js",
+    "start": "node tools/serve.js --with-mcp"
+  },
+  "keywords": [
+    "mcp",
+    "threejs",
+    "game-dev",
+    "agent",
+    "unreal-engine"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "playwright": "^1.63.0",
+    "ws": "^8.21.3"
+  }
+}

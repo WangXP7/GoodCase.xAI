@@ -1,0 +1,12 @@
+{
+  "_comment": "把这段合并进 ~/.workbuddy/mcp.json（注意不是 ~/.workbuddy/.mcp.json）。Windows 路径用正斜杠或双反斜杠。",
+  "mcpServers": {
+    "nexus-breach": {
+      "command": "node",
+      "args": ["D:/68.AIGC/GoodCase/hy4-mcp-shooter/server/mcp-server.js"],
+      "env": {
+        "MCP_WS_PORT": "8787"
+      }
+    }
+  }
+}

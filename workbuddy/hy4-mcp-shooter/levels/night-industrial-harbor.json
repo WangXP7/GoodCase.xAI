@@ -1,0 +1,1749 @@
+{
+  "version": 1,
+  "meta": {
+    "name": "night · industrial · 难度1.4",
+    "author": "agent",
+    "revision": 8
+  },
+  "environment": {
+    "preset": "night",
+    "skyTop": "#050a18",
+    "skyHorizon": "#12233f",
+    "skyGround": "#060a14",
+    "groundColor": "#1c2434",
+    "groundAccent": "#2c3648",
+    "fogColor": "#0e1729",
+    "fogDensity": 0.013,
+    "sunAzimuth": 300,
+    "sunElevation": 9,
+    "sunIntensity": 0.95,
+    "sunColor": "#9cc0ff",
+    "ambientColor": "#425884",
+    "ambientIntensity": 1.25,
+    "exposure": 1.35,
+    "bloom": 0.8,
+    "arenaSize": 90
+  },
+  "props": [
+    {
+      "id": "p_muda1",
+      "type": "wall",
+      "position": [
+        -35.2,
+        1.6,
+        -44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda2",
+      "type": "wall",
+      "position": [
+        -35.2,
+        1.6,
+        44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda3",
+      "type": "wall",
+      "position": [
+        -44,
+        1.6,
+        -35.2
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda4",
+      "type": "wall",
+      "position": [
+        44,
+        1.6,
+        -35.2
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda5",
+      "type": "wall",
+      "position": [
+        -17.6,
+        1.6,
+        -44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda6",
+      "type": "wall",
+      "position": [
+        -17.6,
+        1.6,
+        44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda7",
+      "type": "wall",
+      "position": [
+        -44,
+        1.6,
+        -17.6
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda8",
+      "type": "wall",
+      "position": [
+        44,
+        1.6,
+        -17.6
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda9",
+      "type": "wall",
+      "position": [
+        0,
+        1.6,
+        -44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda10",
+      "type": "wall",
+      "position": [
+        0,
+        1.6,
+        44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda11",
+      "type": "wall",
+      "position": [
+        -44,
+        1.6,
+        0
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda12",
+      "type": "wall",
+      "position": [
+        44,
+        1.6,
+        0
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda13",
+      "type": "wall",
+      "position": [
+        17.6,
+        1.6,
+        -44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda14",
+      "type": "wall",
+      "position": [
+        17.6,
+        1.6,
+        44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda15",
+      "type": "wall",
+      "position": [
+        -44,
+        1.6,
+        17.6
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda16",
+      "type": "wall",
+      "position": [
+        44,
+        1.6,
+        17.6
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda17",
+      "type": "wall",
+      "position": [
+        35.2,
+        1.6,
+        -44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda18",
+      "type": "wall",
+      "position": [
+        35.2,
+        1.6,
+        44
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda19",
+      "type": "wall",
+      "position": [
+        -44,
+        1.6,
+        35.2
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda20",
+      "type": "wall",
+      "position": [
+        44,
+        1.6,
+        35.2
+      ],
+      "rotation": [
+        0,
+        1.57,
+        0
+      ],
+      "scale": [
+        2.2,
+        1.15,
+        1
+      ],
+      "color": "#39424f"
+    },
+    {
+      "id": "p_muda21",
+      "type": "container",
+      "position": [
+        15.29,
+        1.3,
+        4.73
+      ],
+      "rotation": [
+        0,
+        0.7,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b4a2f"
+    },
+    {
+      "id": "p_muda22",
+      "type": "container",
+      "position": [
+        16.99,
+        1.3,
+        18.34
+      ],
+      "rotation": [
+        0,
+        1.22,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#2f5a6b"
+    },
+    {
+      "id": "p_muda23",
+      "type": "container",
+      "position": [
+        7.54,
+        1.3,
+        33.15
+      ],
+      "rotation": [
+        0,
+        1.75,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5a2f3f"
+    },
+    {
+      "id": "p_muda24",
+      "type": "container",
+      "position": [
+        -4.73,
+        1.3,
+        15.29
+      ],
+      "rotation": [
+        0,
+        2.27,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#3f5a2f"
+    },
+    {
+      "id": "p_muda25",
+      "type": "container",
+      "position": [
+        -18.34,
+        1.3,
+        16.99
+      ],
+      "rotation": [
+        0,
+        2.79,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b5a2f"
+    },
+    {
+      "id": "p_muda26",
+      "type": "container",
+      "position": [
+        -33.15,
+        1.3,
+        7.54
+      ],
+      "rotation": [
+        0,
+        3.32,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b4a2f"
+    },
+    {
+      "id": "p_muda27",
+      "type": "container",
+      "position": [
+        -15.29,
+        1.3,
+        -4.73
+      ],
+      "rotation": [
+        0,
+        3.84,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#2f5a6b"
+    },
+    {
+      "id": "p_muda28",
+      "type": "container",
+      "position": [
+        -16.99,
+        1.3,
+        -18.34
+      ],
+      "rotation": [
+        0,
+        4.37,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5a2f3f"
+    },
+    {
+      "id": "p_muda29",
+      "type": "container",
+      "position": [
+        -7.54,
+        1.3,
+        -33.15
+      ],
+      "rotation": [
+        0,
+        4.89,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#3f5a2f"
+    },
+    {
+      "id": "p_muda30",
+      "type": "container",
+      "position": [
+        4.73,
+        1.3,
+        -15.29
+      ],
+      "rotation": [
+        0,
+        5.41,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b5a2f"
+    },
+    {
+      "id": "p_muda31",
+      "type": "container",
+      "position": [
+        18.34,
+        1.3,
+        -16.99
+      ],
+      "rotation": [
+        0,
+        5.94,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b4a2f"
+    },
+    {
+      "id": "p_muda32",
+      "type": "container",
+      "position": [
+        33.15,
+        1.3,
+        -7.54
+      ],
+      "rotation": [
+        0,
+        6.46,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#2f5a6b"
+    },
+    {
+      "id": "p_muda33",
+      "type": "barrel",
+      "position": [
+        30,
+        0.8,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#8a5a2a"
+    },
+    {
+      "id": "p_muda34",
+      "type": "crate",
+      "position": [
+        30.11,
+        1,
+        15.8
+      ],
+      "rotation": [
+        0,
+        0.48,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5c6675"
+    },
+    {
+      "id": "p_muda35",
+      "type": "crate",
+      "position": [
+        21.59,
+        1,
+        31.27
+      ],
+      "rotation": [
+        0,
+        0.97,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5c6675"
+    },
+    {
+      "id": "p_muda36",
+      "type": "barrel",
+      "position": [
+        5.06,
+        0.8,
+        41.69
+      ],
+      "rotation": [
+        0,
+        1.45,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#8a5a2a"
+    },
+    {
+      "id": "p_muda37",
+      "type": "crate",
+      "position": [
+        -10.64,
+        1,
+        28.05
+      ],
+      "rotation": [
+        0,
+        1.93,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5c6675"
+    },
+    {
+      "id": "p_muda38",
+      "type": "crate",
+      "position": [
+        -25.45,
+        1,
+        22.55
+      ],
+      "rotation": [
+        0,
+        2.42,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5c6675"
+    },
+    {
+      "id": "p_muda39",
+      "type": "barrel",
+      "position": [
+        -36.9,
+        0.8,
+        9.09
+      ],
+      "rotation": [
+        0,
+        2.9,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#8a5a2a"
+    },
+    {
+      "id": "p_muda40",
+      "type": "crate",
+      "position": [
+        -40.78,
+        1,
+        -10.05
+      ],
+      "rotation": [
+        0,
+        3.38,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5c6675"
+    },
+    {
+      "id": "p_muda41",
+      "type": "crate",
+      "position": [
+        -22.46,
+        1,
+        -19.89
+      ],
+      "rotation": [
+        0,
+        3.87,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5c6675"
+    },
+    {
+      "id": "p_muda42",
+      "type": "barrel",
+      "position": [
+        -12.06,
+        0.8,
+        -31.79
+      ],
+      "rotation": [
+        0,
+        4.35,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#8a5a2a"
+    },
+    {
+      "id": "p_muda43",
+      "type": "crate",
+      "position": [
+        4.58,
+        1,
+        -37.72
+      ],
+      "rotation": [
+        0,
+        4.83,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5c6675"
+    },
+    {
+      "id": "p_muda44",
+      "type": "crate",
+      "position": [
+        23.86,
+        1,
+        -34.57
+      ],
+      "rotation": [
+        0,
+        5.32,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5c6675"
+    },
+    {
+      "id": "p_muda45",
+      "type": "barrel",
+      "position": [
+        26.56,
+        0.8,
+        -13.94
+      ],
+      "rotation": [
+        0,
+        5.8,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#8a5a2a"
+    },
+    {
+      "id": "p_muda46",
+      "type": "platform",
+      "position": [
+        0,
+        0.5,
+        -12
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1.6,
+        1,
+        1.6
+      ],
+      "color": "#414a58"
+    },
+    {
+      "id": "p_muda47",
+      "type": "ramp",
+      "position": [
+        7.5,
+        1,
+        -12
+      ],
+      "rotation": [
+        0,
+        -1.57,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#4a5462"
+    },
+    {
+      "id": "p_muda48",
+      "type": "tower",
+      "position": [
+        -36,
+        6,
+        10
+      ],
+      "rotation": [
+        0,
+        0.3,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#333b47"
+    },
+    {
+      "id": "p_muda49",
+      "type": "tower",
+      "position": [
+        36,
+        6,
+        -10
+      ],
+      "rotation": [
+        0,
+        -0.4,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#333b47"
+    },
+    {
+      "id": "p_muda50",
+      "type": "antenna",
+      "position": [
+        -36,
+        7,
+        10
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b7280"
+    },
+    {
+      "id": "p_muda51",
+      "type": "antenna",
+      "position": [
+        36,
+        7,
+        -10
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b7280"
+    },
+    {
+      "id": "p_muda52",
+      "type": "lamp",
+      "position": [
+        34.08,
+        2.5,
+        14.41
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#ffb765"
+    },
+    {
+      "id": "p_muda53",
+      "type": "lamp",
+      "position": [
+        13.91,
+        2.5,
+        34.29
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#ffb765"
+    },
+    {
+      "id": "p_muda54",
+      "type": "lamp",
+      "position": [
+        -14.41,
+        2.5,
+        34.08
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#ffb765"
+    },
+    {
+      "id": "p_muda55",
+      "type": "lamp",
+      "position": [
+        -34.29,
+        2.5,
+        13.91
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#ffb765"
+    },
+    {
+      "id": "p_muda56",
+      "type": "lamp",
+      "position": [
+        -34.08,
+        2.5,
+        -14.41
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#ffb765"
+    },
+    {
+      "id": "p_muda57",
+      "type": "lamp",
+      "position": [
+        -13.91,
+        2.5,
+        -34.29
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#ffb765"
+    },
+    {
+      "id": "p_muda58",
+      "type": "lamp",
+      "position": [
+        14.41,
+        2.5,
+        -34.08
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#ffb765"
+    },
+    {
+      "id": "p_muda59",
+      "type": "lamp",
+      "position": [
+        34.29,
+        2.5,
+        -13.91
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#ffb765"
+    },
+    {
+      "id": "p_mwk9141",
+      "type": "container",
+      "position": [
+        22.38,
+        1.3,
+        0.07
+      ],
+      "rotation": [
+        0,
+        -1.574113873049517,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b4a2f"
+    },
+    {
+      "id": "p_mwk9142",
+      "type": "container",
+      "position": [
+        17.46,
+        1.3,
+        12.42
+      ],
+      "rotation": [
+        0,
+        -2.189066682698317,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#2f5a6b"
+    },
+    {
+      "id": "p_mwk9143",
+      "type": "container",
+      "position": [
+        6.72,
+        1.3,
+        20.64
+      ],
+      "rotation": [
+        0,
+        -2.8267238255509803,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5a2f3f"
+    },
+    {
+      "id": "p_mwk9144",
+      "type": "container",
+      "position": [
+        -6.59,
+        1.3,
+        20.98
+      ],
+      "rotation": [
+        0,
+        2.837302536131758,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b4a2f"
+    },
+    {
+      "id": "p_mwk9145",
+      "type": "container",
+      "position": [
+        -17.56,
+        1.3,
+        12.77
+      ],
+      "rotation": [
+        0,
+        2.1994846788600655,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#2f5a6b"
+    },
+    {
+      "id": "p_mwk9146",
+      "type": "container",
+      "position": [
+        -22.11,
+        1.3,
+        -0.25
+      ],
+      "rotation": [
+        0,
+        1.5593600721515908,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5a2f3f"
+    },
+    {
+      "id": "p_mwk9147",
+      "type": "container",
+      "position": [
+        -17.53,
+        1.3,
+        -12.98
+      ],
+      "rotation": [
+        0,
+        0.9333807549516542,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b4a2f"
+    },
+    {
+      "id": "p_mwk9148",
+      "type": "container",
+      "position": [
+        -7.13,
+        1.3,
+        -20.65
+      ],
+      "rotation": [
+        0,
+        0.33246583150188974,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#2f5a6b"
+    },
+    {
+      "id": "p_mwk9149",
+      "type": "container",
+      "position": [
+        6.76,
+        1.3,
+        -20.72
+      ],
+      "rotation": [
+        0,
+        -0.31537753542017544,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#5a2f3f"
+    },
+    {
+      "id": "p_mwk9150",
+      "type": "container",
+      "position": [
+        17.94,
+        1.3,
+        -13.28
+      ],
+      "rotation": [
+        0,
+        -0.9335970905441335,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#6b4a2f"
+    },
+    {
+      "id": "p_myoa231",
+      "type": "platform",
+      "position": [
+        -18,
+        0.5,
+        -18
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1.5,
+        1.4,
+        1.5
+      ],
+      "color": "#414a58"
+    },
+    {
+      "id": "p_myoa232",
+      "type": "platform",
+      "position": [
+        18,
+        0.5,
+        18
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1.5,
+        1.4,
+        1.5
+      ],
+      "color": "#414a58"
+    },
+    {
+      "id": "p_myoa233",
+      "type": "ramp",
+      "position": [
+        -11,
+        0.9,
+        -18
+      ],
+      "rotation": [
+        0,
+        -1.5707963267948966,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#4a5462"
+    },
+    {
+      "id": "p_myoa234",
+      "type": "ramp",
+      "position": [
+        11,
+        0.9,
+        18
+      ],
+      "rotation": [
+        0,
+        1.5707963267948966,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "color": "#4a5462"
+    }
+  ],
+  "spawns": [
+    {
+      "id": "e_muda60",
+      "type": "grunt",
+      "position": [
+        28.89,
+        0,
+        19.76
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_muda61",
+      "type": "rusher",
+      "position": [
+        11.67,
+        0,
+        27.64
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_muda62",
+      "type": "sniper",
+      "position": [
+        -4.27,
+        0,
+        24.63
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_muda63",
+      "type": "grunt",
+      "position": [
+        -23.67,
+        0,
+        25.78
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_mudb64",
+      "type": "grunt",
+      "position": [
+        -29.02,
+        0,
+        7.62
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_mudb65",
+      "type": "rusher",
+      "position": [
+        -23.77,
+        0,
+        -7.73
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_mudb66",
+      "type": "sniper",
+      "position": [
+        -22.15,
+        0,
+        -27.1
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_mudb67",
+      "type": "grunt",
+      "position": [
+        -3.41,
+        0,
+        -29.81
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_mudb68",
+      "type": "grunt",
+      "position": [
+        11.04,
+        0,
+        -22.43
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_mudb69",
+      "type": "rusher",
+      "position": [
+        29.98,
+        0,
+        -18.07
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_mudb70",
+      "type": "sniper",
+      "position": [
+        29.99,
+        0,
+        0.86
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myog319",
+      "type": "sniper",
+      "position": [
+        -18,
+        0,
+        -18
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myog320",
+      "type": "sniper",
+      "position": [
+        18,
+        0,
+        18
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myol407",
+      "type": "rusher",
+      "position": [
+        35.06,
+        0,
+        -0.95
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myol408",
+      "type": "grunt",
+      "position": [
+        27.75,
+        0,
+        23.21
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myol409",
+      "type": "grunt",
+      "position": [
+        7.06,
+        0,
+        34.24
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myol410",
+      "type": "rusher",
+      "position": [
+        -17.87,
+        0,
+        29.91
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myol411",
+      "type": "grunt",
+      "position": [
+        -33.11,
+        0,
+        10.33
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myol412",
+      "type": "grunt",
+      "position": [
+        -32.89,
+        0,
+        -12.44
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myol413",
+      "type": "rusher",
+      "position": [
+        -16.67,
+        0,
+        -32.48
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myol414",
+      "type": "grunt",
+      "position": [
+        6.6,
+        0,
+        -35.84
+      ],
+      "patrol": null
+    },
+    {
+      "id": "e_myol415",
+      "type": "grunt",
+      "position": [
+        27.58,
+        0,
+        -23.21
+      ],
+      "patrol": null
+    }
+  ],
+  "gameplay": {
+    "player": {
+      "maxHealth": 100,
+      "moveSpeed": 7.8,
+      "sprintMultiplier": 1.55,
+      "jumpVelocity": 6.4,
+      "gravity": 22,
+      "damage": 30,
+      "fireRate": 0.085,
+      "magazine": 36,
+      "reloadTime": 1.35,
+      "spread": 0.014,
+      "range": 220,
+      "headshotMultiplier": 2.4
+    },
+    "enemies": {
+      "globalHealthScale": 1.24,
+      "globalSpeedScale": 1.13,
+      "globalDamageScale": 1.26,
+      "visionRange": 78,
+      "attackRangeFudge": 1,
+      "aggression": 0.85
+    },
+    "waves": {
+      "enabled": true,
+      "count": 5,
+      "perWaveBase": 6,
+      "perWaveGrowth": 2,
+      "healthScalePerWave": 1.18,
+      "delay": 3.5
+    }
+  },
+  "playerStart": [
+    0,
+    1.7,
+    33
+  ],
+  "playerYaw": 0
+}

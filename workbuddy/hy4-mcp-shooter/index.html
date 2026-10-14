@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS BREACH · MCP 驱动游戏引擎 — 交付说明</title>
+<style>
+  :root{
+    --bg:#0b0d12; --bg2:#11141c; --card:#161a24; --card2:#1c212d;
+    --line:#262c3a; --line2:#333b4d;
+    --amber:#ffb765; --amber2:#ff9a3c; --gold:#f5c26b;
+    --txt:#e8ebf2; --txt2:#a8b0c0; --txt3:#6f7789;
+    --green:#7dd694; --red:#ff6b5e; --blue:#7aa8ff; --violet:#b08cff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+    line-height:1.75; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 32px 96px}
+
+  /* ---------- Hero ---------- */
+  header{
+    position:relative; padding:88px 0 64px; margin-bottom:56px;
+    border-bottom:1px solid var(--line); overflow:hidden;
+  }
+  header::before{
+    content:""; position:absolute; inset:-40% -10% auto -10%; height:520px;
+    background:radial-gradient(ellipse at 50% 0%,rgba(255,154,60,.20),transparent 62%);
+    pointer-events:none;
+  }
+  .kicker{
+    display:inline-flex;align-items:center;gap:9px;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--amber);border:1px solid rgba(255,183,101,.32);
+    background:rgba(255,154,60,.07);
+    padding:6px 14px;border-radius:999px;margin-bottom:26px;
+  }
+  .kicker i{width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber);font-style:normal}
+  h1{
+    font-size:clamp(38px,5.4vw,62px);line-height:1.08;font-weight:800;letter-spacing:-.02em;
+    background:linear-gradient(100deg,#fff 8%,var(--gold) 52%,var(--amber2) 92%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    margin-bottom:22px;
+  }
+  .lede{font-size:18px;color:var(--txt2);max-width:820px}
+  .lede b{color:var(--txt);font-weight:600}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+    font-size:14.5px;font-weight:600;padding:11px 22px;border-radius:10px;
+    border:1px solid var(--line2);color:var(--txt2);background:var(--card);
+    transition:all .2s;
+  }
+  .btn:hover{border-color:var(--amber);color:var(--txt);transform:translateY(-1px)}
+  .btn.primary{
+    background:linear-gradient(135deg,var(--amber2),var(--gold));color:#1a1207;
+    border-color:transparent;box-shadow:0 8px 26px -10px rgba(255,154,60,.7);
+  }
+  .btn.primary:hover{box-shadow:0 12px 32px -10px rgba(255,154,60,.9);color:#1a1207}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}
+  .tag{
+    font-size:12.5px;color:var(--txt2);background:var(--card2);
+    border:1px solid var(--line);border-radius:8px;padding:5px 12px;
+  }
+  .tag b{color:var(--amber);font-weight:600}
+
+  /* ---------- Section ---------- */
+  section{margin-bottom:76px;scroll-margin-top:32px}
+  .shead{display:flex;align-items:baseline;gap:16px;margin-bottom:10px}
+  .num{
+    font-size:13px;font-weight:700;color:var(--amber);letter-spacing:.1em;
+    font-variant-numeric:tabular-nums;padding-top:4px;
+  }
+  h2{font-size:27px;font-weight:700;letter-spacing:-.01em}
+  .sdesc{color:var(--txt2);font-size:15.5px;margin-bottom:30px;max-width:900px}
+
+  /* ---------- Flow ---------- */
+  .flow{
+    background:linear-gradient(180deg,var(--card),var(--bg2));
+    border:1px solid var(--line);border-radius:16px;padding:30px 26px;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:13.5px;line-height:2.05;color:var(--txt2);overflow-x:auto;
+    white-space:pre;            /* ASCII 架构图靠这个保住对齐 */
+  }
+  /* 对话流程行较长，允许折行，否则要横向滚动 */
+  .flow.chat{white-space:pre-wrap;line-height:1.95;font-size:13px}
+  .flow .hl{color:var(--amber)}
+  .flow .hl2{color:var(--green)}
+  .flow .hl3{color:var(--blue)}
+  .flow .cm{color:var(--txt3)}
+  .flow .v{color:var(--violet)}
+
+  /* ---------- Grid ---------- */
+  .grid{display:grid;gap:18px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:900px){.g2,.g3{grid-template-columns:1fr}}
+
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:22px 22px 24px;position:relative;overflow:hidden;
+    transition:border-color .28s,transform .28s,box-shadow .28s;
+  }
+  .card::after{
+    content:"";position:absolute;inset:0;border-radius:14px;pointer-events:none;
+    background:radial-gradient(320px circle at 50% 0%,rgba(255,183,101,.10),transparent 70%);
+    opacity:0;transition:opacity .28s;
+  }
+  .card:hover{border-color:rgba(255,183,101,.42);transform:translateY(-3px);
+    box-shadow:0 16px 40px -18px rgba(255,154,60,.42)}
+  .card:hover::after{opacity:1}
+  .card h3{font-size:16.5px;font-weight:650;margin-bottom:9px;display:flex;align-items:center;gap:9px}
+  .card h3 .dot{width:7px;height:7px;border-radius:2px;background:var(--amber);box-shadow:0 0 9px var(--amber)}
+  .card p{font-size:14px;color:var(--txt2)}
+  .card p+p{margin-top:9px}
+  .card code{
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;
+    background:#0c0f16;border:1px solid var(--line);border-radius:5px;
+    padding:1.5px 6px;color:var(--gold);
+  }
+  .card ul{list-style:none;font-size:14px;color:var(--txt2);margin-top:10px}
+  .card li{padding-left:17px;position:relative;margin-bottom:5px}
+  .card li::before{content:"▸";position:absolute;left:0;color:var(--amber);font-size:11px}
+
+  /* ---------- Compare ---------- */
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.cmp{grid-template-columns:1fr}}
+  .shot{
+    background:var(--card);border:1px solid var(--line);border-radius:13px;
+    overflow:hidden;transition:border-color .28s,box-shadow .28s;
+  }
+  .shot:hover{border-color:rgba(255,183,101,.4);box-shadow:0 14px 36px -18px rgba(255,154,60,.45)}
+  .shot img{width:100%;display:block;aspect-ratio:16/9;object-fit:cover;background:#000}
+  .shot .cap{padding:13px 16px 15px;display:flex;align-items:flex-start;gap:11px}
+  .shot .badge{
+    flex:0 0 auto;font-size:10.5px;font-weight:700;letter-spacing:.06em;
+    padding:3px 8px;border-radius:5px;margin-top:2px;
+  }
+  .b-before{background:rgba(255,107,94,.16);color:var(--red);border:1px solid rgba(255,107,94,.32)}
+  .b-after{background:rgba(125,214,148,.14);color:var(--green);border:1px solid rgba(125,214,148,.3)}
+  .b-neutral{background:rgba(122,168,255,.14);color:var(--blue);border:1px solid rgba(122,168,255,.3)}
+  .b-art{background:rgba(176,140,255,.14);color:var(--violet);border:1px solid rgba(176,140,255,.3)}
+  .shot .t{font-size:13.5px;font-weight:600}
+  .shot .d{font-size:12.5px;color:var(--txt3);margin-top:3px;line-height:1.6}
+
+  /* ---------- Table ---------- */
+  .tbl{width:100%;border-collapse:collapse;font-size:14px;
+    background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .tbl th{
+    background:#12161f;text-align:left;padding:13px 16px;font-weight:600;
+    color:var(--amber);font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;
+    border-bottom:1px solid var(--line);
+  }
+  .tbl td{padding:12px 16px;border-bottom:1px solid #1d2230;color:var(--txt2);vertical-align:top}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl tr:hover td{background:#141822}
+  .tbl td b{color:var(--txt);font-weight:600}
+  .tbl code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;color:var(--gold)}
+  .wrap-tbl{overflow-x:auto;border-radius:12px}
+
+  /* ---------- Callout ---------- */
+  .note{
+    border-left:3px solid var(--amber);background:rgba(255,154,60,.06);
+    border-radius:0 11px 11px 0;padding:17px 22px;font-size:14.5px;color:var(--txt2);
+  }
+  .note b{color:var(--gold)}
+  .note+.note{margin-top:14px}
+
+  /* ---------- Result banner ---------- */
+  .ok{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    background:linear-gradient(90deg,rgba(125,214,148,.11),rgba(125,214,148,.02));
+    border:1px solid rgba(125,214,148,.28);border-radius:12px;padding:16px 22px;margin-bottom:30px;
+  }
+  .ok .ic{font-size:19px}
+  .ok .tx{font-size:14.5px;color:#cfe8d6}
+  .ok .tx b{color:var(--green)}
+
+  footer{border-top:1px solid var(--line);padding-top:26px;color:var(--txt3);font-size:13px}
+  footer code{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--txt2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker"><i></i>MCP · Three.js · Agent 驱动</div>
+  <h1>NEXUS BREACH<br>MCP 驱动的射击游戏</h1>
+  <p class="lede">
+    复现腾讯 Hy4 preview 官方 Demo「通过 MCP 接入 Unreal 5 引擎，纯对话从零做射击游戏」的同类思路，
+    但把引擎换成 <b>Three.js</b>。<br>
+    <b>AI 不写一行游戏代码，只调工具。</b>
+  </p>
+  <div class="meta">
+    <span class="tag">MCP 工具 <b>19 个</b></span>
+    <span class="tag">代码 <b>~5000 行</b></span>
+    <span class="tag">美术预设 <b>6 套</b></span>
+    <span class="tag">道具类型 <b>12 种</b></span>
+    <span class="tag">敌人类别 <b>4 种</b></span>
+    <span class="tag">外部资产 <b>0</b></span>
+    <span class="tag">冒烟断言 <b>7/7 通过</b></span>
+  </div>
+  <div class="cta">
+    <a class="btn primary" href="game/index.html">▶ 直接打开游戏</a>
+    <a class="btn" href="README.md">完整技术文档</a>
+    <a class="btn" href="research/Hy4-preview-MCP-UE5-调研笔记.md">调研笔记</a>
+  </div>
+</header>
+
+<!-- 01 一句话说清 -->
+<section>
+  <div class="shead"><span class="num">01</span><h2>它到底做了什么</h2></div>
+  <p class="sdesc">不是「生成代码然后你去看」，而是 AI 通过工具调用，实时改变一个<b>正在运行</b>的 3D 游戏。</p>
+  <div class="flow chat">
+<span class="cm">// Agent 说人话，不写代码</span>
+AI  <span class="hl">"生成一个夜间工业港区关卡，掩体密度 1.3，难度 1.4"</span>
+    <span class="cm">└─</span> <span class="hl2">build_arena</span> <span class="v">{preset:"night", style:"industrial", density:1.3, difficulty:1.4}</span>
+    <span class="cm">└─▶</span> 浏览器里的游戏：<b>59 个道具 · 11 个敌人 · 夜景光照</b> —— 立刻变
+
+AI  <span class="hl">"雾太浓了，看不清远处高台"</span>
+    <span class="cm">└─</span> <span class="hl2">set_environment</span> <span class="v">{fogDensity:0.013, sunElevation:9, exposure:1.35}</span>
+    <span class="cm">└─▶</span> 雾浓度实时下降，太阳压到地平线，泛光重新配平
+
+AI  <span class="hl">"跑一次试玩看看难度合不合理"</span>
+    <span class="cm">└─</span> <span class="hl2">start_simulation</span> <span class="cm">→</span> <span class="hl2">run_playtest</span> <span class="v">{seconds:10}</span>
+    <span class="cm">└─▶</span> <span class="hl3">{ kills:3, accuracy:29%, damageTaken:0, hpRemaining:100, verdict:"数值健康" }</span>
+  </div>
+</section>
+
+<!-- 02 对比 -->
+<section>
+  <div class="shead"><span class="num">02</span><h2>过程存证：AI 到底改了什么</h2></div>
+  <p class="sdesc">
+    每走一步工具调用就截一次真实渲染画面。这让「AI 改了什么」变成肉眼可核对的对比，
+    而不是一句自述 —— 也正是靠这套回传，调试期抓出了好几个「代码看着没问题」的隐藏 Bug。
+  </p>
+  <div class="cmp">
+    <div class="shot">
+      <img src="demo/02-arena-generated.png" alt="build_arena 生成后">
+      <div class="cap">
+        <span class="badge b-before">生成后</span>
+        <div>
+          <div class="t">build_arena 一次调用出整关</div>
+          <div class="d">59 道具 / 11 敌人 / 夜间预设 —— 但太暗，掩体轮廓读不出来</div>
+        </div>
+      </div>
+    </div>
+    <div class="shot">
+      <img src="demo/05-env-tuned.png" alt="环境调优后">
+      <div class="cap">
+        <span class="badge b-after">调优后</span>
+        <div>
+          <div class="t">AI 自己判断「看不清」并修正</div>
+          <div class="d">降雾 · 压太阳制造地平线光 · 抬环境光 —— 层次回来了</div>
+        </div>
+      </div>
+    </div>
+    <div class="shot">
+      <img src="demo/06-vertical-check.png" alt="垂直空间检查">
+      <div class="cap">
+        <span class="badge b-neutral">自检视角</span>
+        <div>
+          <div class="t">set_viewpoint 飞到高台高度回看</div>
+          <div class="d">没有这个工具，AI 只能看到玩家站的地方，无法审图</div>
+        </div>
+      </div>
+    </div>
+    <div class="shot">
+      <img src="demo/07-first-person.png" alt="第一人称终态">
+      <div class="cap">
+        <span class="badge b-after">最终态</span>
+        <div>
+          <div class="t">切回第一人称确认掩体尺度</div>
+          <div class="d">月球 · 塔楼灯带 · 灯柱光池 · 敌人发光眼球 —— 夜战氛围成立</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 架构 -->
+<section>
+  <div class="shead"><span class="num">03</span><h2>架构：两条通道，一份清单</h2></div>
+  <p class="sdesc">整套设计对齐 UE5.8 官方 UnrealMCP 插件 —— 只是把「编辑器进程内的 HTTP Server」换成「独立进程 + WebSocket」。</p>
+  <div class="flow">
+┌─────────────────────────────────────────────────────────┐
+│  <span class="hl">Agent</span>（Hy4 preview / Claude / 任意 MCP 客户端）          │
+│  "做一个夜间工业港区的射击关卡"                            │
+└──────────────────────┬──────────────────────────────────┘
+                       │  <span class="hl2">MCP · JSON-RPC 2.0 · stdio</span>
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│  <span class="hl">server/mcp-server.js</span>                                  │
+│  ├─ 19 个 MCP 工具（zod schema）                          │
+│  └─ WebSocket Server <span class="hl3">:8787</span>                                 │
+└──────────────────────┬──────────────────────────────────┘
+                       │  （进程内）
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│  <span class="hl">server/level-store.js</span>   ← 权威状态（对应 UE 的 .umap）   │
+│  ├─ <span class="hl2">Scene Manifest</span>（纯 JSON，单一事实来源）                │
+│  ├─ 撤销/重做历史（60 步）                                │
+│  └─ 变更分类：env / actors / gameplay / full              │
+└──────────────────────┬──────────────────────────────────┘
+                       │  WS 下行 <span class="hl3">level:full / :env / :actors / :gameplay</span>
+                       │  WS 上行 <span class="hl3">telemetry / capture:result / playtest:result</span>
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│  <span class="hl">game/src/main.js</span>（Three.js r160）                     │
+│  ├─ scene-builder.js  清单 → 3D 场景图 + 碰撞盒 + 斜坡      │
+│  ├─ player.js         第一人称控制器（AABB + 斜坡吸附）     │
+│  ├─ enemy.js          敌人 FSM（patrol/chase/attack）      │
+│  └─ bridge.js         WebSocket 客户端（自动重连）          │
+└─────────────────────────────────────────────────────────┘
+  </div>
+
+  <div style="margin-top:22px" class="wrap-tbl">
+  <table class="tbl">
+    <thead><tr><th style="width:38%">UE 5.8 官方方案</th><th>本实现</th></tr></thead>
+    <tbody>
+      <tr><td>编辑器进程内 HTTP Server <code>:8000/mcp</code></td><td>独立进程 stdio + WS <code>:8787</code></td></tr>
+      <tr><td><code>UToolsetDefinition</code> / <code>unreal.ToolsetDefinition</code></td><td>MCP tools（zod schema）</td></tr>
+      <tr><td><code>.umap</code> 关卡资产</td><td><b>Scene Manifest</b> JSON</td></tr>
+      <tr><td><code>start_play_in_editor</code> / <code>stop_play_in_editor</code></td><td><code>start_simulation</code> / <code>stop_simulation</code></td></tr>
+      <tr><td><code>get_editor_logs</code>（读引擎日志找错误）</td><td><code>run_playtest</code>（FPS/命中率/受伤 + 难度判定）</td></tr>
+      <tr><td>Viewport Capture</td><td><code>capture_viewport</code>（JPEG base64 回传）</td></tr>
+      <tr><td>Viewport Camera 控制</td><td><code>set_viewpoint</code>（位置/朝向/FOV，可悬浮取景）</td></tr>
+      <tr><td>Toolset Registry 自动包装</td><td>手写工具表（19 个，可控）</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- 04 关键决策 -->
+<section>
+  <div class="shead"><span class="num">04</span><h2>四个关键设计决策</h2></div>
+  <p class="sdesc">其中第 1 条是地基，第 3 条是「能不能真的跑通」的分水岭。</p>
+  <div class="grid g2">
+    <div class="card">
+      <h3><span class="dot"></span>① AI 编辑「场景清单」，而不是写代码</h3>
+      <p>Scene Manifest 是一份纯 JSON —— 环境、道具、敌人、玩法数值全在里面。对应 UE 的 <code>.umap</code>。</p>
+      <ul>
+        <li>可序列化 → 存盘 / diff / 版本控制</li>
+        <li>撤销重做天然支持（不像生成代码）</li>
+        <li>非法状态被 <code>sanitizeLevel()</code> 兜住，不让游戏崩</li>
+        <li>人工审查一眼看懂，不用读几百行</li>
+        <li>同 seed 同结果，可复现</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="dot"></span>② 工具分两层：原子 + 语义</h3>
+      <p>底层要精确可控，高层要一句出效果。两层都给，Agent 才不会退化成一堆坐标运算。</p>
+      <p><b>原子层</b>：<code>place_props</code> 传 10 组精确坐标。</p>
+      <p><b>语义层</b>：<code>{pattern:"ring", count:10, radius:22, faceCenter:true, jitter:1.5}</code> —— 在中心围一圈集装箱、朝向中心、带随机抖动。</p>
+      <p>最高层 <code>build_arena</code> 一次调用生成完整关卡。这正是官方 Demo 里「从零做一个射击游戏」对应的那个工具。</p>
+    </div>
+    <div class="card">
+      <h3><span class="dot"></span>③ 给 AI 装眼睛和手 ← 最不能省</h3>
+      <p>没有验证闭环，AI 只是在盲改。</p>
+      <ul>
+        <li><code>capture_viewport</code> → 回传 JPEG，AI 真的能看到画面</li>
+        <li><code>set_viewpoint</code> → 能飞到任意高度/角度的「审图」能力</li>
+        <li><code>run_playtest</code> → 机器人接管 N 秒，回报击杀/命中率/受伤，并给出难度判定</li>
+      </ul>
+      <p>三者合起来才形成 <b>执行 → 观察 → 修正</b> 的闭环。UE 侧对应 <code>start_play_in_editor</code> + <code>get_editor_logs</code>。</p>
+    </div>
+    <div class="card">
+      <h3><span class="dot"></span>④ 按变更类型增量下发</h3>
+      <p>store 给每次变更打类别，浏览器走不同应用路径：</p>
+      <ul>
+        <li><code>env</code> → 只换光照/雾/色调</li>
+        <li><code>actors</code> → 重建道具敌人，<b>但保留玩家血量</b></li>
+        <li><code>gameplay</code> → 只更新数值，完全不碰场景</li>
+        <li><code>full</code> → 整体重建</li>
+      </ul>
+      <p>好处：调数值时玩家不被打断，改美术时不卡顿。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 05 验证 -->
+<section>
+  <div class="shead"><span class="num">05</span><h2>验证记录</h2></div>
+  <div class="ok">
+    <span class="ic">✓</span>
+    <span class="tx">三层验证全部通过：语法检查 · 端到端冒烟 <b>7/7</b> · 视觉验收 <b>10 机位</b> · 完整演示 <b>15 步零失败</b></span>
+  </div>
+  <p class="sdesc">
+    截图回传不只是「交付好看」，它是主要调试手段。下面这些都是在「代码看起来没问题」的情况下
+    靠比对画面才发现的：
+  </p>
+  <div class="wrap-tbl">
+  <table class="tbl">
+    <thead><tr><th style="width:4%">#</th><th style="width:26%">症状</th><th style="width:38%">根因</th><th>修法</th></tr></thead>
+    <tbody>
+      <tr><td><b>1</b></td><td>所有截图一律超时</td><td>浏览器端 <code>_emit</code> 没把请求 id 透给处理器，回包发不出去，Server 干等 15s</td><td>透传 id；capture 加 try/catch <b>回报错误而不是静默超时</b></td></tr>
+      <tr><td><b>2</b></td><td>所有机位图长得一模一样</td><td>游戏没进运行态（<code>running=false</code>），<code>player.update()</code> 整段被跳过，相机卡死在原点</td><td>加 <code>?autostart=1</code> + 把 start/stop PIE 做成 MCP 工具</td></tr>
+      <tr><td><b>3</b></td><td>高空俯瞰能看穿地面边缘，关卡像悬浮板子</td><td>地面平面只有 <code>arenaSize+120</code>，从 60 米高往下看直接越过边界</td><td>地面放大到 <code>arenaSize×8</code>，配合指数雾自然淡出</td></tr>
+      <tr><td><b>4</b></td><td>黄昏地面死黑、网格线看不见</td><td>太阳强度与环境光过低，且相机正对太阳（逆光）</td><td>提亮地表 albedo + 环境光系数 0.55→0.95</td></tr>
+      <tr><td><b>5</b></td><td>灯泡糊成一大团白光斑</td><td>自发光 <code>4.5</code> + bloom threshold <code>0.85</code>，HDR 值远超声阈值</td><td>自发光降到 1.6、阈值提到 1.0、radius 收到 0.4；改用 PointLight 照亮地面</td></tr>
+      <tr><td><b>6</b></td><td>夜景几乎全黑，只看见灯</td><td>环境光不足 + 地表 albedo 过暗，掩体轮廓不可辨 → 玩法崩掉</td><td>环境光提到 1.35；把平行光当「月光」用，保住背光面体积感</td></tr>
+      <tr><td><b>7</b></td><td>出生点正前方 4 米杵着灯柱</td><td>灯柱摆在 <code>[0,·,30]</code>，而出生点在 <code>z=34</code></td><td>灯柱挪到 <code>[-13,·,31]</code></td></tr>
+      <tr><td><b>8</b></td><td>玩家一睁眼背对竞技场</td><td><code>Player</code> 构造函数硬编码 <code>yaw=π</code>，出生点在 +Z 侧</td><td>清单加 <code>playerYaw</code> 字段，<code>respawn()</code> 应用它</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note" style="margin-top:22px">
+    <b>第 1 条是最值得记住的教训</b>：MCP 工具遇到异常<b>必须回报错误</b>，绝不能静默超时 ——
+    否则 Agent 侧只能看到「超时」，完全无法判断是渲染管线坏了、还是浏览器压根没连上。
+    工具的错误语义设计，本身就是 Agent 可用性的一部分。
+  </div>
+</section>
+
+<!-- 06 美术 -->
+<section>
+  <div class="shead"><span class="num">06</span><h2>六套美术预设 · 十机位验收</h2></div>
+  <p class="sdesc">环境美术全部由参数驱动：天空三段渐变 + 太阳方位/高度 + 雾色雾浓度 + 曝光 + 泛光。切换预设就是换一组数。</p>
+  <div class="cmp">
+    <div class="shot">
+      <img src="shots/dusk.png" alt="黄昏">
+      <div class="cap"><span class="badge b-art">dusk</span><div>
+        <div class="t">黄昏 · 低角度暖阳</div>
+        <div class="d">长投影 + 网格地面 + 灯柱光池</div></div></div>
+    </div>
+    <div class="shot">
+      <img src="shots/sun.png" alt="逆光日落">
+      <div class="cap"><span class="badge b-art">逆光</span><div>
+        <div class="t">正对太阳 · 剪影与大气光晕</div>
+        <div class="d">塔楼天线、集装箱、油桶全部逆光成剪影</div></div></div>
+    </div>
+    <div class="shot">
+      <img src="shots/night.png" alt="夜间">
+      <div class="cap"><span class="badge b-art">night</span><div>
+        <div class="t">夜景 · 暗但有层次</div>
+        <div class="d">月球光晕 · 塔楼灯带 · 灯柱照亮地面</div></div></div>
+    </div>
+    <div class="shot">
+      <img src="shots/aerial.png" alt="俯瞰布局">
+      <div class="cap"><span class="badge b-neutral">俯瞰审图</span><div>
+        <div class="t">关卡布局一目了然</div>
+        <div class="d">四面围墙 · 对角双塔 · 中央高台 · 中场掩体 · 敌人分布</div></div></div>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:20px">
+    <div class="note">
+      <b>美术铁律 1</b>：地表 albedo 必须明显低于道具。地面法线朝上吃满半球天光，
+      道具侧面只吃到掠射角的光 —— 两者 albedo 接近时，地面反而比道具亮，
+      所有箱体塔楼会退化成黑剪影，场景彻底失去体积感。
+    </div>
+    <div class="note">
+      <b>美术铁律 2</b>：<code>emissiveIntensity</code> 超过 1.0 就必须配 bloom threshold。
+      阈值定低了整个画面会糊上层雾，暗部失去层次；自发光过高则被拉成一团光斑，
+      渲染出「发光的马赛克」而不是「灯泡」。
+    </div>
+  </div>
+</section>
+
+<!-- 07 一键跑 -->
+<section>
+  <div class="shead"><span class="num">07</span><h2>怎么跑起来</h2></div>
+  <div class="grid g3">
+    <div class="card">
+      <h3><span class="dot"></span>完整演示</h3>
+      <p><code>node tools/run-demo.js</code></p>
+      <p>自动起服务 + 开浏览器，走完 15 步建关，每步截图存证，最后导出成品关卡 JSON。</p>
+    </div>
+    <div class="card">
+      <h3><span class="dot"></span>端到端自检</h3>
+      <p><code>node tools/smoke-test.js</code></p>
+      <p>启动 → 渲染 → 射击 → MCP 改场景 → 截图 → 试玩 → 撤销，7 项断言。</p>
+    </div>
+    <div class="card">
+      <h3><span class="dot"></span>视觉验收</h3>
+      <p><code>node tools/gallery.js</code></p>
+      <p>十个机位出图，覆盖六套美术预设 + 俯瞰审图 + 第一人称。</p>
+    </div>
+  </div>
+  <div class="note" style="margin-top:20px">
+    接进真实 AI 客户端：把 <code>server/mcp-server.js</code> 注册到 <code>~/.workbuddy/mcp.json</code>，
+    然后在连接器管理页右上角「自定义连接器」点「信任」启用。之后直接说——
+    <b>「帮我做一个炼狱风格的废墟关卡，掩体稀疏一点，难度拉到 2.5，然后截图看看效果，再跑一次试玩确认难度。」</b>
+    Agent 会自己走完 <code>build_arena → capture_viewport → set_environment → run_playtest</code> 的闭环。
+  </div>
+</section>
+
+<!-- 08 迁移 -->
+<section>
+  <div class="shead"><span class="num">08</span><h2>能搬到哪些项目</h2></div>
+  <div class="wrap-tbl">
+  <table class="tbl">
+    <thead><tr><th style="width:20%">引擎</th><th style="width:16%">可行性</th><th>要点</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Three.js</b><br><span style="color:var(--txt3);font-size:12.5px">本仓库 / 3D 场景系列</span></td>
+        <td style="color:var(--green)">已验证</td>
+        <td>浏览器天生可远程驱动，WebSocket 直接通。换成程序化 3D 世界项目时，只需把清单字段从
+            <code>props</code> 换成 <code>terrain / landmarks / traffic</code> 即可。</td>
+      </tr>
+      <tr>
+        <td><b>Phaser 3</b><br><span style="color:var(--txt3);font-size:12.5px">TBOI 重制</span></td>
+        <td style="color:var(--green)">高</td>
+        <td>2D 但思路完全一致：清单字段换成 <code>tilemap / entities / spawnTable</code>，
+            监听 <code>level:*</code> 消息后 <code>scene.restart()</code> 重建。Phaser 重建成本几乎为零，热更新比 3D 还干净。</td>
+      </tr>
+      <tr>
+        <td><b>Godot 4</b><br><span style="color:var(--txt3);font-size:12.5px">Nodebuster</span></td>
+        <td style="color:var(--amber)">中</td>
+        <td>没有内置 MCP，推荐在 GDScript 里起 <code>WebSocketServer</code>，
+            <code>Node</code> 监听消息 → 操作 <code>SceneTree</code>，概念与本实现同构。
+            额外好处：Godot 的 <code>Resource</code> 系统天然可序列化，<code>.tres</code> 就是现成的场景清单。</td>
+      </tr>
+      <tr>
+        <td><b>UE 5.8+</b></td>
+        <td style="color:var(--blue)">官方已支持</td>
+        <td>直接启用内置 <code>UnrealMCP</code> 插件，端点 <code>127.0.0.1:8000/mcp</code>。
+            自定义能力靠 <code>UToolsetDefinition</code> 子类。注意仍是 Experimental，且仅 loopback、无认证。</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="grid g2" style="margin-top:20px">
+    <div class="note">
+      <b>通用移植四步</b><br>
+      ① 定义清单 —— 把可变状态抽成纯数据（JSON / Resource / ScriptableObject）<br>
+      ② 起本地服务 —— WS 或 HTTP，暴露给 MCP Server<br>
+      ③ 包工具 —— 底层原子 + 高层语义，两层都要<br>
+      ④ 加验证 —— 截图 + 自动跑测，让 AI 能自己看到结果
+    </div>
+    <div class="note">
+      <b>为什么值得做（对齐 Epic 的立场）</b><br>
+      State of Unreal 2026 明确表态「用 Claude、Gemini 或任何适合你的模型来构建」——
+      AI 层被定位为<b>可替换的基础设施</b>，而不是绑定某家模型厂商。<br>
+      同时要区分两件事：<b>MCP 增强开发者控制力</b>（社区欢迎）
+      vs <b>AI 直接生成美术资产</b>（社区强烈反弹）。本方案只做前者。
+    </div>
+  </div>
+</section>
+
+<footer>
+  调研笔记 · 架构说明 · 完整源码见 <code>hy4-mcp-shooter/README.md</code> 与
+  <code>research/Hy4-preview-MCP-UE5-调研笔记.md</code><br>
+  截图由 <code>tools/run-demo.js</code> / <code>tools/gallery.js</code> 经 MCP 的
+  <code>capture_viewport</code> 从无头浏览器实拍生成；低帧率是 SwiftShader 软件渲染所致，真实显卡上 60+。
+</footer>
+
+</div>
+</body>
+</html>
