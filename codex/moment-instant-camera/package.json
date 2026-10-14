@@ -1,0 +1,11 @@
+{
+  "name": "moment-instant-camera",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An offline, interactive instant camera in plain HTML, CSS and WebGL2.",
+  "scripts": {
+    "start": "node server.cjs",
+    "check": "node --check app.js && node --check renderer.js && node --check server.cjs",
+    "test": "node tests/core.test.cjs"
+  }
+}
