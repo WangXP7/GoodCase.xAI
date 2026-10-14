@@ -1,0 +1,289 @@
+{
+  "canvas": [
+    256,
+    256
+  ],
+  "frame_count": 10,
+  "durations_ms": [
+    80,
+    80,
+    80,
+    70,
+    70,
+    70,
+    80,
+    100,
+    80,
+    100
+  ],
+  "loop_duration_ms": 810,
+  "target_body_fill": "50%",
+  "foot_reference": "frame 01 individual boot centers",
+  "target_left_foot_x": 109.82,
+  "target_right_foot_x": 146.2,
+  "target_centerline_x": 128.01,
+  "target_baseline_y": 224,
+  "lower_body_warp_pivot_y": 178,
+  "max_left_foot_deviation_px": 1.75,
+  "max_right_foot_deviation_px": 1.54,
+  "max_either_foot_deviation_px": 1.75,
+  "all_individual_feet_within_2px": true,
+  "all_baselines_locked": true,
+  "all_inside_canvas": true,
+  "frame_10_exact_frame_01": true,
+  "gif_sha256": "F84BCAE90160A3EFA96CC9A6AB68CB3B8B8F5260503991A6622C1825720A0CCE",
+  "fixedfeet_check_gif_sha256": "4001784F225CF59DD4209E99924C320EB6D4EBFE541E68BC525AEDF7E794EAC6",
+  "contact_sheet_sha256": "D306E99E771E8028D428BE7F36C9D740135C537AC4820306C373BA28307734A2",
+  "frames": [
+    {
+      "frame": 1,
+      "duration_ms": 80,
+      "source_boot_centers_x": [
+        109.82,
+        146.2
+      ],
+      "boot_centers_x": [
+        109.82,
+        146.2
+      ],
+      "left_foot_deviation_px": 0.0,
+      "right_foot_deviation_px": 0.0,
+      "feet_center_x": 128.01,
+      "stance_width_px": 36.38,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        83,
+        97,
+        185,
+        224
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "DD08529583CBDE07CE17DCCE87EC6B19BF80832467E0F3A68F69D2654F42674B"
+    },
+    {
+      "frame": 2,
+      "duration_ms": 80,
+      "source_boot_centers_x": [
+        107.74,
+        148.7
+      ],
+      "boot_centers_x": [
+        108.84,
+        147.38
+      ],
+      "left_foot_deviation_px": -0.98,
+      "right_foot_deviation_px": 1.18,
+      "feet_center_x": 128.11,
+      "stance_width_px": 38.54,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        94,
+        99,
+        190,
+        224
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "5F7553078C37AE7FBE199FD91BDE35B420CDCEE92B3BFD37E735A76449A22618"
+    },
+    {
+      "frame": 3,
+      "duration_ms": 80,
+      "source_boot_centers_x": [
+        108.94,
+        148.02
+      ],
+      "boot_centers_x": [
+        109.36,
+        146.92
+      ],
+      "left_foot_deviation_px": -0.47,
+      "right_foot_deviation_px": 0.71,
+      "feet_center_x": 128.14,
+      "stance_width_px": 37.56,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        78,
+        98,
+        184,
+        224
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "473F793765AD6ED9C9CC6AFE4680E0AD4D8BC476251686D637087F75F092D476"
+    },
+    {
+      "frame": 4,
+      "duration_ms": 70,
+      "source_boot_centers_x": [
+        109.31,
+        147.1
+      ],
+      "boot_centers_x": [
+        109.11,
+        146.41
+      ],
+      "left_foot_deviation_px": -0.72,
+      "right_foot_deviation_px": 0.21,
+      "feet_center_x": 127.76,
+      "stance_width_px": 37.3,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        93,
+        82,
+        182,
+        224
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "EE424373A7CB525497BA7A694EC3E24FE6EF6ABF998BFD3AE13B7C547CCAE34E"
+    },
+    {
+      "frame": 5,
+      "duration_ms": 70,
+      "source_boot_centers_x": [
+        106.49,
+        148.97
+      ],
+      "boot_centers_x": [
+        108.3,
+        147.38
+      ],
+      "left_foot_deviation_px": -1.53,
+      "right_foot_deviation_px": 1.18,
+      "feet_center_x": 127.84,
+      "stance_width_px": 39.08,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        96,
+        111,
+        206,
+        224
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "0055F12723A9AFA1804755856C389A37E51182E19D743CA49DC2661EC69E5175"
+    },
+    {
+      "frame": 6,
+      "duration_ms": 70,
+      "source_boot_centers_x": [
+        107.92,
+        148.8
+      ],
+      "boot_centers_x": [
+        108.96,
+        147.45
+      ],
+      "left_foot_deviation_px": -0.86,
+      "right_foot_deviation_px": 1.24,
+      "feet_center_x": 128.2,
+      "stance_width_px": 38.49,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        98,
+        113,
+        192,
+        224
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "085C48BD8FFE617496F9905D259281340CB85D94131EBC827A5533262A955CB1"
+    },
+    {
+      "frame": 7,
+      "duration_ms": 80,
+      "source_boot_centers_x": [
+        106.26,
+        150.04
+      ],
+      "boot_centers_x": [
+        108.08,
+        147.74
+      ],
+      "left_foot_deviation_px": -1.75,
+      "right_foot_deviation_px": 1.54,
+      "feet_center_x": 127.91,
+      "stance_width_px": 39.67,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        96,
+        121,
+        204,
+        224
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "78813EA7FFD2A7D81C7FEA2644D254DF1472F9AA1482BDC403CE95DB13ECD005"
+    },
+    {
+      "frame": 8,
+      "duration_ms": 100,
+      "source_boot_centers_x": [
+        106.74,
+        149.9
+      ],
+      "boot_centers_x": [
+        108.73,
+        147.7
+      ],
+      "left_foot_deviation_px": -1.1,
+      "right_foot_deviation_px": 1.49,
+      "feet_center_x": 128.21,
+      "stance_width_px": 38.97,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        97,
+        126,
+        192,
+        228
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "49FE8A892AC4BC6C4E42A2C6F9A4E502E7B89AE2660C3F4166B83E03A62E23E8"
+    },
+    {
+      "frame": 9,
+      "duration_ms": 80,
+      "source_boot_centers_x": [
+        108.13,
+        147.1
+      ],
+      "boot_centers_x": [
+        109.17,
+        146.49
+      ],
+      "left_foot_deviation_px": -0.65,
+      "right_foot_deviation_px": 0.29,
+      "feet_center_x": 127.83,
+      "stance_width_px": 37.32,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        85,
+        107,
+        182,
+        224
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "A2D98747A43217D4C5DAA6BB9514FF7252BAF90313E1E715556B9DD2D5BEAEAA"
+    },
+    {
+      "frame": 10,
+      "duration_ms": 100,
+      "source_boot_centers_x": [
+        110.07,
+        145.05
+      ],
+      "boot_centers_x": [
+        109.82,
+        146.2
+      ],
+      "left_foot_deviation_px": 0.0,
+      "right_foot_deviation_px": 0.0,
+      "feet_center_x": 128.01,
+      "stance_width_px": 36.38,
+      "foot_baseline_y": 224,
+      "foreground_bbox": [
+        83,
+        97,
+        185,
+        224
+      ],
+      "inside_canvas": true,
+      "transparent_sha256": "DD08529583CBDE07CE17DCCE87EC6B19BF80832467E0F3A68F69D2654F42674B"
+    }
+  ]
+}

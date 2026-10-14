@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="三灯铆卫：原创像素铁甲小兵、定妆提示词与 ACT01 斜劈帧动画。">
+<title>三灯铆卫 · 像素帧动画 | GoodCase.xAI</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b0e14;color:#dfe5ee;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;line-height:1.7}a{color:#7aa2ff;text-underline-offset:4px}header,main,footer{max-width:1140px;margin:auto;padding:28px 24px}header{padding-top:42px;border-bottom:1px solid #1c2230}h1{font-size:clamp(26px,5vw,40px);margin:18px 0 8px}h1 b{color:#7aa2ff}h2{font-size:20px;margin:0 0 16px}p{color:#9ba7bd}small,.muted{color:#8b94a7}.tags{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}.tag{font-size:12px;padding:4px 12px;border:1px solid #2a3245;border-radius:999px;color:#9fb0d0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{background:#11151f;border:1px solid #1e2534;border-radius:12px;padding:22px;margin-bottom:18px}.stage{background:#e7e1d6;border-radius:8px;display:grid;place-items:center;overflow:hidden;min-height:280px}.stage img{width:256px;height:256px;image-rendering:pixelated;max-width:100%;object-fit:contain}.controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}button,select{font:inherit;color:#dfe5ee;border:1px solid #2a3245;background:#1b2434;border-radius:6px;padding:7px 12px}button{cursor:pointer}button:hover{border-color:#7aa2ff}input[type=range]{flex:1;min-width:120px;accent-color:#7aa2ff}label{font-size:13px}.wide{width:100%;height:auto;image-rendering:pixelated;border-radius:8px}ul{padding-left:22px;color:#9ba7bd}.downloads{display:flex;gap:12px;flex-wrap:wrap}.downloads a{display:inline-block;padding:8px 14px;border:1px solid #2a3245;border-radius:7px;text-decoration:none}.notice{border-left:3px solid #7aa2ff;padding-left:15px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}.stat{padding:12px;border:1px solid #2a3245;border-radius:8px}.stat strong{display:block;font-size:22px;color:#e8edf7}.stat span{font-size:12px;color:#8b94a7}footer{font-size:12px;color:#6f7b93;border-top:1px solid #1c2230}a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #7aa2ff;outline-offset:4px}@media(max-width:720px){.grid{grid-template-columns:1fr}header,main,footer{padding-left:16px;padding-right:16px}.stats{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header>
+<a href="../../index.html">← GoodCase.xAI 案例画廊</a>
+<h1>三灯铆卫 <b>·</b> 像素帧动画</h1>
+<p>从原创定妆到连续斜劈：一名携剑持盾的铁甲小兵，以及围绕固定脚点逐步打磨的动画素材。</p>
+<div class="tags"><span class="tag">Codex · 原创角色</span><span class="tag">ACT01 V1.2</span><span class="tag">256 × 256</span><span class="tag">50% 填充</span><span class="tag">动作待审核</span></div>
+</header>
+<main>
+<p class="notice">当前展示 ACT01「右上至右下斜劈」V1.2。角色定妆与动作脚本已通过；本版动画仍待用户审核，其余四个动作尚未生成。</p>
+<div class="grid">
+<section class="card"><h2>斜劈 · GIF 预览</h2><div class="stage"><img src="assets/act01.gif" alt="三灯铆卫完成一次斜劈后回到待机的循环动画" width="256" height="256"></div><p>准备、蓄力、胸前过渡、劈砍、缓冲、回收。保留每个中间姿势，不添加剑光或运动模糊。</p></section>
+<section class="card"><h2>逐帧检查</h2><div class="stage"><img id="frame" src="assets/frames/01.png" alt="ACT01 第 1 帧" width="256" height="256"></div>
+<div class="controls"><button id="play" type="button">播放</button><button id="previous" type="button" aria-label="上一帧">←</button><button id="next" type="button" aria-label="下一帧">→</button><output id="counter" aria-live="polite">01 / 10</output></div>
+<div class="controls"><label for="seek">帧位</label><input id="seek" type="range" min="0" max="9" value="0"><label for="speed">速度</label><select id="speed"><option value="1">正常</option><option value="0.5">半速</option><option value="0.25">四分之一速</option></select></div>
+</section></div>
+<section class="card"><h2>固定脚点 · 让动作留在原地</h2><div class="grid"><div class="stage"><img src="assets/feet-check.gif" alt="青色中心线和橙色左右脚固定点的动画验证" width="256" height="256"></div><div><p>以第一帧左右脚各自的位置为参照，约束后续帧。青线标记中心，橙色标记左右脚点。</p><div class="stats"><div class="stat"><strong>1.75 px</strong><span>左脚最大测量偏差</span></div><div class="stat"><strong>1.54 px</strong><span>右脚最大测量偏差</span></div><div class="stat"><strong>810 ms</strong><span>10 帧循环时长</span></div></div><small>数据来自结构测量，视觉连贯性仍以实际播放与用户审核为准。脚底基线 y=224；所有身体及武器像素位于画布内。</small></div></div></section>
+<section class="card"><h2>10 帧总览</h2><img class="wide" src="assets/contact-sheet.png" alt="按时间顺序排列的斜劈十帧总览" width="1280" height="512" loading="lazy"></section>
+<section class="card"><h2>角色设定与动作范围</h2><div class="grid"><div><p>低矮钢盔、三格琥珀视窗灯、三枚胸甲铆钉；右手短阔剑，左手三铆钉截角盾。蓝灰板甲配深青灰关节软甲。</p><p>动作脚本包含斜劈、过顶重劈、直线突刺、盾牌高位格挡，以及盾挡拨开接横斩。当前仅展示斜劈。</p></div><div><h2>下载与复用</h2><div class="downloads"><a href="assets/act01.gif" download>下载 GIF</a><a href="assets/frames.zip" download>透明 PNG 帧包</a><a href="docs/character.md">定妆与提示词</a><a href="docs/actions.md">五个动作脚本</a><a href="docs/review.md">V1.2 审核记录</a><a href="assets/metrics.json">结构测量数据</a></div><p class="muted">像素帧可用于游戏资源原型；提示词与角色记录保留在项目文档中。</p></div></div></section>
+<p><a href="assets/source-pack.zip" download>下载项目源素材包（母版、透明帧、提示词与制作脚本）</a></p>
+</main>
+<footer>GoodCase.xAI · Codex 案例 · 三灯铆卫 · 本页采用原生 HTML / CSS / JavaScript，无外部运行依赖。</footer>
+<script>
+'use strict';
+const durations=[80,80,80,70,70,70,80,100,80,100];
+const images=Array.from({length:10},(_,i)=>{const im=new Image();im.src=`assets/frames/${String(i+1).padStart(2,'0')}.png`;return im});
+const image=document.getElementById('frame'),counter=document.getElementById('counter'),seek=document.getElementById('seek'),play=document.getElementById('play'),speed=document.getElementById('speed');
+let index=0,playing=false,timer=null;
+function render(){image.src=images[index].src;image.alt=`ACT01 第 ${index+1} 帧`;counter.textContent=`${String(index+1).padStart(2,'0')} / 10`;seek.value=String(index)}
+function schedule(){clearTimeout(timer);if(playing)timer=setTimeout(()=>{index=(index+1)%10;render();schedule()},durations[index]/Number(speed.value))}
+function stop(){playing=false;clearTimeout(timer);play.textContent='播放'}
+play.addEventListener('click',()=>{playing=!playing;play.textContent=playing?'暂停':'播放';schedule()});
+document.getElementById('previous').addEventListener('click',()=>{stop();index=(index+9)%10;render()});
+document.getElementById('next').addEventListener('click',()=>{stop();index=(index+1)%10;render()});
+seek.addEventListener('input',()=>{stop();index=Number(seek.value);render()});
+speed.addEventListener('change',schedule);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop()});
+</script>
+</body>
+</html>
