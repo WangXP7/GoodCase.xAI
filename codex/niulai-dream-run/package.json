@@ -1,0 +1,21 @@
+{
+  "name": "niulai-dream-run",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "《牛来：梦野逐风》——完全本地运行的 3D 网页跑酷冒险游戏",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "check": "node scripts/check.mjs",
+    "test:e2e": "node tests/run-all.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

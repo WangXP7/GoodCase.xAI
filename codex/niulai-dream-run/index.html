@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#102c27" />
+    <meta
+      name="description"
+      content="《牛来：梦野逐风》——一款致敬国产独立动画气质的完全本地 3D 网页跑酷冒险游戏。"
+    />
+    <title>牛来：梦野逐风</title>
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./src/styles.css" />
+    <link rel="modulepreload" href="./vendor/three.module.min.js" />
+  </head>
+  <body>
+    <main id="game-shell" aria-label="牛来：梦野逐风 3D 跑酷游戏">
+      <div id="scene" aria-hidden="true"></div>
+      <div class="paper-grain" aria-hidden="true"></div>
+      <div class="vignette" aria-hidden="true"></div>
+
+      <section id="hud" class="hud is-hidden" aria-label="游戏状态">
+        <div class="hud__brand" aria-hidden="true">
+          <span class="hud__seal">牛</span>
+          <span>梦野逐风</span>
+        </div>
+        <div class="hud__stats">
+          <div class="hud__stat hud__stat--wide">
+            <span class="hud__label">旅程</span>
+            <strong id="distance-value">000</strong><small>丈</small>
+          </div>
+          <div class="hud__stat">
+            <span class="hud__label">云羽</span>
+            <strong id="feather-value">00</strong>
+          </div>
+          <div class="hud__stat">
+            <span class="hud__label">勇气</span>
+            <div id="hearts" class="hearts" aria-label="3 点勇气">
+              <span>◆</span><span>◆</span><span>◆</span>
+            </div>
+          </div>
+        </div>
+        <div class="hud__chapter">
+          <span id="chapter-kicker">第一梦</span>
+          <strong id="chapter-name">草原初醒</strong>
+          <div class="progress-track" aria-hidden="true"><i id="journey-progress"></i></div>
+        </div>
+        <div class="hud__actions">
+          <button id="audio-button" class="icon-button" type="button" aria-label="关闭声音" aria-pressed="false">
+            <span aria-hidden="true">♫</span>
+          </button>
+          <button id="pause-button" class="icon-button" type="button" aria-label="暂停游戏">
+            <span aria-hidden="true">Ⅱ</span>
+          </button>
+        </div>
+      </section>
+
+      <aside id="mission" class="mission is-hidden" aria-live="polite">
+        <span class="mission__eyebrow">云雀的指引</span>
+        <strong id="mission-text">循着青色梦路前行</strong>
+      </aside>
+
+      <div id="dash-meter" class="dash-meter is-hidden" aria-label="踏风冲刺准备情况">
+        <span>踏风</span>
+        <div><i id="dash-fill"></i></div>
+        <kbd>⇧</kbd>
+      </div>
+
+      <section id="title-screen" class="overlay title-screen" aria-labelledby="game-title">
+        <div class="title-screen__ink" aria-hidden="true"></div>
+        <div class="title-screen__copy">
+          <p class="eyebrow">一场关于担当与勇气的梦</p>
+          <h1 id="game-title"><span>牛来</span><small>梦野逐风</small></h1>
+          <p class="title-screen__intro">
+            云雀自荒漠而来，一头小牛踏入三重梦境。<br />越过山林与风沙，在墨云尽头找到自己的答案。
+          </p>
+          <button id="start-button" class="primary-button" type="button">
+            <span>启程入梦</span><i aria-hidden="true">→</i>
+          </button>
+          <div class="controls-hint" aria-label="键盘操作说明">
+            <span><kbd>A</kbd><kbd>D</kbd> 换道</span>
+            <span><kbd>空格</kbd> 跃起</span>
+            <span><kbd>Shift</kbd> 踏风</span>
+          </div>
+          <p class="title-screen__note">原创同人致敬作品 · 未使用电影原始素材 · 完全本地运行</p>
+        </div>
+        <div class="title-screen__chapter-mark" aria-hidden="true">
+          <span>其一</span><b></b><em>向前，才会醒来</em>
+        </div>
+      </section>
+
+      <section id="dialog-screen" class="overlay dialog-screen is-hidden" aria-live="polite">
+        <div class="dialog-card">
+          <span id="dialog-kicker" class="eyebrow">第二梦</span>
+          <h2 id="dialog-title">荒漠问心</h2>
+          <p id="dialog-copy">风会吹散脚印，却吹不散已经做出的选择。</p>
+          <button id="dialog-button" class="primary-button primary-button--small" type="button">继续前行</button>
+        </div>
+      </section>
+
+      <section id="pause-screen" class="overlay simple-overlay is-hidden" aria-labelledby="pause-title">
+        <div class="simple-card">
+          <span class="eyebrow">梦境暂歇</span>
+          <h2 id="pause-title">风停在这一刻</h2>
+          <p>你的旅程已经被妥善留在云里。</p>
+          <button id="resume-button" class="primary-button primary-button--small" type="button">继续逐风</button>
+          <button id="restart-from-pause" class="text-button" type="button">重新入梦</button>
+        </div>
+      </section>
+
+      <section id="result-screen" class="overlay simple-overlay is-hidden" aria-labelledby="result-title">
+        <div class="simple-card result-card">
+          <span id="result-kicker" class="eyebrow">梦醒时分</span>
+          <h2 id="result-title">旅途仍未结束</h2>
+          <p id="result-copy">勇气不是从不跌倒，而是仍愿意向前。</p>
+          <div class="result-stats">
+            <span><small>行过</small><strong id="result-distance">0 丈</strong></span>
+            <span><small>云羽</small><strong id="result-feathers">0 枚</strong></span>
+            <span><small>印记</small><strong id="result-score">0</strong></span>
+          </div>
+          <button id="restart-button" class="primary-button primary-button--small" type="button">再入一梦</button>
+        </div>
+      </section>
+
+      <div id="toast" class="toast is-hidden" aria-live="assertive"></div>
+      <div id="flash" class="flash" aria-hidden="true"></div>
+      <p id="live-region" class="sr-only" aria-live="polite"></p>
+
+      <nav id="touch-controls" class="touch-controls is-hidden" aria-label="触屏操作">
+        <button data-action="left" aria-label="向左换道">←</button>
+        <button data-action="jump" aria-label="跃起">↑</button>
+        <button data-action="right" aria-label="向右换道">→</button>
+        <button data-action="dash" class="touch-controls__dash" aria-label="踏风冲刺">风</button>
+      </nav>
+
+      <noscript>请启用 JavaScript 后进入《牛来：梦野逐风》。</noscript>
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
