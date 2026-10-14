@@ -6,15 +6,9 @@
 
 ## 直接运行
 
-现成的 Windows 成品请从 [GitHub Release](https://github.com/WangXP7/GoodCase.xAI/releases/tag/woolly-debts-v1.1.0) 下载。以下路径在本地构建后生成：
+[在项目站点在线游玩](https://wangxp7.github.io/GoodCase.xAI/codex/woolly-debts/)。推荐使用桌面浏览器与鼠标，分辨率 1280×720 或更高。
 
-- `release/WoollyDebts-1.1.0-portable.exe`：本次更新的单文件便携版。
-- `release/WoollyDebts-1.1.0-win32-x64/WoollyDebts.exe`：本次更新的免安装目录版；必须保留同目录中的 DLL、`locales` 与 `resources`。
-- `release/WoollyDebts-1.1.0-win-x64.zip`：本次更新的目录版压缩包。
-
-本仓库收录 v1.1.0 源码及最新版便携 EXE；旧版本保留于原开发环境。本地构建未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；可先按 `release/SHA256SUMS-1.1.0.md` 核对 SHA-256。游戏不联网、不要求管理员权限，存档使用 Electron 本地存储。
-
-推荐分辨率为 1280×720 或更高。首次启动会显示四步说明。
+本仓库只收录网页成品与源码，不提供 EXE 或 Windows 安装包。源码可以通过下方开发与构建步骤生成本地桌面版。
 
 ## 操作与循环
 
