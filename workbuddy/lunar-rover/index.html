@@ -1,0 +1,2129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>月面运输 LUNAR CARGO — 实时 3D 月球车任务</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
+<style>
+  :root{
+    --amber:#ffb648; --amber-dim:#c98a33; --warm:#ff8a3d;
+    --ink:#0a0c11; --panel:rgba(12,15,21,.78); --line:rgba(255,182,72,.22);
+    --txt:#e8e4dc; --txt2:#9aa2ad; --ok:#5ddc9a; --bad:#ff5d5d; --cyan:#4fd8e8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:#05060a;color:var(--txt);
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;user-select:none;cursor:default}
+  canvas{display:block}
+  #app{position:fixed;inset:0}
+  .mono{font-family:ui-monospace,"SF Mono",Consolas,"Roboto Mono",monospace;font-variant-numeric:tabular-nums}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10;opacity:0;transition:opacity .5s}
+  #hud.on{opacity:1}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+    box-shadow:0 8px 28px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.045)}
+  .lbl{font-size:10px;letter-spacing:.16em;color:var(--txt2);text-transform:uppercase}
+
+  /* 速度 / 电量 */
+  #panelL{position:absolute;left:18px;top:18px;padding:14px 16px 13px;min-width:214px}
+  .spdRow{display:flex;align-items:baseline;gap:8px}
+  #spd{font-size:46px;line-height:.94;font-weight:650;color:var(--amber);letter-spacing:-.02em}
+  .spdUnit{font-size:12px;color:var(--txt2);letter-spacing:.1em}
+  .bar{height:5px;border-radius:3px;background:rgba(255,255,255,.09);overflow:hidden;margin-top:7px}
+  .bar>i{display:block;height:100%;width:0%;border-radius:3px;transition:width .1s linear}
+  #spdBar>i{background:linear-gradient(90deg,var(--amber-dim),var(--amber))}
+  #batBar>i{background:linear-gradient(90deg,#2e8f6a,var(--ok))}
+  #batBar.warn>i{background:linear-gradient(90deg,#a3621f,var(--warm))}
+  #batBar.crit>i{background:linear-gradient(90deg,#8e2b2b,var(--bad))}
+  .row2{display:flex;justify-content:space-between;align-items:baseline;margin-top:11px}
+  #bat{font-size:15px;font-weight:600}
+  #chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:11px}
+  .chip{font-size:10px;letter-spacing:.08em;padding:3px 7px;border-radius:5px;
+    border:1px solid rgba(255,255,255,.14);color:var(--txt2);background:rgba(255,255,255,.04)}
+  .chip.air{border-color:rgba(79,216,232,.5);color:var(--cyan);background:rgba(79,216,232,.1)}
+  .chip.roll{border-color:rgba(255,93,93,.55);color:var(--bad);background:rgba(255,93,93,.12)}
+  .chip.slow{border-color:rgba(93,220,154,.45);color:var(--ok);background:rgba(93,220,154,.1)}
+  .chip.slip{border-color:rgba(255,182,72,.5);color:var(--amber);background:rgba(255,182,72,.1)}
+
+  /* 任务面板 */
+  #panelR{position:absolute;right:18px;top:18px;padding:13px 15px;width:262px}
+  #mTitle{font-size:16px;font-weight:640;color:var(--amber);letter-spacing:.02em}
+  #mSub{font-size:11px;color:var(--txt2);margin-top:3px}
+  #mDist{font-size:26px;font-weight:620;margin-top:8px;letter-spacing:-.01em}
+  #mDist span{font-size:11px;color:var(--txt2);font-weight:400;margin-left:4px}
+  .bases{margin-top:11px;display:flex;flex-direction:column;gap:5px}
+  .bItem{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--txt2);
+    padding:4px 6px;border-radius:6px;border:1px solid transparent}
+  .bItem.tgt{color:var(--txt);background:rgba(255,182,72,.09);border-color:rgba(255,182,72,.28)}
+  .bItem.done{color:var(--ok)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 7px currentColor}
+  .bName{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bDist{font-size:10.5px;opacity:.85}
+  .sep{height:1px;background:rgba(255,255,255,.09);margin:11px 0 9px}
+  #slots{display:flex;gap:6px}
+  .slot{flex:1;text-align:center;padding:6px 3px;border-radius:7px;font-size:10px;letter-spacing:.04em;
+    border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035);color:var(--txt2);line-height:1.35}
+  .slot b{display:block;font-size:13px;margin-bottom:1px}
+  .slot.loaded{border-color:rgba(255,182,72,.45);color:var(--amber);background:rgba(255,182,72,.09)}
+  .slot.dropped{border-color:rgba(255,138,61,.5);color:var(--warm);background:rgba(255,138,61,.1)}
+  .slot.done{border-color:rgba(93,220,154,.45);color:var(--ok);background:rgba(93,220,154,.09)}
+  #deliv{margin-top:10px;font-size:12px;color:var(--txt2)}
+  #deliv b{color:var(--ok);font-size:15px}
+
+  /* 小地图 */
+  #mapWrap{position:absolute;left:18px;bottom:18px;padding:9px;border-radius:12px}
+  #minimap{display:block;width:216px;height:216px;border-radius:7px;background:#0b0d12}
+  .mapHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:0 2px}
+  .legend{display:flex;gap:9px;margin-top:6px;padding:0 2px;font-size:9.5px;color:var(--txt2);flex-wrap:wrap}
+  .legend i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px;vertical-align:-1px}
+
+  /* 底部提示 */
+  #hint{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);
+    padding:8px 14px;font-size:11.5px;color:var(--txt2);text-align:center;line-height:1.7;max-width:74vw}
+  #hint b{color:var(--amber);font-weight:600}
+  kbd{display:inline-block;min-width:17px;padding:1px 5px;margin:0 1px;border-radius:4px;
+    background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);
+    font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:var(--txt)}
+  #hint.min{padding:5px 12px;font-size:10.5px}
+
+  /* 镜头标记 */
+  #camBadge{position:absolute;right:18px;top:calc(18px + var(--rh,240px));padding:7px 11px;font-size:11px;
+    display:flex;align-items:center;gap:8px;letter-spacing:.06em}
+  #camBadge b{color:var(--amber);font-weight:600}
+
+  /* 居中提示（交付 / 翻覆 / 低电量） */
+  #centerMsg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
+    font-size:19px;font-weight:600;letter-spacing:.06em;text-shadow:0 3px 18px rgba(0,0,0,.9);
+    opacity:0;transition:opacity .25s;white-space:pre-line;line-height:1.65}
+  #centerMsg.on{opacity:1}
+  #centerMsg .sub{display:block;font-size:12px;font-weight:400;color:var(--txt2);letter-spacing:.1em;margin-top:5px}
+  #pgWrap{margin:12px auto 0;width:190px;height:4px;border-radius:2px;background:rgba(255,255,255,.16);overflow:hidden}
+  #pgWrap>i{display:block;height:100%;width:0%;background:var(--amber);border-radius:2px}
+
+  /* toast */
+  #toasts{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);
+    display:flex;flex-direction:column;align-items:center;gap:6px}
+  .toast{padding:7px 14px;border-radius:8px;font-size:12.5px;letter-spacing:.03em;
+    background:rgba(12,15,21,.92);border:1px solid var(--line);color:var(--txt);
+    box-shadow:0 6px 20px rgba(0,0,0,.5);animation:tin .3s ease both}
+  .toast.warn{border-color:rgba(255,138,61,.55);color:var(--warm)}
+  .toast.good{border-color:rgba(93,220,154,.5);color:var(--ok)}
+  .toast.bad{border-color:rgba(255,93,93,.55);color:var(--bad)}
+  @keyframes tin{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+
+  /* 屏幕效果 */
+  #vig{position:fixed;inset:0;pointer-events:none;z-index:5;
+    background:radial-gradient(ellipse at center,transparent 52%,rgba(0,0,0,.55) 100%)}
+  #flash{position:fixed;inset:0;pointer-events:none;z-index:11;background:#ff5a3c;opacity:0;transition:opacity .3s}
+
+  /* ---------- 覆盖层 ---------- */
+  .ov{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 60% 35%,rgba(40,26,10,.5),rgba(3,4,7,.94) 62%);
+    backdrop-filter:blur(3px)}
+  .ov.hide{display:none}
+  .card{width:min(680px,92vw);padding:34px 38px 30px;border-radius:16px;
+    background:linear-gradient(180deg,rgba(20,17,13,.95),rgba(9,10,14,.96));
+    border:1px solid rgba(255,182,72,.28);box-shadow:0 30px 80px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.06)}
+  .kicker{font-size:10.5px;letter-spacing:.34em;color:var(--amber-dim);text-transform:uppercase}
+  h1{font-size:38px;font-weight:680;letter-spacing:.04em;margin:8px 0 2px;
+    background:linear-gradient(92deg,#ffe0b0,var(--amber) 45%,var(--warm));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub1{font-size:12.5px;color:var(--txt2);letter-spacing:.2em;margin-bottom:20px}
+  .brief{font-size:13.5px;line-height:1.85;color:#cfd4da}
+  .brief b{color:var(--amber);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 22px;margin:20px 0 6px}
+  .kv{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--txt2)}
+  .kv b{color:var(--txt);font-weight:500}
+  .btn{margin-top:24px;padding:13px 30px;border-radius:10px;border:1px solid rgba(255,182,72,.45);
+    background:linear-gradient(180deg,rgba(255,182,72,.22),rgba(255,138,61,.13));color:var(--amber);
+    font-size:14.5px;font-weight:620;letter-spacing:.14em;cursor:pointer;pointer-events:auto;
+    transition:.18s;font-family:inherit}
+  .btn:hover{background:linear-gradient(180deg,rgba(255,182,72,.36),rgba(255,138,61,.22));
+    box-shadow:0 0 26px rgba(255,182,72,.28);transform:translateY(-1px)}
+  .foot{margin-top:15px;font-size:11px;color:#6d747e;letter-spacing:.05em}
+  #stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0 4px}
+  .stat{padding:12px 10px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);text-align:center}
+  .stat b{display:block;font-size:22px;font-weight:640;color:var(--amber);margin-bottom:3px}
+  .stat b i{font-style:normal;font-size:12px;font-weight:500;color:var(--txt2);margin-left:3px;letter-spacing:.04em}
+  .stat span{font-size:10px;color:var(--txt2);letter-spacing:.1em}
+  #loading .card{text-align:center}
+  .spin{width:34px;height:34px;margin:0 auto 16px;border-radius:50%;
+    border:2px solid rgba(255,182,72,.2);border-top-color:var(--amber);animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="vig"></div>
+<div id="flash"></div>
+
+<div id="hud">
+  <div id="panelL" class="panel">
+    <div class="lbl">车速 SPEED</div>
+    <div class="spdRow"><div id="spd" class="mono">0</div><div class="spdUnit">KM/H</div></div>
+    <div class="bar" id="spdBar"><i></i></div>
+    <div class="row2"><div class="lbl">电量 BATTERY</div><div id="bat" class="mono">100%</div></div>
+    <div class="bar" id="batBar"><i></i></div>
+    <div id="chips"></div>
+  </div>
+
+  <div id="panelR" class="panel">
+    <div class="lbl">当前任务 MISSION</div>
+    <div id="mTitle">—</div>
+    <div id="mSub">—</div>
+    <div id="mDist" class="mono">—<span>基地距离</span></div>
+    <div class="bases" id="baseList"></div>
+    <div class="sep"></div>
+    <div class="lbl" style="margin-bottom:7px">货舱 CARGO BAY</div>
+    <div id="slots"></div>
+    <div id="deliv">已送达 <b id="delivN" class="mono">0</b> / 3</div>
+  </div>
+
+  <div id="camBadge" class="panel"><span class="lbl">镜头</span><b id="camName">第三人称</b><span class="lbl" style="opacity:.7">C 切换</span></div>
+
+  <div id="mapWrap" class="panel">
+    <div class="mapHead"><span class="lbl">任务区地图</span><span class="lbl mono" id="mapCoord">0, 0</span></div>
+    <canvas id="minimap" width="432" height="432"></canvas>
+    <div class="legend">
+      <span><i style="background:#fff"></i>月球车</span>
+      <span><i style="background:#ffb648"></i>目标基地</span>
+      <span><i style="background:#5ddc9a"></i>已完成</span>
+      <span><i style="background:#ff8a3d"></i>掉落货物</span>
+      <span><i style="background:#4fd8e8"></i>信标</span>
+    </div>
+  </div>
+
+  <div id="centerMsg"><span id="cmText"></span><div id="pgWrap"><i></i></div></div>
+  <div id="toasts"></div>
+  <div id="hint" class="panel">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 驾驶 · <kbd>空格</kbd> 手刹 · <kbd>R</kbd> 复位 ·
+    <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>/<kbd>C</kbd> 镜头 · <kbd>L</kbd> 车灯 · <kbd>H</kbd> 收起
+  </div>
+</div>
+
+<div id="loading" class="ov">
+  <div class="card">
+    <div class="spin"></div>
+    <div class="kicker">Lunar Cargo Operations</div>
+    <h1 style="font-size:26px">正在生成月面地形</h1>
+    <div class="foot" id="loadTxt">加载渲染引擎…</div>
+  </div>
+</div>
+
+<div id="start" class="ov hide">
+  <div class="card">
+    <div class="kicker">Lunar Cargo Operations · 2148</div>
+    <h1>月面运输</h1>
+    <div class="sub1">LUNAR CARGO — ROVER DELIVERY MISSION</div>
+    <div class="brief">
+      你是 <b>静海中央装卸区</b> 的运输驾驶员。月面重力仅 <b>1.62 m/s²</b>（地球的 1/6），
+      车轮抓地力极弱：<b>加速迟缓、刹车距离极长、越过坡顶会腾空飘飞</b>，
+      上坡明显掉速、下坡不断加速。<br>
+      车斗上有 <b>三箱设备</b>，请分别运送到月面三个基地。
+      高速撞击会导致货物甩出车外 —— 减速慢行，或停车把掉落的箱子捡回来。
+    </div>
+    <div class="grid">
+      <div class="kv"><span class="dot" style="background:#ffb648;color:#ffb648"></span><b>目标</b> 三基地各送达 1 箱</div>
+      <div class="kv"><span class="dot" style="background:#ff5d5d;color:#ff5d5d"></span><b>风险</b> 撞击甩货 / 陡坡翻覆</div>
+      <div class="kv"><span class="dot" style="background:#4fd8e8;color:#4fd8e8"></span><b>镜头</b> 第一人称 / 跟随 / 远景</div>
+      <div class="kv"><span class="dot" style="background:#5ddc9a;color:#5ddc9a"></span><b>复位</b> R 键，随时可用</div>
+    </div>
+    <button class="btn" id="btnStart">开 始 任 务</button>
+    <div class="foot">W/↑ 前进 · S/↓ 刹车与倒车 · A/D 或 ←/→ 转向 · 空格 手刹 · R 复位 · 1/2/3 或 C 切换镜头 · 鼠标拖拽可环视</div>
+  </div>
+</div>
+
+<div id="win" class="ov hide">
+  <div class="card" style="text-align:center">
+    <div class="kicker">Mission Complete</div>
+    <h1>运输任务完成</h1>
+    <div class="sub1">三处基地全部收到补给</div>
+    <div id="stats"></div>
+    <button class="btn" id="btnAgain">再 来 一 次</button>
+  </div>
+</div>
+
+<div id="fatal" class="ov hide">
+  <div class="card" style="text-align:center">
+    <div class="kicker" style="color:#ff5d5d">Engine Error</div>
+    <h1 style="font-size:26px">渲染引擎加载失败</h1>
+    <div class="brief" id="fatalMsg" style="margin-top:14px"></div>
+    <div class="foot">请检查网络连接后刷新页面（本页需要加载 three.js r160）</div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* =========================================================================
+   月面运输 LUNAR CARGO — 实时 3D 月球车运输模拟
+   单文件 / 程序化生成 / 无外部资源
+   ========================================================================= */
+
+/* ---------- 0. 加载状态 ---------- */
+let loadOk = false;
+try {
+  document.getElementById('loadTxt').textContent = '初始化渲染引擎…';
+  // 验证导入成功
+  if(!THREE || !THREE.Scene) throw new Error('THREE.Scene missing');
+  if(!OrbitControls) throw new Error('OrbitControls missing');
+  loadOk = true;
+} catch(err){
+  document.getElementById('loading').classList.add('hide');
+  document.getElementById('fatal').classList.remove('hide');
+  document.getElementById('fatalMsg').textContent = String(err && err.message || err);
+  throw err;
+}
+
+/* ---------- 1. 工具 ---------- */
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+const lerp=(a,b,t)=>a+(b-a)*t;
+const damp=(a,b,l,dt)=>lerp(a,b,1-Math.exp(-l*dt));
+const smoothstep=(e0,e1,x)=>{const t=clamp((x-e0)/(e1-e0),0,1);return t*t*(3-2*t);};
+const TAU=Math.PI*2;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const SEED = 20260828;
+const rnd = mulberry32(SEED);
+const rr=(a,b)=>a+(b-a)*rnd();
+
+function hash2(ix,iz){
+  let n = (ix|0)*374761393 + (iz|0)*668265263;
+  n = (n ^ (n>>13)) * 1274126177;
+  return ((n ^ (n>>16)) >>> 0) / 4294967295;
+}
+function vnoise(x,z){
+  const x0=Math.floor(x), z0=Math.floor(z), fx=x-x0, fz=z-z0;
+  const sx=fx*fx*(3-2*fx), sz=fz*fz*(3-2*fz);
+  const n00=hash2(x0,z0), n10=hash2(x0+1,z0), n01=hash2(x0,z0+1), n11=hash2(x0+1,z0+1);
+  return (n00*(1-sx)+n10*sx)*(1-sz) + (n01*(1-sx)+n11*sx)*sz;
+}
+function fbm(x,z){
+  return (vnoise(x,z)-0.5)*2*1.0 + (vnoise(x*2.13,z*2.13)-0.5)*2*0.5 + (vnoise(x*4.7,z*4.7)-0.5)*2*0.25;
+}
+
+/* ---------- 2. 世界常量与数据 ---------- */
+const WORLD = 900, HALF = WORLD/2;
+const G  = 1.62;   // 月面重力 m/s²
+const MU = 2.05;   // 轮胎—月壤摩擦系数（抓地力上限）
+const RIDE = 0.62; // 车轮半径
+const HOVER = 1.18;// 底盘原点距地面高度
+const WHEELBASE = 3.4;
+const STEER_LO = 0.60, STEER_HI = 0.19;
+const ENGINE_A = 3.30, BRAKE_A = 4.00, REV_A = 1.90;
+const MAX_SPEED = 24, MAX_REV = 7;
+const MAX_CLIMB = 0.72;        // 可爬坡度（tanθ，超过则打滑下滑）
+const DROP_IMPACT = 7.2;       // 撞击掉货阈值 m/s
+const LAND_IMPACT = 3.6;       // 落地掉货阈值（重着陆会颠掉货箱）
+const FLIP_IMPACT = 11.5;      // 侧向撞击翻覆阈值
+const ROLL_LIMIT = 62*Math.PI/180;
+const DELIVER_R = 9.0;         // 交付附加半径
+const PICKUP_R = 5.0;
+
+const HUB = {x:0, z:0, padR:34, y:0, name:'静海中央装卸区', code:'HUB', color:0xdfe4ea};
+const BASES = [
+  {x: 262, z:-196, padR:27, y:0, name:'静海基地',     code:'ALPHA', color:0xffb648, delivered:false},
+  {x:-302, z:-118, padR:24, y:0, name:'月溪前哨',     code:'BETA',  color:0x4fd8e8, delivered:false},
+  {x:-128, z: 306, padR:26, y:0, name:'南极环形山站', code:'GAMMA', color:0xb98cff, delivered:false}
+];
+const CARGO_DEF = [
+  {name:'生命维持模块', short:'LSS', color:0xffb648, size:[0.6,0.6,0.6]},
+  {name:'钻探岩芯舱',   short:'CORE',color:0x4fd8e8, size:[0.55,0.75,0.55]},
+  {name:'同位素电源',   short:'RTG', color:0xb98cff, size:[0.6,0.6,0.6]}
+];
+
+/* 陨石坑：拒绝落在基地/装卸区上 */
+const CRATERS = [];
+{
+  const pads=[HUB,...BASES];
+  let guard=0;
+  while (CRATERS.length < 30 && guard++ < 4000){
+    const r = rr(20, 92);
+    const x = rr(-HALF+120, HALF-120), z = rr(-HALF+120, HALF-120);
+    let ok = true;
+    for (const p of pads){ if (Math.hypot(x-p.x, z-p.z) < r*1.25 + p.padR + 16){ ok=false; break; } }
+    if (!ok) continue;
+    CRATERS.push({x, z, r, d: r*rr(0.15,0.235), rim: r*rr(0.15,0.235)*0.34});
+  }
+}
+function craterH(x,z,c){
+  const dx=x-c.x, dz=z-c.z;
+  const d = Math.sqrt(dx*dx+dz*dz) / c.r;
+  if (d > 1.26) return 0;
+  if (d < 0.86){
+    const t = d/0.86;
+    return -c.d * (1 - t*t) * (1 - 0.18*t*t);
+  }
+  const u = (d-0.86)/0.40;
+  return c.rim * Math.sin(Math.PI*u) * (1-0.25*u);
+}
+function edgeH(x,z){
+  const ex = Math.abs(x) - (HALF-72), ez = Math.abs(z) - (HALF-72);
+  const e = Math.max(ex, ez);
+  return e > 0 ? e*e*0.0062 : 0;
+}
+/* 无场地平整的原始地形 */
+function rawH(x,z){
+  let h = 0;
+  h += Math.sin(x*0.0115+0.4)*Math.cos(z*0.0127-0.9)*7.6;
+  h += Math.sin(x*0.0273-1.1)*Math.cos(z*0.0231+0.5)*3.1;
+  h += Math.cos(x*0.0531+2.2)*Math.sin(z*0.0497-1.4)*1.35;
+  h += Math.sin((x+z)*0.0087+1.3)*4.2;
+  h += fbm(x*0.0075, z*0.0075)*5.4;
+  h += fbm(x*0.031, z*0.031)*1.15;
+  for (let i=0;i<CRATERS.length;i++) h += craterH(x,z,CRATERS[i]);
+  h += edgeH(x,z);
+  return h;
+}
+/* 场地平整高度（含平台与通道） */
+HUB.y = rawH(HUB.x,HUB.z);
+for (const b of BASES) b.y = rawH(b.x,b.z);
+const ROUTES = BASES.map(b=>({ax:HUB.x, az:HUB.z, bx:b.x, bz:b.z, ay:HUB.y, by:b.y,
+                              len:Math.hypot(b.x-HUB.x, b.z-HUB.z)}));
+function segDist(px,pz,r){
+  const vx=r.bx-r.ax, vz=r.bz-r.az;
+  const wx=px-r.ax, wz=pz-r.az;
+  let t = (wx*vx + wz*vz) / (vx*vx+vz*vz);
+  t = clamp(t,0,1);
+  return {d: Math.hypot(px-(r.ax+vx*t), pz-(r.az+vz*t)), t};
+}
+const PADS = [HUB, ...BASES];
+function terrainH(x,z){
+  let h = rawH(x,z);
+  // 平台平整
+  for (let i=0;i<PADS.length;i++){
+    const p=PADS[i];
+    const d = Math.hypot(x-p.x, z-p.z), R = p.padR;
+    if (d < R*1.75) h = lerp(h, p.y, smoothstep(R*1.75, R*0.92, d));
+  }
+  // 通道平整（保证可通行）
+  for (let i=0;i<ROUTES.length;i++){
+    const r=ROUTES[i];
+    const s=segDist(x,z,r);
+    if (s.d < 40){
+      const target = lerp(r.ay, r.by, smoothstep(0.05,0.92,s.t));
+      h = lerp(h, target, (1-smoothstep(15,40,s.d))*0.88);
+    }
+  }
+  return h;
+}
+const _g = {gx:0, gz:0};
+function terrainGrad(x,z){
+  const e=0.9;
+  _g.gx = (terrainH(x+e,z)-terrainH(x-e,z))/(2*e);
+  _g.gz = (terrainH(x,z+e)-terrainH(x,z-e))/(2*e);
+  return _g;
+}
+function terrainNormal(x,z,out){
+  const g=terrainGrad(x,z);
+  return out.set(-g.gx, 1, -g.gz).normalize();
+}
+/* 出生点（必须在建造基地之前确定：建筑布置要避开出站口） */
+const SPAWN = {x: 10, z: -14};
+const SPAWN_GY = terrainH(SPAWN.x, SPAWN.z);
+
+/* ---------- 3. 渲染器 / 场景 / 相机 ---------- */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x04050a);
+scene.fog = new THREE.FogExp2(0x0a0b11, 0.0013);
+
+const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.25, 6000);
+camera.position.set(0, 40, -60);
+
+const SUN_DIR = new THREE.Vector3(-0.62, 0.26, -0.74).normalize();
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.7);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 900;
+const SH = 115;
+sun.shadow.camera.left = -SH; sun.shadow.camera.right = SH;
+sun.shadow.camera.top = SH;   sun.shadow.camera.bottom = -SH;
+sun.shadow.bias = -0.0007;
+sun.shadow.normalBias = 0.75;
+scene.add(sun);
+scene.add(sun.target);
+const fill = new THREE.DirectionalLight(0x5f7ab5, 0.30);
+fill.position.set(0.5, 0.35, 0.8);
+scene.add(fill);
+scene.add(new THREE.HemisphereLight(0x33405e, 0x090a0d, 0.55));
+
+/* ---------- 4. 程序化贴图 ---------- */
+function makeGlowTex(){
+  const c = document.createElement('canvas'); c.width=c.height=128;
+  const g = c.getContext('2d');
+  const rg = g.createRadialGradient(64,64,0,64,64,64);
+  rg.addColorStop(0,'rgba(255,255,255,1)');
+  rg.addColorStop(0.18,'rgba(255,255,255,.75)');
+  rg.addColorStop(0.45,'rgba(255,255,255,.22)');
+  rg.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=rg; g.fillRect(0,0,128,128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const GLOW = makeGlowTex();
+function glowSprite(color, size, opacity=0.9){
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW, color, transparent:true,
+    opacity, blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  s.scale.set(size, size, 1);
+  return s;
+}
+function makeEarthTex(){
+  const W=1024,H=512, c=document.createElement('canvas'); c.width=W;c.height=H;
+  const g=c.getContext('2d');
+  const r2 = mulberry32(7788);
+  const og = g.createLinearGradient(0,0,0,H);
+  og.addColorStop(0,'#0d2f63'); og.addColorStop(.5,'#15508f'); og.addColorStop(1,'#0d2f63');
+  g.fillStyle=og; g.fillRect(0,0,W,H);
+  // 大陆
+  for(let i=0;i<26;i++){
+    const cx=r2()*W, cy=60+r2()*(H-120), rad=28+r2()*95;
+    g.beginPath();
+    const pts=14, arr=[];
+    for(let k=0;k<pts;k++){
+      const a=k/pts*TAU, rr2=rad*(0.55+r2()*0.62);
+      arr.push([cx+Math.cos(a)*rr2, cy+Math.sin(a)*rr2*0.72]);
+    }
+    g.moveTo(arr[0][0],arr[0][1]);
+    for(let k=0;k<pts;k++){
+      const p0=arr[k], p1=arr[(k+1)%pts];
+      g.quadraticCurveTo(p0[0],p0[1],(p0[0]+p1[0])/2,(p0[1]+p1[1])/2);
+    }
+    g.closePath();
+    const grn = 90+Math.floor(r2()*70);
+    g.fillStyle = `rgb(${60+Math.floor(r2()*50)},${grn},${50+Math.floor(r2()*40)})`;
+    g.fill();
+  }
+  // 极冠
+  g.fillStyle='rgba(236,244,255,.92)';
+  g.beginPath(); g.ellipse(W/2,-14,520,72,0,0,TAU); g.fill();
+  g.beginPath(); g.ellipse(W/2,H+16,540,80,0,0,TAU); g.fill();
+  // 云带
+  g.globalCompositeOperation='lighter';
+  for(let i=0;i<160;i++){
+    const cx=r2()*W, cy=r2()*H, rw=18+r2()*90, rh=5+r2()*16;
+    g.fillStyle=`rgba(255,255,255,${0.03+r2()*0.10})`;
+    g.beginPath(); g.ellipse(cx,cy,rw,rh,0,0,TAU); g.fill();
+  }
+  g.globalCompositeOperation='source-over';
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+function labelSprite(text, hex, scale=1){
+  const c=document.createElement('canvas'); c.width=512; c.height=128;
+  const g=c.getContext('2d');
+  g.font='600 56px "Segoe UI","Microsoft YaHei",sans-serif';
+  g.textAlign='center'; g.textBaseline='middle';
+  g.fillStyle='rgba(6,8,12,.62)';
+  const w=g.measureText(text).width+40;
+  g.fillRect(256-w/2, 22, w, 84);
+  g.strokeStyle=hex; g.lineWidth=2; g.strokeRect(256-w/2,22,w,84);
+  g.fillStyle=hex; g.fillText(text,256,66);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace;
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t, transparent:true, depthTest:true, depthWrite:false, fog:false}));
+  s.scale.set(34*scale, 8.5*scale, 1);
+  return s;
+}
+
+/* ---------- 5. 星空 / 地球 ---------- */
+(function sky(){
+  const N=2800, pos=new Float32Array(N*3), col=new Float32Array(N*3);
+  const r3 = mulberry32(4242);
+  for(let i=0;i<N;i++){
+    const u=r3()*2-1, a=r3()*TAU, s=Math.sqrt(1-u*u), R=3400;
+    pos[i*3]=Math.cos(a)*s*R; pos[i*3+1]=Math.abs(u)*R*0.9+40; pos[i*3+2]=Math.sin(a)*s*R;
+    const b=0.45+r3()*0.55, w=0.9+r3()*0.1;
+    col[i*3]=b*w; col[i*3+1]=b*(0.95+r3()*0.05); col[i*3+2]=b*(0.9+r3()*0.1);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  scene.add(new THREE.Points(geo,new THREE.PointsMaterial({size:2.6,sizeAttenuation:false,
+    vertexColors:true,transparent:true,opacity:.95,fog:false,depthWrite:false})));
+
+  const dirE=new THREE.Vector3(0.42,0.34,0.84).normalize();
+  const earth=new THREE.Mesh(new THREE.SphereGeometry(150,64,48),
+    new THREE.MeshBasicMaterial({map:makeEarthTex(), fog:false}));
+  earth.position.copy(dirE).multiplyScalar(2500);
+  scene.add(earth);
+  const halo=new THREE.Mesh(new THREE.SphereGeometry(163,48,32),
+    new THREE.MeshBasicMaterial({color:0x5b8fe0, transparent:true, opacity:.16,
+      blending:THREE.AdditiveBlending, side:THREE.BackSide, depthWrite:false, fog:false}));
+  halo.position.copy(earth.position);
+  scene.add(halo);
+})();
+
+/* ---------- 6. 地形网格 ---------- */
+const terrainMesh = (function(){
+  const SEG = 248;
+  const geo = new THREE.PlaneGeometry(WORLD, WORLD, SEG, SEG);
+  geo.rotateX(-Math.PI/2);
+  const p = geo.attributes.position;
+  const colors = new Float32Array(p.count*3);
+  const nrm = new Float32Array(p.count*3);
+  const n = new THREE.Vector3();
+  for (let i=0;i<p.count;i++){
+    const x=p.getX(i), z=p.getZ(i);
+    const y=terrainH(x,z);
+    p.setY(i,y);
+    terrainNormal(x,z,n);
+    nrm[i*3]=n.x; nrm[i*3+1]=n.y; nrm[i*3+2]=n.z;
+    const slope = 1-n.y;
+    const v = fbm(x*0.021+13.7, z*0.021-7.1)*0.5+0.5;
+    const b = (0.80 + v*0.34 - slope*0.42) * 0.50;
+    colors[i*3]=b*1.02; colors[i*3+1]=b*0.995; colors[i*3+2]=b*0.955;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors,3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nrm,3));
+  geo.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    vertexColors:true, roughness:0.97, metalness:0.0
+  }));
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  return mesh;
+})();
+
+/* ---------- 7. 障碍物与空间索引 ---------- */
+const OBSTACLES = [];
+const GRID = 32, GN = Math.ceil(WORLD/GRID)+2;
+const gridIndex = new Map();
+function cellOf(x,z){ return (Math.floor((x+HALF)/GRID)) + ':' + (Math.floor((z+HALF)/GRID)); }
+function addObstacle(o){
+  o.id = OBSTACLES.length;
+  /* 旋转矩形没有 r，必须补一个外接半径：空间索引用 o.x ± o.r 计算覆盖网格，
+     缺省时会算成 NaN，导致该障碍永远不出现在 queryObs 结果里 —— 也就是车辆会直接穿过房屋。 */
+  if (o.r === undefined) o.r = Math.hypot(o.hx || 0, o.hz || 0);
+  OBSTACLES.push(o);
+  const cx0 = Math.max(0, Math.floor((o.x-o.r+HALF)/GRID)), cx1 = Math.min(GN-1, Math.floor((o.x+o.r+HALF)/GRID));
+  const cz0 = Math.max(0, Math.floor((o.z-o.r+HALF)/GRID)), cz1 = Math.min(GN-1, Math.floor((o.z+o.r+HALF)/GRID));
+  for(let cx=cx0;cx<=cx1;cx++) for(let cz=cz0;cz<=cz1;cz++){
+    const k = cx+':'+cz;
+    let a = gridIndex.get(k); if(!a){ a=[]; gridIndex.set(k,a); }
+    a.push(o);
+  }
+}
+const _q = [];
+function queryObs(x,z,r){
+  _q.length = 0;
+  const cx0 = Math.max(0,Math.floor((x-r+HALF)/GRID)), cx1 = Math.min(GN-1,Math.floor((x+r+HALF)/GRID));
+  const cz0 = Math.max(0,Math.floor((z-r+HALF)/GRID)), cz1 = Math.min(GN-1,Math.floor((z+r+HALF)/GRID));
+  for(let cx=cx0;cx<=cx1;cx++) for(let cz=cz0;cz<=cz1;cz++){
+    const a = gridIndex.get(cx+':'+cz);
+    if(a) for(let i=0;i<a.length;i++) if(_q.indexOf(a[i])<0) _q.push(a[i]);
+  }
+  return _q;
+}
+
+/* ---------- 8. 岩石 ---------- */
+const rockMats = [0x8b8880,0x7d7b74,0x96938c,0x6f6e69].map(c=>
+  new THREE.MeshStandardMaterial({color:c, roughness:.96, metalness:.02, flatShading:true}));
+const rockGeos = [];
+for(let g=0; g<7; g++){
+  const geo = new THREE.IcosahedronGeometry(1, 1);
+  const p = geo.attributes.position;
+  const rg = mulberry32(1000+g*37);
+  for(let i=0;i<p.count;i++){
+    const k = 0.72 + rg()*0.52;
+    p.setXYZ(i, p.getX(i)*k*(0.9+rg()*0.3), p.getY(i)*k*(0.65+rg()*0.5), p.getZ(i)*k*(0.9+rg()*0.3));
+  }
+  geo.computeVertexNormals();
+  rockGeos.push(geo);
+}
+/* 导航信标位置（沿三条运输线布置，兼作路标） */
+const BEACON_SPOTS = [
+  {x:  90.4, z: -53.9}, {x: 189.9, z:-155.8},
+  {x:-131.9, z: -63.3}, {x:-251.6, z: -86.6},
+  {x: -63.9, z: 124.3}, {x: -92.3, z: 249.0}
+];
+const ROCK_MIN_DIST_PAD = 15, ROCK_MIN_DIST_ROUTE = 13;
+function rockAllowed(x,z,r){
+  if (Math.hypot(x,z) < 9) return false;              // 出生点
+  for(const p of PADS) if (Math.hypot(x-p.x,z-p.z) < p.padR + ROCK_MIN_DIST_PAD + r) return false;
+  for(const rt of ROUTES){ if (segDist(x,z,rt).d < ROCK_MIN_DIST_ROUTE + r) return false; }
+  for(const b of BEACON_SPOTS) if (Math.hypot(x-b.x,z-b.z) < 12+r) return false;
+  return true;
+}
+const ROCKS = [];
+(function buildRocks(){
+  let guard=0;
+  while (ROCKS.length < 130 && guard++ < 20000){
+    const r = rr(1.1, 6.4);
+    const x = rr(-HALF+60, HALF-60), z = rr(-HALF+60, HALF-60);
+    if (!rockAllowed(x,z,r)) continue;
+    const gy = terrainH(x,z);
+    const sink = r*0.34;
+    const m = new THREE.Mesh(rockGeos[(rnd()*rockGeos.length)|0], rockMats[(rnd()*rockMats.length)|0]);
+    m.position.set(x, gy - sink, z);
+    m.rotation.set(rr(0,TAU), rr(0,TAU), rr(0,TAU));
+    m.scale.set(r, r*rr(0.62,1.0), r);
+    m.castShadow = true; m.receiveShadow = true;
+    scene.add(m);
+    ROCKS.push(m);
+    addObstacle({type:'cyl', x, z, r: r*0.88, y0: gy - sink - r*0.35, h: r*1.35});
+  }
+})();
+/* ---------- 9. 建筑构件 ---------- */
+const MAT = {
+  metal: new THREE.MeshStandardMaterial({color:0x9aa1aa, roughness:.42, metalness:.78}),
+  panel: new THREE.MeshStandardMaterial({color:0xd9dee6, roughness:.55, metalness:.24}),
+  dark:  new THREE.MeshStandardMaterial({color:0x2b3038, roughness:.70, metalness:.50}),
+  gold:  new THREE.MeshStandardMaterial({color:0xb99050, roughness:.40, metalness:.80}),
+  glass: new THREE.MeshStandardMaterial({color:0x0d1b2a, roughness:.12, metalness:.90, emissive:0x123054, emissiveIntensity:.55}),
+  solar: new THREE.MeshStandardMaterial({color:0x1b2a52, roughness:.20, metalness:.70, emissive:0x0a1430, emissiveIntensity:.30}),
+  pad:   new THREE.MeshStandardMaterial({color:0x343941, roughness:.88, metalness:.16})
+};
+const cyl=(rt,rb,h,s=20)=>new THREE.CylinderGeometry(rt,rb,h,s);
+const box=(w,h,d)=>new THREE.BoxGeometry(w,h,d);
+const hemi=(r,s=22)=>new THREE.SphereGeometry(r,s,12,0,TAU,0,Math.PI/2);
+function addMesh(geo,mat,x,y,z,ry){
+  const m=new THREE.Mesh(geo,mat);
+  m.position.set(x,y,z);
+  if(ry) m.rotation.y=ry;
+  m.castShadow=true; m.receiveShadow=true;
+  scene.add(m); return m;
+}
+function makePadTex(code, hex){
+  const S=512, c=document.createElement('canvas'); c.width=c.height=S;
+  const g=c.getContext('2d'); g.clearRect(0,0,S,S);
+  g.strokeStyle=hex;
+  g.globalAlpha=.5; g.lineWidth=7;  g.beginPath(); g.arc(S/2,S/2,S/2-18,0,TAU); g.stroke();
+  g.globalAlpha=.26; g.lineWidth=3;
+  [0.42,0.30,0.18].forEach(k=>{g.beginPath();g.arc(S/2,S/2,S*k,0,TAU);g.stroke();});
+  g.globalAlpha=.28; g.lineWidth=4;
+  g.beginPath(); g.moveTo(S/2,50); g.lineTo(S/2,S-50); g.moveTo(50,S/2); g.lineTo(S-50,S/2); g.stroke();
+  g.globalAlpha=1; g.fillStyle=hex;
+  g.font='700 66px ui-monospace,Consolas,monospace';
+  g.textAlign='center'; g.textBaseline='middle';
+  g.fillText(code, S/2, S/2);
+  g.font='500 22px ui-monospace,Consolas,monospace';
+  g.globalAlpha=.62; g.fillText('LANDING PAD', S/2, S/2+62);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=4;
+  return t;
+}
+
+const BEACONS = [];
+function buildBase(b, isHub){
+  const gy=b.y, cx=b.x, cz=b.z;
+  addMesh(cyl(b.padR,b.padR,0.6,56), MAT.pad, cx, gy-0.2, cz);
+  const decal=new THREE.Mesh(new THREE.CircleGeometry(b.padR*0.985,72),
+    new THREE.MeshBasicMaterial({map:makePadTex(isHub?'HUB':b.code, '#'+new THREE.Color(b.color).getHexString()),
+      transparent:true, depthWrite:false, opacity:.8}));
+  decal.rotation.x=-Math.PI/2; decal.position.set(cx,gy+0.13,cz); scene.add(decal);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(b.padR-0.18,0.2,8,84),
+    new THREE.MeshBasicMaterial({color:b.color}));
+  ring.rotation.x=-Math.PI/2; ring.position.set(cx,gy+0.2,cz); scene.add(ring);
+
+  // 边缘灯
+  const lg=new THREE.SphereGeometry(0.32,10,8);
+  const lm=new THREE.MeshBasicMaterial({color:b.color});
+  for(let i=0;i<12;i++){
+    const a=i/12*TAU;
+    const s=new THREE.Mesh(lg,lm);
+    s.position.set(cx+Math.cos(a)*(b.padR-0.9), gy+0.34, cz+Math.sin(a)*(b.padR-0.9));
+    scene.add(s);
+    if(i%3===0){
+      const g0=glowSprite(b.color, 3.2, .55); g0.position.copy(s.position); scene.add(g0);
+    }
+  }
+
+  // 建筑群（环形布置；必须避开运输通道与出站口，中心留出交付区）
+  const rg = mulberry32(isHub? 9911 : 5100+b.id*37);
+  const placed = [];
+  const N = 5;
+  for(let i=0;i<N;i++){
+    const rad=b.padR*0.80;
+    const baseA=(i/N)*TAU + 0.35 + rg()*0.30 + (isHub?0.40:0);
+    let bx=0, bz=0, kind=0, ok=false;
+    for(let tryN=0; tryN<10 && !ok; tryN++){
+      const a = baseA + tryN*0.42;
+      bx = cx+Math.cos(a)*rad; bz = cz+Math.sin(a)*rad;
+      kind = (i + (isHub?1:0) + tryN)%5;
+      const br = [3.0, 1.85, 3.9, 3.1, 0.9][kind];      // 该类型外径
+      ok = true;
+      for (const rt of ROUTES){                          // 不堵住任何运输通道
+        if (segDist(bx,bz,rt).d < br + 8){ ok=false; break; }
+      }
+      if (ok && isHub && Math.hypot(bx-SPAWN.x, bz-SPAWN.z) < br + 16) ok=false;  // 不堵住出站口
+      if (ok) for (const p of placed){                   // 彼此不重叠
+        if (Math.hypot(bx-p.x, bz-p.z) < br + p.r + 4){ ok=false; break; }
+      }
+    }
+    if (!ok) continue;
+    const gyi=terrainH(bx,bz);
+    placed.push({x:bx, z:bz, r:[3.0,1.85,3.9,3.1,0.9][kind]});
+    if(kind===0){
+      addMesh(cyl(2.9,2.9,3.8,24), MAT.panel, bx, gyi+1.9, bz);
+      addMesh(hemi(2.9), MAT.metal, bx, gyi+3.8, bz);
+      const wb=new THREE.Mesh(new THREE.TorusGeometry(2.92,0.17,6,28), new THREE.MeshBasicMaterial({color:b.color}));
+      wb.rotation.x=-Math.PI/2; wb.position.set(bx,gyi+2.5,bz); scene.add(wb);
+      addObstacle({type:'cyl',x:bx,z:bz,r:3.0,y0:gyi,h:6.7});
+    } else if(kind===1){
+      addMesh(cyl(1.7,1.7,5.2,18), MAT.metal, bx, gyi+2.6, bz);
+      addMesh(cyl(1.9,1.9,0.45,18), MAT.dark, bx, gyi+5.35, bz);
+      addMesh(cyl(1.95,1.95,0.22,18), MAT.gold, bx, gyi+3.2, bz);
+      addObstacle({type:'cyl',x:bx,z:bz,r:1.85,y0:gyi,h:5.8});
+    } else if(kind===2){
+      addMesh(hemi(3.9,26), MAT.panel, bx, gyi, bz);
+      const wb=new THREE.Mesh(new THREE.TorusGeometry(3.92,0.14,6,28), new THREE.MeshBasicMaterial({color:b.color}));
+      wb.rotation.x=-Math.PI/2; wb.position.set(bx,gyi+1.5,bz); scene.add(wb);
+      addObstacle({type:'cyl',x:bx,z:bz,r:3.9,y0:gyi,h:4.0});
+    } else if(kind===3){
+      const rot=rg()*TAU;
+      addMesh(box(6.2,2.6,2.6), MAT.gold, bx, gyi+1.3, bz, rot);
+      addMesh(box(6.3,0.16,2.7), MAT.dark, bx, gyi+2.65, bz, rot);
+      addObstacle({type:'box',x:bx,z:bz,hx:3.1,hz:1.3,rot,y0:gyi,h:2.7});
+    } else {
+      addMesh(cyl(0.3,0.5,16,12), MAT.metal, bx, gyi+8, bz);
+      for(let k=1;k<=3;k++) addMesh(cyl(1.5,1.5,0.1,14), MAT.dark, bx, gyi+4.6+k*3, bz);
+      const lamp=glowSprite(b.color, 7.5, .95);
+      lamp.position.set(bx, gy+16.6, bz); scene.add(lamp);
+      b.lamp=lamp;
+      addObstacle({type:'cyl',x:bx,z:bz,r:0.9,y0:gyi,h:16});
+    }
+  }
+
+  // 太阳能阵列（同样避开运输通道）
+  for(let i=0;i<3;i++){
+    const a=(i/3)*TAU + 0.7;
+    const sx=cx+Math.cos(a)*(b.padR+13), sz=cz+Math.sin(a)*(b.padR+13);
+    let blocked=false;
+    for (const rt of ROUTES){ if (segDist(sx,sz,rt).d < 11){ blocked=true; break; } }
+    if (blocked) continue;
+    const sy=terrainH(sx,sz);
+    addMesh(cyl(0.16,0.16,1.5,8), MAT.dark, sx, sy+0.75, sz);
+    const pn=addMesh(box(7,0.16,3.4), MAT.solar, sx, sy+1.62, sz, a+Math.PI/2);
+    pn.rotation.z=0.30;
+    addObstacle({type:'box',x:sx,z:sz,hx:3.5,hz:1.7,rot:a+Math.PI/2,y0:sy,h:2.4});
+  }
+
+  if(isHub){
+    // 装卸龙门吊：自动选一个远离三条运输通道的空档，避免堵住出站口
+    let bestA=0, bestD=-1;
+    for(let k=0;k<72;k++){
+      const a=k/72*TAU;
+      const px=cx+Math.cos(a)*20, pz=cz+Math.sin(a)*20;
+      let d=1e9;
+      for (const rt of ROUTES) d=Math.min(d, segDist(px,pz,rt).d);
+      if (d>bestD){ bestD=d; bestA=a; }
+    }
+    const gx=cx+Math.cos(bestA)*20, gz=cz+Math.sin(bestA)*20;
+    const ty=terrainH(gx,gz);
+    const cs=Math.cos(bestA), sn=Math.sin(bestA);
+    for(let k=0;k<4;k++){
+      const ox=(k%2?1:-1)*4.2, oz=(k<2?1:-1)*2.6;
+      const wx=gx+ox*cs-oz*sn, wz=gz+ox*sn+oz*cs;
+      const ly=terrainH(wx,wz);
+      addMesh(box(0.5,9,0.5), MAT.metal, wx, ly+4.5, wz, bestA);
+      addObstacle({type:'cyl', x:wx, z:wz, r:0.45, y0:ly, h:9.2});   // 只有立柱挡路，车可从横梁下穿过
+    }
+    addMesh(box(9.6,0.7,6.4), MAT.dark, gx, ty+9.3, gz, bestA);
+    addMesh(box(3.4,0.5,3.4), MAT.gold, gx, ty+8.4, gz, bestA);
+    addMesh(cyl(0.12,0.12,3.2,8), MAT.dark, gx, ty+6.6, gz);
+    addMesh(box(1.4,0.8,1.4), MAT.gold, gx, ty+4.9, gz, bestA);
+  }
+
+  // 交付区（装卸区不需要）
+  if(!isHub){
+    const dzR=b.padR*0.50;
+    b.deliverR=dzR;
+    const dz=new THREE.Mesh(new THREE.RingGeometry(dzR-0.8,dzR,72),
+      new THREE.MeshBasicMaterial({color:b.color, transparent:true, opacity:.62, side:THREE.DoubleSide, depthWrite:false}));
+    dz.rotation.x=-Math.PI/2; dz.position.set(cx,gy+0.22,cz); scene.add(dz);
+    b.dzRing=dz;
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(dzR*0.9,dzR*0.9,70,32,1,true),
+      new THREE.MeshBasicMaterial({color:b.color, transparent:true, opacity:.05, side:THREE.DoubleSide,
+        blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+    beam.position.set(cx,gy+35,cz); scene.add(beam);
+    b.beam=beam;
+  }
+
+  const lb=labelSprite(isHub?'静海中央装卸区':b.name, '#'+new THREE.Color(b.color).getHexString(), 1.0);
+  lb.position.set(cx, gy+(isHub?26:24), cz); scene.add(lb);
+}
+BASES.forEach((b,i)=>b.id=i);
+buildBase(HUB, true);
+BASES.forEach(b=>buildBase(b,false));
+
+/* ---------- 10. 导航信标 ---------- */
+BEACON_SPOTS.forEach((p,i)=>{
+  const gy=terrainH(p.x,p.z);
+  addMesh(cyl(0.26,0.4,11,10), MAT.metal, p.x, gy+5.5, p.z);
+  addMesh(new THREE.ConeGeometry(1.5,3.2,10), MAT.dark, p.x, gy+1.6, p.z);
+  for(let k=1;k<=3;k++) addMesh(cyl(1.1,1.1,0.1,12), MAT.dark, p.x, gy+3.4+k*2.4, p.z);
+  const lamp=glowSprite(0x4fd8e8, 6.5, .95);
+  lamp.position.set(p.x, gy+11.5, p.z); scene.add(lamp);
+  const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.55,1.5,46,14,1,true),
+    new THREE.MeshBasicMaterial({color:0x4fd8e8, transparent:true, opacity:.05, side:THREE.DoubleSide,
+      blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  beam.position.set(p.x, gy+23, p.z); scene.add(beam);
+  addObstacle({type:'cyl', x:p.x, z:p.z, r:0.85, y0:gy, h:11.5});
+  BEACONS.push({x:p.x, z:p.z, y:gy, lamp, beam, phase:i*0.83});
+});
+
+/* ---------- 11. 路线标记杆 ---------- */
+ROUTES.forEach((rt)=>{
+  const n=Math.floor(rt.len/34);
+  const vx=rt.bx-rt.ax, vz=rt.bz-rt.az, L=Math.hypot(vx,vz);
+  const nx=-vz/L, nz=vx/L;
+  for(let i=1;i<=n;i++){
+    const t=i/(n+1);
+    const sgn=(i%2)?1:-1;
+    const mx=rt.ax+vx*t+nx*13.5*sgn, mz=rt.az+vz*t+nz*13.5*sgn;
+    const gy=terrainH(mx,mz);
+    addMesh(cyl(0.13,0.16,2.3,8), MAT.dark, mx, gy+1.15, mz);
+    const tip=new THREE.Mesh(new THREE.SphereGeometry(0.28,10,8), new THREE.MeshBasicMaterial({color:0xffb648}));
+    tip.position.set(mx,gy+2.42,mz); scene.add(tip);
+    const g0=glowSprite(0xffb648,2.8,.45); g0.position.copy(tip.position); scene.add(g0);
+  }
+});
+/* =========================================================================
+   12. 月球车：模型与运行状态
+   ========================================================================= */
+const rover = {
+  group: new THREE.Group(),      // 位置 = 地面高度，朝向 = yaw
+  body:  new THREE.Group(),      // 车身（带坡度/侧倾姿态）
+  wheelGrp: new THREE.Group(),   // 车轮（各自贴合地形）
+  wheels: [], wheelLocal: [], M: null,
+  pos: new THREE.Vector3(SPAWN.x, SPAWN_GY + HOVER, SPAWN.z),
+  vel: new THREE.Vector3(),      // 水平速度
+  vy: 0,
+  yaw: Math.atan2(BASES[0].x - SPAWN.x, BASES[0].z - SPAWN.z),
+  vLong: 0, vLat: 0, aLong: 0, aLat: 0, slip: 0,
+  steerVis: 0,
+  airborne: false, contact: false, nearEdge: false,
+  prevSurf: SPAWN_GY, prevVyT: 0,
+  up: new THREE.Vector3(0,1,0),
+  orient: new THREE.Quaternion(),
+  battery: 100,
+  rolled: false, rollReason: '',
+  lastSafe: new THREE.Vector3(SPAWN.x, SPAWN_GY + HOVER, SPAWN.z),
+  lastSafeYaw: 0,
+  odometer: 0, topSpeed: 0, drops: 0, dropCd: 0,
+  shake: 0, onPadBase: null, lamps: []
+};
+scene.add(rover.group);
+rover.group.add(rover.body);
+rover.group.add(rover.wheelGrp);
+
+const _tmpN = new THREE.Vector3(), _worldUp = new THREE.Vector3(0,1,0);
+const _fwdV = new THREE.Vector3(), _leftV = new THREE.Vector3(), _upV = new THREE.Vector3();
+const _m4 = new THREE.Matrix4(), _eul = new THREE.Euler(), _qTmp = new THREE.Quaternion();
+const _flipQ = new THREE.Quaternion(), _zAxis = new THREE.Vector3(0,0,1);
+const _vTmpA = new THREE.Vector3(), _vTmpB = new THREE.Vector3();
+
+function buildRover(){
+  const M = {
+    body:  new THREE.MeshStandardMaterial({color:0xc9cdd3, roughness:.42, metalness:.70}),
+    dark:  new THREE.MeshStandardMaterial({color:0x23262c, roughness:.66, metalness:.55}),
+    trim:  new THREE.MeshStandardMaterial({color:0xffb648, roughness:.38, metalness:.62}),
+    glass: new THREE.MeshStandardMaterial({color:0x0e1b2c, roughness:.10, metalness:.95,
+            emissive:0x163a5e, emissiveIntensity:.55}),
+    wheel: new THREE.MeshStandardMaterial({color:0x141416, roughness:.95, metalness:.05}),
+    rim:   new THREE.MeshStandardMaterial({color:0x8c9099, roughness:.50, metalness:.80}),
+    solar: new THREE.MeshStandardMaterial({color:0x1b2a52, roughness:.22, metalness:.70,
+            emissive:0x0a1430, emissiveIntensity:.30}),
+    lamp:  new THREE.MeshBasicMaterial({color:0xfff3d6}),
+    tail:  new THREE.MeshBasicMaterial({color:0xff4a3a})
+  };
+  rover.M = M;
+  const B = rover.body;
+  const put=(geo,mat,x,y,z,rx,ry,rz)=>{
+    const m=new THREE.Mesh(geo,mat);
+    m.position.set(x,y,z);
+    if(rx||ry||rz) m.rotation.set(rx||0,ry||0,rz||0);
+    m.castShadow=true; m.receiveShadow=true;
+    B.add(m); return m;
+  };
+  const bx=(w,h,d)=>new THREE.BoxGeometry(w,h,d);
+
+  put(bx(2.50,0.42,4.60), M.body, 0, HOVER, 0);
+  put(bx(2.64,0.20,3.10), M.dark, 0, HOVER-0.28, -0.25);
+  put(bx(2.56,0.28,0.22), M.trim, 0, HOVER+0.14,  2.36);
+  put(bx(2.56,0.28,0.22), M.trim, 0, HOVER+0.14, -2.36);
+  // 车斗
+  put(bx(2.40,0.14,2.60), M.dark, 0, HOVER+0.32, -1.15);
+  put(bx(0.12,0.44,2.60), M.trim,  1.16, HOVER+0.55, -1.15);
+  put(bx(0.12,0.44,2.60), M.trim, -1.16, HOVER+0.55, -1.15);
+  put(bx(2.40,0.44,0.12), M.trim, 0, HOVER+0.55, -2.38);
+  put(bx(2.40,0.44,0.12), M.trim, 0, HOVER+0.55,  0.10);
+  // 驾驶舱
+  put(bx(2.10,0.86,1.90), M.body,  0, HOVER+0.66,  1.05);
+  put(bx(1.86,0.60,0.10), M.glass, 0, HOVER+0.76,  2.02);
+  put(bx(0.10,0.60,1.70), M.glass,  1.05, HOVER+0.76, 1.05);
+  put(bx(0.10,0.60,1.70), M.glass, -1.05, HOVER+0.76, 1.05);
+  put(bx(2.20,0.10,2.00), M.dark,  0, HOVER+1.14,  1.05);
+  const sp = put(bx(2.00,0.07,1.70), M.solar, 0, HOVER+1.27, 1.05, -0.30,0,0);
+  sp.name = 'solar';
+  // 天线 / 尾部设备
+  put(new THREE.CylinderGeometry(0.05,0.05,1.25,8), M.dark, 0.86, HOVER+1.80, -0.55);
+  put(new THREE.ConeGeometry(0.40,0.22,14,1,true), M.rim, 0.86, HOVER+2.42, -0.55, 1.15,0,0.30);
+  put(bx(0.70,0.42,0.60), M.dark, -0.85, HOVER+0.35, -2.05);
+  // 车灯 / 尾灯
+  for(const sx of [-0.80, 0.80]){
+    put(bx(0.34,0.20,0.10), M.lamp, sx, HOVER+0.18, 2.42);
+    const sl = new THREE.SpotLight(0xfff0d2, 26, 95, 0.50, 0.55, 1.15);
+    sl.position.set(sx, HOVER+0.20, 2.30);
+    const tg = new THREE.Object3D(); tg.position.set(sx*0.7, HOVER-0.9, 32);
+    B.add(tg); sl.target = tg; B.add(sl);
+    rover.lamps.push(sl);
+  }
+  for(const sx of [-0.92, 0.92]) put(bx(0.24,0.14,0.10), M.tail, sx, HOVER+0.22, -2.42);
+
+  // 六轮
+  const wg = new THREE.CylinderGeometry(RIDE, RIDE, 0.44, 22); wg.rotateZ(Math.PI/2);
+  const rg0 = new THREE.TorusGeometry(RIDE*0.60, 0.055, 6, 20); rg0.rotateY(Math.PI/2);
+  for(const wz of [1.60, 0.0, -1.60]) for(const wx of [1.44, -1.44]){
+    const w = new THREE.Group();
+    const tire = new THREE.Mesh(wg, M.wheel);
+    tire.castShadow = true; tire.receiveShadow = true;
+    w.add(tire);
+    for(const s of [1,-1]){ const r0=new THREE.Mesh(rg0, M.rim); r0.position.x = s*0.17; w.add(r0); }
+    w.rotation.order = 'YXZ';
+    rover.wheelGrp.add(w);
+    rover.wheels.push(w);
+    rover.wheelLocal.push(new THREE.Vector3(wx, RIDE, wz));
+  }
+}
+
+/* =========================================================================
+   13. 货物
+   ========================================================================= */
+const CARGO = [];
+const SLOT_POS = [[-0.62,-1.80],[0.62,-1.80],[0.00,-0.42]];
+function buildCargo(){
+  const sizes = [[1.24,1.14,1.14],[1.30,0.98,1.16],[0.98,1.28,1.24]];
+  for(let i=0;i<3;i++){
+    const cd = CARGO_DEF[i], sz = sizes[i];
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sz[0],sz[1],sz[2]),
+      new THREE.MeshStandardMaterial({color:cd.color, roughness:.34, metalness:.52}));
+    m.castShadow = true; m.receiveShadow = true; g.add(m);
+    const bandMat = new THREE.MeshStandardMaterial({color:0x24282f, roughness:.75, metalness:.35});
+    const b1 = new THREE.Mesh(new THREE.BoxGeometry(sz[0]*1.03, sz[1]*1.03, sz[2]*0.30), bandMat);
+    g.add(b1);
+    const b2 = new THREE.Mesh(new THREE.BoxGeometry(sz[0]*0.30, sz[1]*1.03, sz[2]*1.03), bandMat);
+    g.add(b2);
+    // 掉落时的定位光柱
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.45,1.1,30,14,1,true),
+      new THREE.MeshBasicMaterial({color:cd.color, transparent:true, opacity:.10, side:THREE.DoubleSide,
+        blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+    beam.position.y = 15; beam.visible = false; g.add(beam);
+    const marker = glowSprite(cd.color, 5.5, .85); marker.position.y = 3.2; marker.visible = false; g.add(marker);
+    rover.body.add(g);
+    CARGO.push({i, def:cd, sz, group:g, beam, marker,
+      state:'loaded', pos:new THREE.Vector3(), vel:new THREE.Vector3(),
+      yaw:0, roll:0, rest:false, pickProg:0, pickLock:0, deliveredAt:null});
+  }
+  layoutCargo();
+}
+function cargoBedY(i){ return HOVER + 0.39 + CARGO[i].sz[1]*0.5; }
+function layoutCargo(){
+  for(const c of CARGO){
+    if (c.state !== 'loaded') continue;
+    c.group.position.set(SLOT_POS[c.i][0], cargoBedY(c.i), SLOT_POS[c.i][1]);
+    c.group.rotation.set(0,0,0);
+    c.group.visible = true;
+    c.beam.visible = false; c.marker.visible = false;
+  }
+}
+function cargoOnboardCount(){ return CARGO.filter(c=>c.state==='loaded').length; }
+function deliveredCount(){ return CARGO.filter(c=>c.state==='delivered').length; }
+
+function dropCargo(reasonTxt){
+  if (rover.dropCd > 0) return false;      // 单次碰撞只甩出一箱
+  const list = CARGO.filter(c=>c.state==='loaded');
+  if(!list.length) return false;
+  rover.dropCd = 1.3;
+  const c = list[list.length-1];
+  c.state = 'dropped'; c.rest = false; c.pickProg = 0; c.pickLock = 0.9;
+  c.group.getWorldPosition(c.pos);
+  // 由车斗世界坐标转为世界物体
+  rover.body.remove(c.group);
+  scene.add(c.group);
+  c.group.position.copy(c.pos);
+  c.group.rotation.set(0, rover.yaw, 0);
+  const s = Math.sin(rover.yaw), co = Math.cos(rover.yaw);
+  c.vel.set(rover.vel.x*0.45 + (Math.random()-0.5)*2.2, 2.0 + Math.random()*1.6,
+            rover.vel.z*0.45 + (Math.random()-0.5)*2.2);
+  c.vel.x -= s*1.2; c.vel.z -= co*1.2;
+  c.beam.visible = true; c.marker.visible = true;
+  rover.drops++;
+  toast('⚠ 货物甩出车外：'+c.def.name, 'warn');
+  flash(0.35);
+  return true;
+}
+function updateDroppedCargo(dt){
+  for(const c of CARGO){
+    if (c.state !== 'dropped') continue;
+    c.vel.y -= G*dt;
+    c.pos.addScaledVector(c.vel, dt);
+    const gh = terrainH(c.pos.x, c.pos.z) + c.sz[1]*0.5;
+    if (c.pos.y <= gh){
+      c.pos.y = gh;
+      if (c.vel.y < -0.6) c.vel.y *= -0.22; else c.vel.y = 0;
+      c.vel.x *= 0.70; c.vel.z *= 0.70;
+      if (Math.hypot(c.vel.x,c.vel.z) < 0.25){ c.vel.x=0; c.vel.z=0; c.rest=true; }
+    }
+    // 与障碍物简单分离
+    const list = queryObs(c.pos.x, c.pos.z, 3);
+    for(const o of list){
+      if (c.pos.y - c.sz[1]*0.5 > o.y0 + o.h - 0.1) continue;
+      if (o.type==='cyl'){
+        const dx=c.pos.x-o.x, dz=c.pos.z-o.z, md=o.r+c.sz[0]*0.4, d=Math.hypot(dx,dz);
+        if (d < md && d > 1e-4){ c.pos.x += dx/d*(md-d); c.pos.z += dz/d*(md-d); c.vel.multiplyScalar(0.4); }
+      }
+    }
+    if (!c.rest){ c.yaw += dt*0.7; c.roll += dt*0.5; }
+    c.group.position.copy(c.pos);
+    c.group.rotation.set(0, c.yaw, 0);
+
+    // 拾取
+    if (c.pickLock > 0) c.pickLock -= dt;
+    const d = Math.hypot(c.pos.x-rover.pos.x, c.pos.z-rover.pos.z);
+    const slow = Math.abs(rover.vLong) < 5.0 && !rover.rolled;
+    if (d < PICKUP_R && slow && c.pickLock <= 0){
+      c.pickProg += dt;
+      centerMsg('装货中…', c.def.name+' · 保持低速', c.pickProg/1.3, 1);
+      if (c.pickProg >= 1.3){
+        c.state='loaded'; c.pickProg=0;
+        rover.body.add(c.group);
+        layoutCargo();
+        toast('↺ 已装回车斗：'+c.def.name, 'good');
+        hideCenter();
+      }
+    } else if (c.pickProg > 0){ c.pickProg = 0; }
+  }
+}
+
+/* =========================================================================
+   14. 输入
+   ========================================================================= */
+const keys = Object.create(null);
+const input = {throttle:0, brake:0, steer:0, handbrake:0};
+let steerSm = 0;
+function readInput(){
+  input.throttle = (keys['KeyW']||keys['ArrowUp'])   ? 1 : 0;
+  input.brake    = (keys['KeyS']||keys['ArrowDown']) ? 1 : 0;
+  input.steer    = ((keys['KeyA']||keys['ArrowLeft'])?1:0) - ((keys['KeyD']||keys['ArrowRight'])?1:0);
+  input.handbrake= keys['Space'] ? 1 : 0;
+}
+window.addEventListener('keydown', e=>{
+  keys[e.code] = true;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].indexOf(e.code)>=0) e.preventDefault();
+  if(e.code==='KeyR') respawn(true);
+  if(e.code==='KeyC') setCameraMode((camMode+1)%3);
+  if(e.code==='Digit1') setCameraMode(0);
+  if(e.code==='Digit2') setCameraMode(1);
+  if(e.code==='Digit3') setCameraMode(2);
+  if(e.code==='KeyH') document.getElementById('hint').classList.toggle('min');
+  if(e.code==='KeyL') lampOn = !lampOn;
+  if(e.code==='Enter' && !gameStarted) startGame();
+},{passive:false});
+window.addEventListener('keyup', e=>{ keys[e.code] = false; });
+window.addEventListener('blur', ()=>{ for(const k in keys) keys[k]=false; });
+
+/* =========================================================================
+   15. 车辆动力学（低重力 + 摩擦圆 + 地形跟随 + 碰撞）
+   ========================================================================= */
+function stepVehicle(dt){
+  const s = Math.sin(rover.yaw), c = Math.cos(rover.yaw);
+  const fx=s, fz=c, lx=c, lz=-s;                       // forward / left
+  let vLong = rover.vel.x*fx + rover.vel.z*fz;
+  let vLat  = rover.vel.x*lx + rover.vel.z*lz;
+
+  // --- 地形坡度 → 重力分量（上坡减速 / 下坡加速） ---
+  const g0 = terrainGrad(rover.pos.x, rover.pos.z);
+  const denom = 1 + g0.gx*g0.gx + g0.gz*g0.gz;
+  const slopeLong = g0.gx*fx + g0.gz*fz;               // >0 上坡
+  const slopeLat  = g0.gx*lx + g0.gz*lz;
+  const aGravLong = -G*slopeLong/denom;
+  const aGravLat  = -G*slopeLat/denom;
+  const loadF = rover.airborne ? 0 : Math.max(0.20, 1/Math.sqrt(denom));
+
+  // --- 驱动 / 制动 ---
+  const thr = input.throttle, brk = input.brake;
+  const power = rover.battery > 0.5 ? 1 : 0;
+  let aDrive = 0;
+  if (thr>0) aDrive = thr*ENGINE_A*power;
+  if (brk>0) aDrive = (vLong > 0.5) ? -brk*BRAKE_A : -brk*REV_A*power;
+  if (vLong >  MAX_SPEED && aDrive > 0) aDrive = 0;
+  if (vLong < -MAX_REV   && aDrive < 0) aDrive = 0;
+  if (thr===0 && brk===0){                              // 机械阻力（月面无空气阻力）
+    const roll = 0.18 + 0.008*Math.abs(vLong);
+    aDrive -= Math.sign(vLong)*roll;
+    if (Math.abs(vLong) < roll*dt + 0.02) aDrive = -vLong/Math.max(dt,1e-4);
+  }
+  if (input.handbrake>0) aDrive = -Math.sign(vLong)*Math.min(BRAKE_A*1.3, Math.abs(vLong)/Math.max(dt,1e-4));
+
+  // --- 转向（自行车模型 + 低速原地回转） ---
+  steerSm = damp(steerSm, input.steer, 9, dt);
+  const spAbs = Math.abs(vLong);
+  const steerMax = STEER_HI + (STEER_LO-STEER_HI)*Math.exp(-spAbs/7);
+  const ang = steerSm*steerMax;
+  let yawRate = vLong*Math.tan(ang)/WHEELBASE;
+  yawRate += steerSm*0.92*(1-Math.min(1, spAbs/5))*((thr||brk)?1:0.55);
+  yawRate = clamp(yawRate, -1.7, 1.7);
+  if (input.handbrake>0) yawRate *= 1.3;
+  if (rover.airborne) yawRate *= 0.28;
+  rover.steerVis = damp(rover.steerVis, ang, 10, dt);
+
+  // --- 横向抓地 ---
+  let aLatGrip = clamp(-vLat/Math.max(dt,1e-4), -70, 70);
+  if (input.handbrake>0) aLatGrip *= 0.10;
+  // --- 摩擦圆：驱动力与侧向抓地共享有限的月面附着力 ---
+  const aMax = MU*G*loadF;
+  const mag = Math.hypot(aDrive, aLatGrip);
+  if (mag > aMax){ const k=aMax/mag; aDrive*=k; aLatGrip*=k; }
+  if (rover.airborne){ aDrive = 0; aLatGrip = 0; }
+
+  // --- 陡坡打滑下滑 ---
+  let aSlide = 0;
+  const excess = Math.abs(slopeLong) - MAX_CLIMB;
+  if (excess > 0 && !rover.airborne) aSlide = -Math.sign(slopeLong)*excess*G*3.4;
+
+  vLong += (aDrive + aGravLong + aSlide)*dt;
+  vLat  += (aLatGrip + aGravLat)*dt;
+  if (thr===0 && brk===0 && input.handbrake===0 && Math.abs(vLong) < 0.10) vLong = 0;
+
+  rover.yaw += yawRate*dt;
+  if (rover.yaw >  Math.PI) rover.yaw -= TAU;
+  if (rover.yaw < -Math.PI) rover.yaw += TAU;
+
+  const s2=Math.sin(rover.yaw), c2=Math.cos(rover.yaw);
+  rover.vel.set(s2*vLong + c2*vLat, 0, c2*vLong - s2*vLat);
+  rover.vLong = vLong; rover.vLat = vLat;
+  rover.aLong = aDrive + aGravLong + aSlide;
+  rover.aLat  = aLatGrip + aGravLat;
+  rover.slip  = Math.abs(vLat);
+}
+
+/* 碰撞：车头/车尾两个球体 vs 障碍物（圆柱 / 旋转矩形） */
+const _cols = [[1.45,1.52],[-1.45,1.52]];
+function moveAndCollide(dt){
+  rover.pos.x += rover.vel.x*dt;
+  rover.pos.z += rover.vel.z*dt;
+  rover.contact = false;
+  let impact = 0, latImpact = 0;
+  const s = Math.sin(rover.yaw), c = Math.cos(rover.yaw);
+  for (let iter=0; iter<4; iter++){
+    let moved = false;
+    for (let ci=0; ci<_cols.length; ci++){
+      const cx = rover.pos.x + s*_cols[ci][0], cz = rover.pos.z + c*_cols[ci][0];
+      const R = _cols[ci][1];
+      const lowR = rover.pos.y - HOVER, highR = rover.pos.y + 1.45;
+      const list = queryObs(cx, cz, R+12);
+      for (let i=0;i<list.length;i++){
+        const o = list[i];
+        if (highR < o.y0 + 0.10 || lowR > o.y0 + o.h - 0.10) continue;  // 从上方飞越
+        let nx=0, nz=0, pen=0;
+        if (o.type==='cyl'){
+          const dx = cx-o.x, dz = cz-o.z;
+          const d = Math.hypot(dx,dz), md = R + o.r;
+          if (d >= md) continue;
+          if (d < 1e-4){ nx=1; nz=0; pen=md; } else { nx=dx/d; nz=dz/d; pen=md-d; }
+        } else {
+          const cs=Math.cos(o.rot), sn=Math.sin(o.rot);
+          const dx = cx-o.x, dz = cz-o.z;
+          const lx =  dx*cs + dz*sn, lz = -dx*sn + dz*cs;
+          const qx = clamp(lx,-o.hx,o.hx), qz = clamp(lz,-o.hz,o.hz);
+          const ddx = lx-qx, ddz = lz-qz, d2 = ddx*ddx + ddz*ddz;
+          if (d2 > R*R) continue;
+          let lnx, lnz, p;
+          if (d2 > 1e-8){
+            const d = Math.sqrt(d2); lnx = ddx/d; lnz = ddz/d; p = R-d;
+          } else {
+            const px = o.hx - Math.abs(lx), pz = o.hz - Math.abs(lz);
+            if (px < pz){ lnx = Math.sign(lx)||1; lnz = 0; p = px + R; }
+            else        { lnx = 0; lnz = Math.sign(lz)||1; p = pz + R; }
+          }
+          nx = lnx*cs - lnz*sn;
+          nz = lnx*sn + lnz*cs;
+          pen = p;
+        }
+        rover.pos.x += nx*pen;
+        rover.pos.z += nz*pen;
+        const vn = rover.vel.x*nx + rover.vel.z*nz;
+        if (vn < 0){
+          rover.vel.x -= nx*vn*1.22;
+          rover.vel.z -= nz*vn*1.22;
+          rover.vel.multiplyScalar(0.88);
+          rover.contact = true; moved = true;
+          const im = -vn;
+          const latF = Math.abs(nx*c - nz*s);           // 法线与车身纵轴的垂直程度
+          if (im > impact) impact = im;
+          if (im*latF > latImpact) latImpact = im*latF;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  // 世界边界
+  const rad = Math.hypot(rover.pos.x, rover.pos.z), LIM = HALF-40;
+  if (rad > LIM){
+    const ux = rover.pos.x/rad, uz = rover.pos.z/rad;
+    rover.pos.x = ux*LIM; rover.pos.z = uz*LIM;
+    const vn = rover.vel.x*ux + rover.vel.z*uz;
+    if (vn > 0){ rover.vel.x -= ux*vn*1.4; rover.vel.z -= uz*vn*1.4; }
+    rover.nearEdge = true;
+  } else rover.nearEdge = rad > LIM-45;
+
+  if (impact > 0){
+    rover.shake = Math.min(1, rover.shake + impact/22);
+    if (impact > 3.2) flash(Math.min(0.45, impact/40));
+    if (impact >= DROP_IMPACT) dropCargo('impact');
+    if (latImpact >= FLIP_IMPACT) flipRover('side');
+  }
+}
+
+/* 垂直运动：贴合地形 / 冲上坡顶后腾空（低重力 → 飘） */
+function updateVertical(dt){
+  const surf = terrainH(rover.pos.x, rover.pos.z);
+  if (rover.airborne){
+    rover.vy -= G*dt;
+    rover.pos.y += rover.vy*dt;
+    const rest = surf + HOVER;
+    if (rover.pos.y <= rest){
+      const impact = -rover.vy;
+      rover.pos.y = rest; rover.vy = 0; rover.airborne = false; rover.prevVyT = 0;
+      rover.shake = Math.min(1, rover.shake + impact/26);
+      if (impact >= 12) flipRover('land');
+      else if (impact >= LAND_IMPACT) dropCargo('land');
+    }
+  } else {
+    const vt = (surf - rover.prevSurf)/Math.max(dt,1e-4);
+    const aReq = (vt - rover.prevVyT)/Math.max(dt,1e-4);
+    if (aReq < -G*1.5 && Math.abs(rover.vLong) > 5){
+      rover.airborne = true;
+      // 悬挂行程吸收大部分冲击动能：起飞垂直速度受限
+      // （月面重力仅 1.62 m/s²，限制在 3.8 m/s 依然能滞空约 4.7s、飞出数十米）
+      rover.vy = clamp(Math.max(rover.prevVyT, 0)*0.45, 0, 3.8);
+    } else {
+      rover.pos.y = surf + HOVER;
+      rover.vy = 0;
+    }
+    rover.prevVyT = damp(rover.prevVyT, vt, 20, dt);
+  }
+  rover.prevSurf = surf;
+  if (rover.pos.y < surf + HOVER) rover.pos.y = surf + HOVER;
+}
+
+function flipRover(reason){
+  if (rover.rolled) return;
+  rover.rolled = true;
+  rover.rollReason = reason;
+  rover.vel.set(0,0,0); rover.vLong = 0; rover.vLat = 0; rover.vy = 0;
+  rover.shake = 1;
+  _flipQ.setFromAxisAngle(_zAxis, (Math.random()<0.5?1:-1)*(Math.PI*0.52));
+  flash(0.5);
+  toast('⨯ 车辆翻覆 — 按 R 复位', 'bad');
+}
+function respawn(manual){
+  const gy = terrainH(rover.lastSafe.x, rover.lastSafe.z);
+  rover.pos.set(rover.lastSafe.x, gy + HOVER, rover.lastSafe.z);
+  rover.yaw = rover.lastSafeYaw;
+  rover.vel.set(0,0,0); rover.vLong=0; rover.vLat=0; rover.vy=0;
+  rover.airborne = false; rover.rolled = false;
+  rover.up.set(0,1,0);   rover.prevSurf = gy; rover.prevVyT = 0;
+  rover.body.quaternion.identity();
+  rover.orient.identity();
+  rover.shake = 0;
+  syncView(0);
+  if (manual) toast('车辆已复位', '');
+}
+
+function updateOrientation(dt){
+  terrainNormal(rover.pos.x, rover.pos.z, _tmpN);
+  if (rover.airborne) rover.up.lerp(_worldUp, 1-Math.exp(-4*dt));
+  else                rover.up.lerp(_tmpN,    1-Math.exp(-11*dt));
+  rover.up.normalize();
+  _fwdV.set(Math.sin(rover.yaw), 0, Math.cos(rover.yaw));
+  _fwdV.addScaledVector(rover.up, -_fwdV.dot(rover.up));
+  if (_fwdV.lengthSq() < 1e-6) _fwdV.set(0,0,1);
+  _fwdV.normalize();
+  _leftV.crossVectors(rover.up, _fwdV).normalize();     // X = up × forward
+  _m4.makeBasis(_leftV, rover.up, _fwdV);
+  rover.orient.setFromRotationMatrix(_m4);
+  if (rover.rolled){
+    rover.orient.multiply(_flipQ);
+  } else {
+    const roll  = clamp( 0.020*rover.aLat,  -0.26, 0.26);
+    const pitch = clamp(-0.013*rover.aLong, -0.20, 0.20);
+    _eul.set(pitch, 0, roll, 'XYZ');
+    _qTmp.setFromEuler(_eul);
+    rover.orient.multiply(_qTmp);
+  }
+  rover.body.quaternion.copy(rover.orient);
+  rover.tilt = Math.acos(clamp(rover.up.dot(_worldUp), -1, 1));
+}
+
+function updateWheels(dt){
+  const s = Math.sin(rover.yaw), c = Math.cos(rover.yaw);
+  const surf = terrainH(rover.pos.x, rover.pos.z);
+  for (let i=0;i<rover.wheels.length;i++){
+    const L = rover.wheelLocal[i];
+    const wx = rover.pos.x + L.x*c + L.z*s;
+    const wz = rover.pos.z - L.x*s + L.z*c;
+    const tgt = clamp(terrainH(wx,wz) - surf, -1.7, 1.7) + RIDE;
+    const w = rover.wheels[i];
+    w.position.x = L.x; w.position.z = L.z;
+    w.position.y = damp(w.position.y, tgt, 16, dt);
+    w.rotation.x += rover.vLong/RIDE*dt;
+    const front = L.z > 1.0 ? 1 : (L.z < -1.0 ? -0.55 : 0);
+    w.rotation.y = damp(w.rotation.y, front*rover.steerVis, 10, dt);
+  }
+}
+
+function updateBattery(dt){
+  const th = input.throttle, br = input.brake;
+  let drain = 0.06 + 0.34*th + 0.14*br + 0.004*Math.abs(rover.vLong);
+  let charge = 0;
+  if (th < 0.02 && Math.abs(rover.vLong) < 0.8) charge = 1.40;         // 车载太阳能板
+  if (rover.onPadBase) charge = Math.max(charge, 5.0);                 // 基地快充
+  rover.battery = clamp(rover.battery - drain*dt + charge*dt, 0, 100);
+}
+
+/* 视图同步：group 原点位于「地面高度」，车身零件以 HOVER 抬高，
+   车轮各自贴合地形。rover.pos.y = 地面 + HOVER。 */
+function syncView(dt){
+  rover.group.position.set(rover.pos.x, rover.pos.y - HOVER, rover.pos.z);
+  rover.group.rotation.y = rover.yaw;
+  rover.group.updateMatrixWorld(true);
+}
+
+function updateRover(dt){
+  readInput();
+  if (rover.rolled){
+    rover.vel.multiplyScalar(0.86);
+    rover.vLong *= 0.86; rover.vLat *= 0.86;
+    updateVertical(dt);
+    updateOrientation(dt);
+    updateWheels(dt);
+    syncView(dt);
+    return;
+  }
+  const steps = Math.min(4, Math.max(1, Math.ceil(dt/0.022)));
+  const h = dt/steps;
+  for (let i=0;i<steps;i++){
+    stepVehicle(h);
+    moveAndCollide(h);
+    updateVertical(h);
+  }
+  updateBattery(dt);
+  updateOrientation(dt);
+  updateWheels(dt);
+  syncView(dt);
+  rover.odometer += Math.abs(rover.vLong)*dt;
+  rover.topSpeed = Math.max(rover.topSpeed, Math.abs(rover.vLong));
+  rover.shake = Math.max(0, rover.shake - dt*2.2);
+  rover.dropCd = Math.max(0, rover.dropCd - dt);
+  if (!rover.airborne && !rover.contact && rover.tilt < 0.42 && Math.abs(rover.vLong) < 16){
+    rover.lastSafe.set(rover.pos.x, rover.pos.y, rover.pos.z);
+    rover.lastSafeYaw = rover.yaw;
+  }
+}
+
+/* =========================================================================
+   16. 交付 / 拾取 / 任务流程
+   ========================================================================= */
+const DELIVER_TIME = 1.8;
+let deliverBase = null, deliverProg = 0, won = false, elapsed = 0;
+
+function updateMission(dt){
+  // 判断所在基地
+  rover.onPadBase = null;
+  for (const b of BASES){
+    const d = Math.hypot(rover.pos.x-b.x, rover.pos.z-b.z);
+    if (d < b.deliverR + DELIVER_R){ rover.onPadBase = b; break; }
+  }
+  const loaded = cargoOnboardCount();
+  const target = rover.onPadBase && !rover.onPadBase.delivered ? rover.onPadBase : null;
+  const slowEnough = Math.abs(rover.vLong) < 3.0;
+
+  if (target && loaded > 0 && slowEnough && !rover.rolled){
+    if (deliverBase !== target){ deliverBase = target; deliverProg = 0; }
+    deliverProg += dt;
+    centerMsg('正在卸载货物', target.name + ' · ' + (DELIVER_TIME-deliverProg).toFixed(1) + ' s',
+              deliverProg/DELIVER_TIME, 2);
+    if (deliverProg >= DELIVER_TIME){
+      deliverTo(target);
+      deliverProg = 0; deliverBase = null;
+    }
+  } else {
+    if (deliverBase){ deliverBase = null; deliverProg = 0; }
+  }
+}
+function deliverTo(base){
+  const c = CARGO.find(x=>x.state==='loaded');
+  if (!c) return;
+  c.state = 'delivered'; c.deliveredAt = base;
+  rover.body.remove(c.group);
+  scene.add(c.group);
+  const a = Math.random()*TAU, r = base.deliverR*0.45 + 2.5;
+  c.group.position.set(base.x + Math.cos(a)*r, base.y + c.sz[1]*0.5, base.z + Math.sin(a)*r);
+  c.group.rotation.set(0, Math.random()*TAU, 0);
+  c.beam.visible = false; c.marker.visible = false;
+  base.delivered = true;
+  base.deliveredBy = c;
+  if (base.dzRing) base.dzRing.material.color.set(0x5ddc9a);
+  if (base.beam)   base.beam.material.color.set(0x5ddc9a);
+  layoutCargo();
+  hideCenter();
+  toast('✓ 已送达：' + c.def.name + ' → ' + base.name, 'good');
+  flash(0.18, '#5ddc9a');
+  const n = deliveredCount();
+  if (n >= 3 && !won) triggerWin();
+  else if (n < 3) {
+    const next = BASES.find(b=>!b.delivered);
+    toast('下一目标：' + next.name, '');
+  }
+}
+/* =========================================================================
+   17. 镜头：第一人称 / 第三人称跟随 / 远景观察
+   ========================================================================= */
+let camMode = 1, lampOn = true;
+let bodyForceVisible = false;   // 仅供自动化验证强制显示车体（复现第一人称视野被遮挡）
+const camState = {
+  chase: new THREE.Vector3(),
+  init: false,
+  theta: Math.PI*0.25, phi: 0.82, radius: 165,
+  target: new THREE.Vector3(), dragging: false, lastDrag: 0, px:0, py:0
+};
+const _idCam = {
+  angle: 0,
+};
+function setCameraMode(m){
+  camMode = ((m%3)+3)%3;
+  document.getElementById('camName').textContent = ['第一人称','第三人称','远景观察'][camMode];
+  if (camMode === 2) camState.lastDrag = 0;
+}
+renderer.domElement.addEventListener('pointerdown', e=>{
+  camState.dragging = true; camState.px = e.clientX; camState.py = e.clientY;
+  renderer.domElement.setPointerCapture && renderer.domElement.setPointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener('pointerup', e=>{
+  camState.dragging = false; camState.lastDrag = performance.now();
+});
+renderer.domElement.addEventListener('pointermove', e=>{
+  if (!camState.dragging) return;
+  const dx = e.clientX - camState.px, dy = e.clientY - camState.py;
+  camState.px = e.clientX; camState.py = e.clientY;
+  camState.theta -= dx*0.005;
+  camState.phi = clamp(camState.phi - dy*0.004, 0.10, 1.38);
+  camState.lastDrag = performance.now();
+});
+renderer.domElement.addEventListener('wheel', e=>{
+  if (camMode === 2){
+    camState.radius = clamp(camState.radius * (1 + Math.sign(e.deltaY)*0.12), 45, 360);
+    e.preventDefault();
+  }
+}, {passive:false});
+
+const _camPos = new THREE.Vector3(), _camLook = new THREE.Vector3(), _qY180 = new THREE.Quaternion();
+_qY180.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.PI);
+function updateCamera(dt){
+  // 第一人称必须隐藏车体：镜头位于驾驶舱内部，车厢箱体/前挡/货箱/太阳能板
+  // 全都在近裁剪面附近，车身一俯仰就会整块糊住视野。车轮在两侧 1.44 m、低于镜头 1.28 m，
+  // 落在视锥之外，保留可见反而有驾驶感。
+  // bodyForceVisible 仅供自动化验证把车体强行显示出来，复现「视野被遮挡」以自证断言有效。
+  const hideBody = (camMode === 0) && !bodyForceVisible;
+  if (rover.body.visible === hideBody) rover.body.visible = !hideBody;
+  // 朝向 —— 三种镜头共用的地平线参考
+  if (camMode === 0){
+    // 第一人称：位于驾驶舱内
+    _camPos.set(0.0, HOVER + 0.72, 1.15).applyQuaternion(rover.orient).add(rover.group.position);
+    camera.position.copy(_camPos);
+    camera.quaternion.copy(rover.orient).multiply(_qY180);
+    // 视点随地形微俯
+    camera.rotateX(-0.04);
+  } else if (camMode === 1){
+    // 第三人称：平滑跟随
+    const s = Math.sin(rover.yaw), c = Math.cos(rover.yaw);
+    const back = 11.5, up = 5.6;
+    _camPos.set(rover.pos.x - s*back, rover.pos.y + up, rover.pos.z - c*back);
+    const floorSeen = terrainH(_camPos.x, _camPos.z) + 2.6;
+    if (_camPos.y < floorSeen) _camPos.y = floorSeen;
+    if (!camState.init){ camState.chase.copy(_camPos); camState.init = true; }
+    const k = 1 - Math.exp(-6.5*dt);
+    camState.chase.lerp(_camPos, k);
+    camera.position.copy(camState.chase);
+    _camLook.set(rover.pos.x + s*3.0, rover.pos.y + 1.5, rover.pos.z + c*3.0);
+    camera.lookAt(_camLook);
+  } else {
+    // 远景观察：缓慢环绕 + 可拖拽
+    if (!camState.dragging && performance.now() - camState.lastDrag > 1500) camState.theta += 0.045*dt;
+    camState.target.lerp(rover.pos, 1-Math.exp(-3*dt));
+    const r = camState.radius, ph = camState.phi, th = camState.theta;
+    camera.position.set(
+      camState.target.x + Math.sin(th)*Math.cos(ph)*r,
+      camState.target.y + Math.sin(ph)*r,
+      camState.target.z + Math.cos(th)*Math.cos(ph)*r
+    );
+    const minY = terrainH(camera.position.x, camera.position.z) + 4;
+    if (camera.position.y < minY) camera.position.y = minY;
+    camera.lookAt(camState.target.x, camState.target.y + 2, camState.target.z);
+  }
+  // 撞击抖动
+  if (rover.shake > 0.001){
+    const a = rover.shake * 0.55;
+    camera.position.x += (Math.random()-0.5)*a;
+    camera.position.y += (Math.random()-0.5)*a;
+    camera.position.z += (Math.random()-0.5)*a;
+  }
+}
+function updateIdleCam(dt){
+  _idCam.angle += dt*0.06;
+  const r = 78, t = rover.pos;
+  camera.position.set(t.x + Math.cos(_idCam.angle)*r, t.y + 34, t.z + Math.sin(_idCam.angle)*r);
+  camera.position.y = Math.max(camera.position.y, terrainH(camera.position.x, camera.position.z) + 22);
+  camera.lookAt(t.x, t.y + 2.5, t.z);
+}
+
+/* =========================================================================
+   18. 扬起的月尘
+   ========================================================================= */
+const DUST_N = 280;
+const dust = {geo:new THREE.BufferGeometry(), pos:new Float32Array(DUST_N*3),
+  vel:new Float32Array(DUST_N*3), life:new Float32Array(DUST_N), head:0, acc:0, pts:null};
+function initDust(){
+  for (let i=0;i<DUST_N;i++) dust.pos[i*3+1] = -9999;
+  dust.geo.setAttribute('position', new THREE.BufferAttribute(dust.pos,3));
+  // 必须挂 GLOW 贴图：PointsMaterial 不带 map 时会把每个粒子渲染成硬边方块，
+  // 近距离看就是一串白色小方块而不是尘雾。
+  dust.pts = new THREE.Points(dust.geo, new THREE.PointsMaterial({size:0.9, map:GLOW, color:0xa9a29a,
+    transparent:true, opacity:0.5, sizeAttenuation:true, depthWrite:false}));
+  dust.pts.frustumCulled = false;
+  scene.add(dust.pts);
+}
+function updateDust(dt){
+  const sp = Math.abs(rover.vLong);
+  if (!rover.airborne && !rover.rolled && sp > 2.0){
+    const rate = clamp((sp*0.7 + rover.slip*2.2 + (input.handbrake?7:0))/10, 0, 3.2);
+    dust.acc += rate*42*dt;
+    while (dust.acc > 1){
+      dust.acc -= 1;
+      const s = Math.sin(rover.yaw), c = Math.cos(rover.yaw);
+      const side = Math.random()<0.5 ? 1 : -1;
+      const wx = rover.pos.x - s*1.6 + c*side*1.45;
+      const wz = rover.pos.z - c*1.6 - s*side*1.45;
+      const i = dust.head; dust.head = (dust.head+1)%DUST_N;
+      dust.pos[i*3] = wx; dust.pos[i*3+1] = terrainH(wx,wz)+0.2; dust.pos[i*3+2] = wz;
+      dust.vel[i*3]   = -rover.vel.x*0.16 + (Math.random()-0.5)*1.4;
+      dust.vel[i*3+1] = 0.7 + Math.random()*1.5;
+      dust.vel[i*3+2] = -rover.vel.z*0.16 + (Math.random()-0.5)*1.4;
+      dust.life[i] = 1.0 + Math.random()*0.8;
+    }
+  }
+  for (let i=0;i<DUST_N;i++){
+    if (dust.life[i] <= 0) continue;
+    dust.life[i] -= dt;
+    dust.vel[i*3+1] -= G*0.30*dt;
+    dust.pos[i*3]   += dust.vel[i*3]*dt;
+    dust.pos[i*3+1] += dust.vel[i*3+1]*dt;
+    dust.pos[i*3+2] += dust.vel[i*3+2]*dt;
+    if (dust.life[i] <= 0) dust.pos[i*3+1] = -9999;
+  }
+  dust.geo.attributes.position.needsUpdate = true;
+}
+
+/* =========================================================================
+   19. 界面：提示 / HUD / 小地图
+   ========================================================================= */
+const toastBox = document.getElementById('toasts');
+function toast(msg, type){
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type||'');
+  t.textContent = msg;
+  toastBox.appendChild(t);
+  while (toastBox.children.length > 4) toastBox.firstChild.remove();
+  setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 3200);
+}
+const flashEl = document.getElementById('flash');
+function flash(strength, color){
+  flashEl.style.background = color || '#ff5a3c';
+  flashEl.style.opacity = String(strength == null ? 0.3 : strength);
+  setTimeout(()=>{ flashEl.style.opacity = '0'; }, 90);
+}
+const cmEl = document.getElementById('centerMsg'), cmText = document.getElementById('cmText'),
+      pgWrap = document.getElementById('pgWrap'), pgBar = pgWrap.firstElementChild;
+let cmReq = {pri:-1, text:'', sub:'', prog:-1};
+function centerMsg(text, sub, prog, pri){ if (pri >= cmReq.pri) cmReq = {pri, text, sub, prog}; }
+function beginCenter(){ cmReq = {pri:-1, text:'', sub:'', prog:-1}; }
+function applyCenter(){
+  if (cmReq.pri < 0){ cmEl.classList.remove('on'); return; }
+  cmText.innerHTML = cmReq.text + (cmReq.sub ? '<span class="sub">'+cmReq.sub+'</span>' : '');
+  if (cmReq.prog >= 0){ pgWrap.style.display = 'block'; pgBar.style.width = (clamp(cmReq.prog,0,1)*100)+'%'; }
+  else pgWrap.style.display = 'none';
+  cmEl.classList.add('on');
+}
+function hideCenter(){}
+
+const ui = {
+  spd: document.getElementById('spd'), spdBar: document.querySelector('#spdBar > i'),
+  bat: document.getElementById('bat'), batBar: document.getElementById('batBar'),
+  batFill: document.querySelector('#batBar > i'), chips: document.getElementById('chips'),
+  mTitle: document.getElementById('mTitle'), mSub: document.getElementById('mSub'),
+  mDist: document.getElementById('mDist'), baseList: document.getElementById('baseList'),
+  slots: document.getElementById('slots'), delivN: document.getElementById('delivN'),
+  mm: document.getElementById('minimap'), mmCtx: document.getElementById('minimap').getContext('2d'),
+  coord: document.getElementById('mapCoord'), hint: document.getElementById('hint')
+};
+/* 预先烘焙小地图地形 */
+const mmBake = document.createElement('canvas'); mmBake.width = mmBake.height = 180;
+(function bakeMinimap(){
+  const g = mmBake.getContext('2d');
+  const img = g.createImageData(180,180);
+  for (let j=0;j<180;j++){
+    for (let i=0;i<180;i++){
+      const x = (i/179)*WORLD - HALF, z = (j/179)*WORLD - HALF;
+      const h = terrainH(x,z);
+      const gx = (terrainH(x+7,z)-terrainH(x-7,z))/14;
+      const gz = (terrainH(x,z+7)-terrainH(x,z-7))/14;
+      const slope = clamp(Math.hypot(gx,gz)/1.1, 0, 1);
+      let b = 30 + 54*smoothstep(-30, 34, h) + (1-slope)*30 + slope*16;
+      const o = (j*180+i)*4;
+      img.data[o]   = clamp(b*1.03, 6, 236);
+      img.data[o+1] = clamp(b*0.99, 6, 232);
+      img.data[o+2] = clamp(b*0.94, 6, 224);
+      img.data[o+3] = 255;
+    }
+  }
+  g.putImageData(img,0,0);
+})();
+function drawMinimap(){
+  const W = ui.mm.width, g = ui.mmCtx, s = W/WORLD;
+  const TX = x => (x+HALF)*s, TZ = z => (z+HALF)*s;
+  g.clearRect(0,0,W,W);
+  g.drawImage(mmBake, 0, 0, W, W);
+  // 路线
+  g.strokeStyle = 'rgba(255,182,72,.22)'; g.lineWidth = 2.5; g.setLineDash([7,9]);
+  for (const r of ROUTES){
+    g.beginPath(); g.moveTo(TX(r.ax), TZ(r.az)); g.lineTo(TX(r.bx), TZ(r.bz)); g.stroke();
+  }
+  g.setLineDash([]);
+  // 信标
+  g.fillStyle = '#4fd8e8';
+  for (const p of BEACON_SPOTS){
+    g.beginPath(); g.arc(TX(p.x), TZ(p.z), 3.4, 0, TAU); g.fill();
+  }
+  // 基地
+  const tgt = nearestUndeliveredBase();
+  for (const b of BASES){
+    const bx = TX(b.x), bz = TZ(b.z);
+    const col = b.delivered ? '#5ddc9a' : (b===tgt ? '#ffb648' : 'rgba(255,255,255,.55)');
+    g.strokeStyle = col; g.lineWidth = b===tgt ? 3.2 : 2;
+    g.beginPath(); g.arc(bx, bz, b.padR*s, 0, TAU); g.stroke();
+    g.fillStyle = col;
+    g.beginPath(); g.arc(bx, bz, b.delivered?5.5:4.5, 0, TAU); g.fill();
+    if (b===tgt){
+      g.globalAlpha = .35;
+      g.beginPath(); g.arc(bx, bz, b.padR*s+7, 0, TAU); g.stroke();
+      g.globalAlpha = 1;
+    }
+  }
+  // 装卸区
+  g.strokeStyle = '#e8e4dc'; g.lineWidth = 2;
+  g.beginPath(); g.arc(TX(HUB.x), TZ(HUB.z), HUB.padR*s, 0, TAU); g.stroke();
+  g.fillStyle = '#e8e4dc';
+  g.beginPath(); g.arc(TX(HUB.x), TZ(HUB.z), 4, 0, TAU); g.fill();
+  // 掉落货物
+  for (const c of CARGO){
+    if (c.state !== 'dropped') continue;
+    g.fillStyle = '#ff8a3d';
+    g.fillRect(TX(c.pos.x)-4.5, TZ(c.pos.z)-4.5, 9, 9);
+    g.strokeStyle = 'rgba(255,138,61,.6)'; g.lineWidth = 2;
+    g.beginPath(); g.arc(TX(c.pos.x), TZ(c.pos.z), 9+Math.sin(performance.now()*0.004)*3, 0, TAU); g.stroke();
+  }
+  // 月球车
+  const rx = TX(rover.pos.x), rz = TZ(rover.pos.z);
+  const s2 = Math.sin(rover.yaw), c2 = Math.cos(rover.yaw);
+  const AV = 9;
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.moveTo(rx + s2*AV, rz + c2*AV);
+  g.lineTo(rx - s2*7 - c2*6.5, rz - c2*7 + s2*6.5);
+  g.lineTo(rx - s2*3.5,         rz - c2*3.5);
+  g.lineTo(rx - s2*7 + c2*6.5, rz - c2*7 - s2*6.5);
+  g.closePath(); g.fill();
+  // 北向
+  g.fillStyle = 'rgba(255,255,255,.5)';
+  g.font = '600 20px system-ui,sans-serif'; g.textAlign = 'center';
+  g.fillText('N', W/2, 24);
+  ui.coord.textContent = rover.pos.x.toFixed(0) + ', ' + rover.pos.z.toFixed(0);
+}
+function nearestUndeliveredBase(){
+  let best = null, bd = Infinity;
+  for (const b of BASES){
+    if (b.delivered) continue;
+    const d = Math.hypot(rover.pos.x-b.x, rover.pos.z-b.z);
+    if (d < bd){ bd = d; best = b; }
+  }
+  return best;
+}
+function updateHUD(){
+  const kmh = Math.abs(rover.vLong*3.6);
+  ui.spd.textContent = kmh.toFixed(0);
+  ui.spdBar.style.width = clamp(kmh/(MAX_SPEED*3.6)*100, 0, 100) + '%';
+  ui.bat.textContent = Math.round(rover.battery) + '%';
+  ui.batFill.style.width = rover.battery + '%';
+  ui.batBar.className = rover.battery < 15 ? 'crit' : (rover.battery < 40 ? 'warn' : '');
+
+  let ch = '';
+  if (rover.rolled)     ch += '<span class="chip roll">车辆翻覆</span>';
+  if (rover.airborne)   ch += '<span class="chip air">腾空中</span>';
+  if (rover.slip > 2.5) ch += '<span class="chip slip">侧滑 '+rover.slip.toFixed(1)+'</span>';
+  if (rover.contact)    ch += '<span class="chip">接触障碍</span>';
+  if (rover.battery <= 0.6) ch += '<span class="chip roll">电量耗尽</span>';
+  else if (rover.onPadBase && rover.onPadBase.delivered) ch += '<span class="chip slow">基地充电</span>';
+  else if (rover.battery < 100 && Math.abs(rover.vLong) < 0.8 && input.throttle===0) ch += '<span class="chip slow">太阳能充电</span>';
+  if (rover.nearEdge)   ch += '<span class="chip">接近边界</span>';
+  if (Math.abs(rover.aLong) > 0.02 && Math.sign(rover.aLong) < 0 && Math.abs(rover.vLong) > 1)
+    ch += '<span class="chip">减速中</span>';
+  ui.chips.innerHTML = ch;
+
+  const loaded = cargoOnboardCount();
+  const tgt = nearestUndeliveredBase();
+  if (tgt){
+    const d = Math.hypot(rover.pos.x-tgt.x, rover.pos.z-tgt.z);
+    ui.mTitle.textContent = '→ ' + tgt.name;
+    ui.mSub.textContent = loaded > 0 ? ('货舱 '+loaded+' 箱 · 已送达 '+deliveredCount()+'/3') : '货舱为空 · 先取回掉落货物';
+    if (loaded > 0){
+      ui.mDist.innerHTML = d.toFixed(0) + '<span>距离 m</span>';
+    } else {
+      const dc = CARGO.filter(c=>c.state==='dropped');
+      if (dc.length){
+        let md = Infinity;
+        for (const c of dc) md = Math.min(md, Math.hypot(rover.pos.x-c.pos.x, rover.pos.z-c.pos.z));
+        ui.mDist.innerHTML = md.toFixed(0) + '<span>货物距离 m</span>';
+      } else ui.mDist.innerHTML = '—<span>距离 m</span>';
+    }
+  } else {
+    ui.mTitle.textContent = '全部送达';
+    ui.mSub.textContent = '任务完成';
+    ui.mDist.innerHTML = '0<span>距离 m</span>';
+  }
+
+  let bh = '';
+  for (const b of BASES){
+    const d = Math.hypot(rover.pos.x-b.x, rover.pos.z-b.z);
+    const hex = '#' + new THREE.Color(b.color).getHexString();
+    let cls = 'bItem';
+    if (b.delivered) cls += ' done';
+    else if (b === tgt) cls += ' tgt';
+    bh += '<div class="'+cls+'"><span class="dot" style="background:'+hex+';color:'+hex+'"></span>' +
+          '<span class="bName">'+b.name+'</span>' +
+          '<span class="bDist">'+(b.delivered ? '已补给' : d.toFixed(0)+'m')+'</span></div>';
+  }
+  ui.baseList.innerHTML = bh;
+
+  let sh = '';
+  for (const c of CARGO){
+    let cls = 'slot', st;
+    if (c.state === 'delivered'){ cls += ' done'; st = '已送达'; }
+    else if (c.state === 'dropped'){ cls += ' dropped'; st = '掉落中'; }
+    else { cls += ' loaded'; st = '在车斗'; }
+    sh += '<div class="'+cls+'"><b>'+c.def.short+'</b>'+c.def.name+'<br>'+st+'</div>';
+  }
+  ui.slots.innerHTML = sh;
+  ui.delivN.textContent = deliveredCount();
+  drawMinimap();
+}
+
+/* =========================================================================
+   20. 场景动画：信标闪烁 / 阳光跟随
+   ========================================================================= */
+function animateWorld(t, dt){
+  for (const b of BEACONS){
+    b.lamp.material.opacity = 0.35 + Math.sin(t*2.4 + b.phase)*0.40 + 0.25;
+  }
+  for (const b of BASES){
+    if (b.lamp) b.lamp.material.opacity = 0.45 + Math.sin(t*3.1)*0.45;
+    if (b.dzRing) b.dzRing.material.opacity = 0.45 + Math.sin(t*2.0 + b.id)*0.22;
+  }
+  sun.target.position.set(rover.pos.x, rover.pos.y, rover.pos.z);
+  sun.position.set(rover.pos.x + SUN_DIR.x*300, rover.pos.y + SUN_DIR.y*300, rover.pos.z + SUN_DIR.z*300);
+  for (const l of rover.lamps) l.intensity = lampOn ? 26 : 0;
+}
+
+/* =========================================================================
+   21. 流程：开始 / 通关 / 重启
+   ========================================================================= */
+let gameStarted = false;
+const mmss = s => Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2,'0');
+function triggerWin(){
+  won = true;
+  document.getElementById('stats').innerHTML =
+    '<div class="stat"><b>'+mmss(elapsed)+'</b><span>任务用时</span></div>' +
+    '<div class="stat"><b>'+rover.odometer.toFixed(0)+'<i>m</i></b><span>行驶里程</span></div>' +
+    '<div class="stat"><b>'+(rover.topSpeed*3.6).toFixed(0)+'<i>km/h</i></b><span>最高车速</span></div>' +
+    '<div class="stat"><b>'+rover.drops+'<i>次</i></b><span>货物掉落</span></div>';
+  document.getElementById('win').classList.remove('hide');
+  toast('任务完成：三处基地全部补给到位', 'good');
+}
+function startGame(){
+  gameStarted = true;
+  document.getElementById('start').classList.add('hide');
+  document.getElementById('hud').classList.add('on');
+  respawn(false);
+  layoutCargo();
+  elapsed = 0;
+  toast('任务开始：将三箱设备运抵三个基地', 'good');
+}
+function restartGame(){
+  won = false; elapsed = 0;
+  toastBox.innerHTML = '';        // 清掉上一局的残留提示，否则会与「任务已重置」同屏显示且内容矛盾
+  hideCenter();
+  rover.drops = 0; rover.odometer = 0; rover.topSpeed = 0; rover.battery = 100;
+  for (const b of BASES){
+    b.delivered = false;
+    if (b.dzRing) b.dzRing.material.color.set(b.color);
+    if (b.beam)   b.beam.material.color.set(b.color);
+  }
+  for (const c of CARGO){
+    if (c.state !== 'loaded'){ scene.remove(c.group); rover.body.add(c.group); }
+    c.state = 'loaded'; c.deliveredAt = null; c.pickProg = 0; c.rest = false;
+    c.vel.set(0,0,0);
+  }
+  layoutCargo();
+  rover.lastSafe.set(SPAWN.x, SPAWN_GY + HOVER, SPAWN.z);
+  rover.lastSafeYaw = Math.atan2(BASES[0].x - SPAWN.x, BASES[0].z - SPAWN.z);
+  respawn(false);
+  document.getElementById('win').classList.add('hide');
+  toast('任务已重置', '');
+}
+document.getElementById('btnStart').addEventListener('click', startGame);
+document.getElementById('btnAgain').addEventListener('click', restartGame);
+
+/* =========================================================================
+   22. 主循环（固定步长物理，帧率无关）
+   ========================================================================= */
+const FIXED_DT = 1/60;
+let simAcc = 0, timeScale = 1;
+
+/* 一个物理步：所有与 dt 相关的推进都在这里，保证低帧率下游戏时间仍然等于真实时间 */
+function simulate(dt){
+  elapsed += dt;
+  updateRover(dt);
+  updateDroppedCargo(dt);
+  updateMission(dt);
+}
+
+/* 一帧：物理按固定步长推进，视觉/UI 每帧一次。
+   fullRender=false 时只推进物理（用于自动化验证与快进），不渲染。 */
+function frameStep(frameDtRaw, fullRender){
+  const frameDt = Math.min(frameDtRaw > 0 ? frameDtRaw : 0.016, 0.25);
+  if (!gameStarted){
+    const d = Math.min(frameDt, 0.05);
+    updateIdleCam(d); animateWorld(performance.now()*0.001, d);
+    if (fullRender !== false) renderer.render(scene, camera);
+    return;
+  }
+  beginCenter();
+  simAcc += frameDt * timeScale;
+  let steps = 0;
+  while (simAcc >= FIXED_DT && steps < 24){ simulate(FIXED_DT); simAcc -= FIXED_DT; steps++; }
+  if (simAcc > FIXED_DT) simAcc = 0;                 // 极端掉帧时丢弃积压，避免追帧雪崩
+  if (!steps) simAcc = Math.max(simAcc, 0);
+
+  if (rover.rolled) centerMsg('车 辆 翻 覆', '按 R 键复位到最近安全点', -1, 9);
+  else if (rover.battery <= 0.6) centerMsg('电 量 耗 尽', '停车等待车载太阳能充电', -1, 8);
+
+  if (fullRender === false) return;
+  const visDt = Math.min(frameDt, 0.05);
+  updateCamera(visDt);
+  applyCenter();
+  updateHUD();
+  updateDust(visDt);
+  animateWorld(performance.now()*0.001, visDt);
+  renderer.render(scene, camera);
+}
+
+let prevT = performance.now();
+function animate(){
+  requestAnimationFrame(animate);
+  frameCount++;
+  const now = performance.now();
+  const raw = (now - prevT)/1000; prevT = now;
+  frameStep(raw, true);
+}
+
+/* =========================================================================
+   23. 自适应 / 启动
+   ========================================================================= */
+function layoutUI(){
+  const panelR = document.getElementById('panelR');
+  document.getElementById('camBadge').style.top = (18 + panelR.offsetHeight + 10) + 'px';
+}
+window.addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  layoutUI();
+});
+
+const errors = [];
+window.addEventListener('error', e=>errors.push(String(e.message)));
+window.addEventListener('unhandledrejection', e=>errors.push('promise: ' + String(e.reason)));
+
+buildRover();
+buildCargo();
+initDust();
+rover.lastSafeYaw = Math.atan2(BASES[0].x - SPAWN.x, BASES[0].z - SPAWN.z);
+respawn(false);
+layoutUI();
+document.getElementById('loading').classList.add('hide');
+document.getElementById('start').classList.remove('hide');
+
+/* ---------- 自测接口（供自动化试玩验证） ---------- */
+let frameCount = 0;
+let inputOverride = null;
+const _origRead = readInput;
+readInput = function(){
+  if (inputOverride){
+    input.throttle = inputOverride.throttle || 0;
+    input.brake    = inputOverride.brake || 0;
+    input.steer    = inputOverride.steer || 0;
+    input.handbrake= inputOverride.handbrake || 0;
+    return;
+  }
+  _origRead();
+};
+window.__LR = {
+  ready: true, version: '1.0.0', errors,
+  start: ()=>startGame(),
+  restart: ()=>restartGame(),
+  setInput: (o)=>{ inputOverride = o ? Object.assign({throttle:0,brake:0,steer:0,handbrake:0}, o) : null; },
+  clearInput: ()=>{ inputOverride = null; },
+  teleport: (x, z, yaw)=>{
+    rover.pos.set(x, terrainH(x,z) + HOVER, z);
+    if (yaw != null) rover.yaw = yaw;
+    rover.vel.set(0,0,0); rover.vLong = 0; rover.vLat = 0; rover.vy = 0;
+    rover.airborne = false; rover.rolled = false;
+    rover.prevSurf = terrainH(x,z); rover.prevVyT = 0;
+    rover.lastSafe.set(x, rover.pos.y, z); rover.lastSafeYaw = rover.yaw || 0;
+    syncView(0);
+  },
+  flip: ()=>flipRover('test'),
+  drop: ()=>dropCargo('test'),
+  setCam: (m)=>setCameraMode(m),
+  forceBodyVisible: (v)=>{ bodyForceVisible = !!v; },
+  setTimeScale: (v)=>{ timeScale = clamp(Number(v)||1, 0.1, 8); },
+  stepSim: (n)=>{ for(let i=0;i<n;i++) simulate(FIXED_DT); },
+  /* 从当前相机沿视线发一条射线，返回最近命中的实体网格距离，以及它是否属于漫游车自身。
+     用于断言「第一人称前方视野没有被自身几何体挡住」——比像素统计更直接可靠。
+     两个坑：Sprite.raycast 需要 raycaster.camera；three.js 的 intersectObjects 不会因
+     父级隐藏而跳过子级，必须自己判断整条可见性链，否则隐藏车体后仍会命中其子级货箱。 */
+  camOcclusion: ()=>{
+    camera.updateMatrixWorld(true);
+    scene.updateMatrixWorld(true);
+    const dir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion).normalize();
+    const ray = new THREE.Raycaster(camera.position.clone(), dir, 0.01, 600);
+    const targets = [];
+    scene.traverse(o=>{
+      if (!o.isMesh) return;                       // 排除 Points / Sprite（星空、光晕、尾尘）
+      let p = o, vis = true;
+      while (p){ if (p.visible === false){ vis = false; break; } p = p.parent; }
+      if (vis) targets.push(o);
+    });
+    const hits = ray.intersectObjects(targets, false);
+    const first = hits[0] || null;
+    let selfHit = false;
+    if (first){
+      let p = first.object;
+      while (p){ if (p === rover.group){ selfHit = true; break; } p = p.parent; }
+    }
+    return {dist: first ? +first.distance.toFixed(2) : null, selfHit, tested: targets.length};
+  },
+  /* 立即渲染一帧并同步从 GL 缓冲区读像素，统计亮度分布。
+     自动化验证「第一人称视野是否被自身几何体糊住」用：
+     渲染缓冲区不保留时只能在同一任务内 readPixels 才拿得到真实画面。 */
+  frameSample: (fx, fy, fw, fh)=>{
+    renderer.render(scene, camera);
+    const gl = renderer.getContext();
+    const W = renderer.domElement.width, H = renderer.domElement.height;
+    const x = Math.max(0, Math.round(W*fx)), y = Math.max(0, Math.round(H*fy));
+    const w = Math.min(W-x, Math.max(2, Math.round(W*fw)));
+    const h = Math.min(H-y, Math.max(2, Math.round(H*fh)));
+    const buf = new Uint8Array(w*h*4);
+    gl.readPixels(x, H-y-h, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);   // GL 原点在左下
+    const set = new Set();
+    let minL=999, maxL=-1, dark=0, light=0, n=0, sL=0, sL2=0;
+    for (let i=0;i<buf.length;i+=4){
+      const L = 0.2126*buf[i] + 0.7152*buf[i+1] + 0.0722*buf[i+2];
+      set.add((buf[i]>>4)+','+(buf[i+1]>>4)+','+(buf[i+2]>>4));
+      if (L<minL) minL=L;
+      if (L>maxL) maxL=L;
+      if (L<60) dark++;
+      if (L>140) light++;
+      sL+=L; sL2+=L*L; n++;
+    }
+    const mean = sL/Math.max(1,n);
+    return {colors:set.size, mean:+mean.toFixed(1), minL:Math.round(minL), maxL:Math.round(maxL),
+            sd:+Math.sqrt(Math.max(0, sL2/Math.max(1,n) - mean*mean)).toFixed(1), dark, light, n};
+  },
+  frameStep: (n, dt, render)=>{ for(let i=0;i<(n||1);i++) frameStep(dt||FIXED_DT, render !== false); },
+  respawn: ()=>respawn(true),
+  terrainH: (x,z)=>terrainH(x,z),
+  bases: ()=>BASES.map(b=>({name:b.name, x:b.x, z:b.z, deliverR:b.deliverR, delivered:b.delivered})),
+  routes: ()=>ROUTES.map(r=>({ax:r.ax, az:r.az, bx:r.bx, bz:r.bz})),
+  craters: ()=>CRATERS.map(c=>({x:c.x, z:c.z, r:c.r, d:c.d, rim:c.rim})),
+  hub: ()=>({x:HUB.x, z:HUB.z, y:HUB.y, padR:HUB.padR}),
+  spawn: ()=>({x:SPAWN.x, z:SPAWN.z}),
+  obstacles: OBSTACLES,
+  get state(){
+    return {
+      started: gameStarted, won, elapsed,
+      x: rover.pos.x, y: rover.pos.y, z: rover.pos.z,
+      groundY: terrainH(rover.pos.x, rover.pos.z),
+      yaw: rover.yaw, speed: rover.vLong, lat: rover.vLat, vy: rover.vy,
+      airborne: rover.airborne, rolled: rover.rolled, battery: rover.battery,
+      tilt: rover.tilt, contact: rover.contact, onPad: rover.onPadBase ? rover.onPadBase.name : null,
+      cam: camMode, error: errors.length,
+      camName: document.getElementById('camName').textContent,
+      camPos: [camera.position.x, camera.position.y, camera.position.z],
+      // 第一人称应隐藏车体（否则驾驶舱/货箱会糊住视野），供自动化回归断言
+      bodyVisible: rover.body.visible,
+      input: {throttle:input.throttle, brake:input.brake, steer:input.steer, handbrake:input.handbrake},
+      keysDown: Object.keys(keys).filter(k=>keys[k]),
+      override: !!inputOverride,
+      cargo: CARGO.map(c=>({name:c.def.name, state:c.state,
+              x:c.state==='loaded'?null:c.pos.x, z:c.state==='loaded'?null:c.pos.z,
+              pickProg:+c.pickProg.toFixed(2), pickLock:+c.pickLock.toFixed(2),
+              dist:Math.hypot(c.pos.x-rover.pos.x, c.pos.z-rover.pos.z)})),
+      delivered: deliveredCount(), drops: rover.drops,
+      odometer: rover.odometer, frames: frameCount,
+      // 供自动化试玩使用的判定常量（与游戏内保持一致，避免测试写死数值）
+      pickR: PICKUP_R, deliverR: DELIVER_R,
+      pickSlow: 5.0, dropImpact: DROP_IMPACT
+    };
+  }
+};
+
+setCameraMode(1);
+camera.position.set(SPAWN.x - 16, SPAWN_GY + 10, SPAWN.z - 16);
+camState.init = false;
+animate();
+</script>
+</body>
+</html>
