@@ -1,0 +1,52 @@
+{
+  "name": "woolly-debts",
+  "version": "1.1.0",
+  "description": "《羊债必须清》——原创肥羊砸罐主动增量游戏",
+  "author": "Rain Studio",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "build:web": "pnpm run typecheck && vite build",
+    "build:exe": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1",
+    "test": "vitest run",
+    "test:e2e": "node tests/e2e.mjs",
+    "test:exe": "node tests/exe-smoke.mjs",
+    "verify": "pnpm run test && pnpm run build:web && pnpm run test:e2e"
+  },
+  "dependencies": {
+    "three": "^0.179.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.179.0",
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12",
+    "playwright-core": "^1.54.2",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.1",
+    "vitest": "^3.2.4"
+  },
+  "build": {
+    "appId": "com.rainstudio.woollydebts",
+    "productName": "羊债必须清",
+    "executableName": "WoollyDebts",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "portable"
+      ],
+      "artifactName": "WoollyDebts-${version}-portable.${ext}"
+    }
+  }
+}
