@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050b10">
+  <meta name="description" content="ASTRA 科幻飞船驾驶舱 HUD — 离线交互原型">
+  <title>ASTRA · 深空驾驶舱</title>
+  <link rel="icon" href="assets/emblem.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="space-background" aria-hidden="true"></div>
+  <canvas id="stars" aria-hidden="true"></canvas>
+  <div class="scanlines" aria-hidden="true"></div>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-flight" viewBox="0 0 24 24"><path d="m12 3 8 17-8-4-8 4 8-17Z M12 3v13"/></symbol>
+    <symbol id="i-nav" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m16 8-2 6-6 2 2-6 6-2Z"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 1v6m0 10v6M1 12h6m10 0h6"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="m14 2-9 12h6l-1 8 9-12h-6l1-8Z"/></symbol>
+    <symbol id="i-audio" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4V9Zm12-1c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></symbol>
+    <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+  </defs></svg>
+
+  <div class="cockpit">
+    <header class="masthead">
+      <a class="brand" href="#" aria-label="ASTRA 飞行概览"><img src="assets/emblem.svg" alt=""><span>ASTRA<small>DEEP SPACE SYSTEMS</small></span></a>
+      <div class="mission-location"><span class="mini-cross">+</span><div>EUCLID SECTOR <span class="muted">/</span> <b>KEPLER–186</b><small>远航者计划 · 第 07 次深空勘探</small></div></div>
+      <div class="mission-clock"><span class="status-dot"></span> SYSTEM ONLINE <span class="clock" id="clock">00:00:00</span><small>UTC</small></div>
+    </header>
+
+    <nav class="mode-bar" aria-label="驾驶舱模式">
+      <div class="mode-tabs" role="tablist" aria-label="显示模式">
+        <button class="mode-tab active" data-mode="flight" role="tab" aria-selected="true" aria-controls="mode-view"><svg><use href="#i-flight"/></svg>飞行概览<span>01</span></button>
+        <button class="mode-tab" data-mode="navigation" role="tab" aria-selected="false" aria-controls="mode-view"><svg><use href="#i-nav"/></svg>星际导航<span>02</span></button>
+        <button class="mode-tab" data-mode="tactical" role="tab" aria-selected="false" aria-controls="mode-view"><svg><use href="#i-target"/></svg>战术扫描<span>03</span></button>
+        <button class="mode-tab" data-mode="engineering" role="tab" aria-selected="false" aria-controls="mode-view"><svg><use href="#i-power"/></svg>动力工程<span>04</span></button>
+      </div>
+      <div class="ship-id"><span class="status-dot"></span> NSS ODYSSEY <span class="muted">//</span> EXPLORER CLASS</div>
+    </nav>
+
+    <main>
+      <div class="flight-grid">
+        <aside class="left-instruments">
+          <section class="panel vessel-panel">
+            <div class="panel-heading"><h2>舰船状态<small>VESSEL INTEGRITY</small></h2><span class="panel-index">01 / SYS</span></div>
+            <div class="ship-diagram">
+              <div class="diagram-code">NSS–07<small>ODYSSEY</small></div>
+              <svg viewBox="0 0 240 188" role="img" aria-label="奥德赛探索飞船结构示意图">
+                <defs><linearGradient id="ship-fill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#82e7ec" stop-opacity=".12"/><stop offset="1" stop-color="#82e7ec" stop-opacity=".02"/></linearGradient></defs>
+                <g class="diagram-grid"><path d="M20 35h200M20 75h200M20 115h200M20 155h200M40 15v158M80 15v158M120 15v158M160 15v158M200 15v158"/><circle cx="120" cy="94" r="68"/><circle cx="120" cy="94" r="44"/></g>
+                <g class="ship-lines"><path fill="url(#ship-fill)" d="m120 14 13 49 13 21 14-14 13 4 4 42 34 35v11l-53-12-23-20-3 32-12-9-12 9-3-32-23 20-53 12v-11l34-35 4-42 13-4 14 14 13-21Z"/><path d="m120 14 0 139m-13-90 13 12 13-12m-29 23 16 21 16-21m-29 41 13-20 13 20M67 74l15 76M173 74l-15 76M29 151l49-15 16-52m117 67-49-15-16-52m-40 24-28 28m56-28 28 28M112 56h16m-17 62h18"/><path class="engine-glow" d="M67 151v14m9-12v17m88-17v17m9-19v14m-58-8v16m10-16v16"/></g>
+                <g class="diagram-label"><path d="M83 49H39v-9m120 65h54v17"/><circle cx="83" cy="49" r="2"/><circle cx="159" cy="105" r="2"/></g>
+              </svg>
+              <span class="diagram-state">ALL SYSTEMS NOMINAL</span>
+            </div>
+            <div class="integrity-list">
+              <div class="meter-row"><span>护盾 <small>SHIELD</small></span><b><span id="shield-value">98</span><em>%</em></b><div class="segmented-track"><i id="shield-bar" style="--value:98%"></i></div></div>
+              <div class="meter-row"><span>船体 <small>HULL</small></span><b>100<em>%</em></b><div class="segmented-track"><i style="--value:100%"></i></div></div>
+              <div class="meter-row fuel"><span>燃料 <small>FUEL</small></span><b><span id="fuel-value">76</span><em>%</em></b><div class="segmented-track"><i id="fuel-bar" style="--value:76%"></i></div></div>
+            </div>
+          </section>
+          <section class="panel propulsion-panel">
+            <div class="panel-heading"><h2>推进系统<small>PROPULSION</small></h2><span class="tiny-pill" id="engine-status">CRUISE</span></div>
+            <div class="thrust-readout"><span>THROTTLE</span><b id="throttle-value">64<em>%</em></b></div>
+            <label class="visually-hidden" for="throttle">推进器功率</label><input type="range" id="throttle" min="0" max="100" value="64">
+            <div class="range-labels"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+            <button class="toggle-row" id="autopilot" aria-pressed="true"><span>自动驾驶 <small>AUTOPILOT</small></span><span class="switch on"></span></button>
+          </section>
+        </aside>
+
+        <section class="viewport" id="mode-view" role="tabpanel" aria-label="飞行概览">
+          <div class="viewport-top"><span class="status-dot"></span><h1 id="view-title">ORBITAL CRUISE</h1><span id="view-subtitle">轨道巡航 · 航线稳定</span></div>
+          <div class="compass" aria-label="航向 284 度"><div class="compass-numbers"><span>240</span><span>255</span><span>270</span><b>284</b><span>300</span><span>315</span><span>330</span></div><div class="compass-ticks"></div><div class="compass-needle"></div></div>
+          <div class="view-mode flight-only">
+            <div class="flight-readout velocity"><span>VELOCITY</span><b id="velocity">842</b><small>M / S</small><div class="side-ticks"></div><em>▲ STABLE</em></div>
+            <div class="flight-readout altitude"><span>ALTITUDE</span><b>128.4</b><small>KM</small><div class="side-ticks"></div><em>ORBIT SYNC</em></div>
+            <div class="target-reticle"><div class="reticle-outer"></div><div class="reticle-inner"></div><div class="reticle-notch n1"></div><div class="reticle-notch n2"></div><div class="reticle-notch n3"></div><div class="reticle-notch n4"></div><span class="reticle-center">+</span><div class="target-diamond"></div><div class="target-tag"><span>NAV POINT / 01</span><b id="reticle-destination">KEPLER STATION</b><small><span id="target-distance">24,860</span> KM <span class="target-line">────</span> APPROACH</small></div></div>
+            <div class="pitch-ladder" aria-hidden="true"><span>10 ──── &nbsp; ──── 10</span><span>0 ━━━━━ &nbsp; ━━━━━ 0</span><span>−10 ─── &nbsp; ─── −10</span></div>
+          </div>
+          <div class="view-mode navigation-only" hidden>
+            <div class="map-surface"><canvas id="navmap" aria-label="开普勒星系航线示意图"></canvas><span class="map-label">KEPLER SYSTEM <small>LOCAL SPACE / 1 : 240,000</small></span></div>
+            <div class="route-options" aria-label="选择航点"><button class="route-option active" data-route="0">01 <span>开普勒空间站<small>KEPLER STATION</small></span><b>24,860 km</b></button><button class="route-option" data-route="1">02 <span>曙光中继站<small>AURORA RELAY</small></span><b>48,200 km</b></button><button class="route-option" data-route="2">03 <span>外环勘探区<small>OUTER RIM</small></span><b>96,750 km</b></button></div>
+          </div>
+          <div class="view-mode tactical-only" hidden>
+            <div class="tactical-scope"><div class="scope-grid"></div><svg><use href="#i-target"/></svg><span>CONTACT IDENTIFIED</span><b id="tactical-target">ATLAS FREIGHTER</b><small id="tactical-detail">友方运输舰 · 距离 8.4 km</small><div class="tactical-actions"><button id="lock-target" class="outline-button">锁定目标 [L]</button><button id="arm-weapons" class="outline-button amber-button" aria-pressed="false">武器待机</button></div></div>
+          </div>
+          <div class="view-mode engineering-only" hidden>
+            <div class="reactor-display"><div class="reactor-core"><svg><use href="#i-power"/></svg></div><span>FUSION REACTOR</span><b id="reactor-output">3.84 <small>GW</small></b><p id="diagnostic-status">反应堆稳定 · 冷却回路正常</p><div class="engineering-metrics"><span>核心温度<b id="core-temp">2,480 K</b></span><span>冷却效率<b>99.2%</b></span><span>输出稳定性<b>99.8%</b></span></div><button class="outline-button" id="diagnostic">运行系统诊断</button></div>
+          </div>
+          <div class="flight-bottom"><div><span>FLIGHT VECTOR</span><b>284° <small>/ +02.6°</small></b></div><div class="horizon-mark" aria-hidden="true"><span></span><svg><use href="#i-flight"/></svg><span></span></div><div class="gravity"><span>LOCAL GRAVITY</span><b>0.08 <small>G</small></b></div></div>
+          <div class="viewport-corner tl"></div><div class="viewport-corner tr"></div><div class="viewport-corner bl"></div><div class="viewport-corner br"></div>
+        </section>
+
+        <aside class="right-instruments">
+          <section class="panel radar-panel">
+            <div class="panel-heading"><h2>近域雷达<small>PROXIMITY RADAR</small></h2><span class="live-label">LIVE</span></div>
+            <div class="radar-wrap"><canvas id="radar" role="img" aria-label="近域雷达：三处信号，其中一处未知"></canvas><span class="radar-n">N</span><span class="radar-range">25 KM</span></div>
+            <div class="radar-legend"><span><i></i> 友方 02</span><span class="amber"><i></i> 未知 01</span></div>
+            <div class="contact-heading">DETECTED CONTACTS <span>03</span></div>
+            <div class="contact-list"><button class="contact active" data-contact="0"><span class="contact-symbol">◇</span><span>ATLAS FREIGHTER<small>友方 · 运输舰</small></span><b>8.4<small>KM</small></b></button><button class="contact" data-contact="1"><span class="contact-symbol">◇</span><span>BEACON K–12<small>友方 · 导航信标</small></span><b>12.8<small>KM</small></b></button><button class="contact unknown" data-contact="2"><span class="contact-symbol">△</span><span>UNKNOWN SIGNAL<small>未知 · 等待识别</small></span><b>21.6<small>KM</small></b></button></div>
+            <button class="scan-button" id="scan"><svg><use href="#i-target"/></svg><span>扫描近域空间</span><small>[R]</small></button>
+          </section>
+          <div class="sector-weather"><span class="weather-icon">⌁</span><div>环境辐射低<small>AMBIENT RADIATION</small></div><b>0.04<small>mSv</small></b></div>
+        </aside>
+      </div>
+
+      <div class="console-grid">
+        <section class="panel power-panel"><div class="panel-heading"><h2>能源分配<small>POWER DISTRIBUTION</small></h2><span class="power-capacity">100<span>%</span></span></div><div class="power-channels"><div><span>ENG<small>引擎</small></span><div class="power-bars" id="power-eng"></div><b id="eng-value">40</b></div><div><span>SHD<small>护盾</small></span><div class="power-bars" id="power-shd"></div><b id="shd-value">35</b></div><div class="weapon-channel"><span>WPN<small>武器</small></span><div class="power-bars" id="power-wpn"></div><b id="wpn-value">25</b></div></div><div class="power-presets" aria-label="能源预设"><button data-power="balanced" class="active" aria-pressed="true">均衡</button><button data-power="cruise" aria-pressed="false">巡航优先</button><button data-power="combat" aria-pressed="false">战斗优先</button></div></section>
+        <section class="panel navigation-panel"><div class="panel-heading"><h2>当前航线<small>ACTIVE FLIGHT PLAN</small></h2><span class="panel-index">NAV / 01</span></div><div class="waypoint"><div class="waypoint-icon"><svg><use href="#i-nav"/></svg></div><div><span>DESTINATION</span><h3 id="destination">KEPLER STATION</h3><small id="destination-sub">开普勒空间站 · 商贸轨道港</small></div><span class="waypoint-code" id="waypoint-code">K–01</span></div><div class="route-line"><span class="route-origin"></span><span class="route-path"></span><svg><use href="#i-flight"/></svg><span class="route-path dashed"></span><span class="route-end"></span></div><div class="route-meta"><span>剩余航程 <b id="route-distance">24,860 <small>KM</small></b></span><span id="jump-status">跃迁窗口已就绪</span></div><button class="jump-button" id="jump"><span>启动跃迁引擎</span><small>HOLD COURSE</small><svg><use href="#i-arrow"/></svg></button><div id="jump-progress" aria-hidden="true"></div></section>
+        <section class="panel comms-panel"><div class="panel-heading"><h2>舰载通讯<small>COMMS / EVENT LOG</small></h2><span class="live-label">SECURE</span></div><div class="comms-channel"><span class="waveform" aria-hidden="true"></span><span>DEEP SPACE NETWORK<small>CH 07.84 · 加密通道已连接</small></span><b>5/5</b></div><ol id="event-log" class="event-log" aria-label="舰载事件日志" aria-live="polite"></ol><div class="comms-footer"><span class="status-dot"></span> 无待处理消息<span>LINK 42 ms</span></div></section>
+      </div>
+    </main>
+    <footer class="statusbar"><div><span class="status-dot"></span><b id="footer-status">所有系统运行正常</b><span class="footer-divider">/</span><span>LOCAL SIMULATION</span></div><div class="shortcuts"><span><kbd>1–4</kbd> 模式</span><span><kbd>A</kbd> 自动驾驶</span><span><kbd>R</kbd> 扫描</span><span><kbd>F</kbd> 全屏</span></div><div class="footer-actions"><button id="motion" aria-pressed="true" title="开关动态效果">动态 <span>ON</span></button><button id="audio" class="icon-button" aria-label="开启音效" aria-pressed="false" title="开启音效"><svg><use href="#i-audio"/></svg></button><button id="fullscreen" class="icon-button" aria-label="进入全屏" title="进入全屏"><svg><use href="#i-full"/></svg></button><span>ASTRA OS <b>4.8.2</b></span></div></footer>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+  <div class="warp-flash" aria-hidden="true"></div>
+</body>
+</html>

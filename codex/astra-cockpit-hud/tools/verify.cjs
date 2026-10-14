@@ -1,0 +1,45 @@
+// Run: node tools/verify.cjs [absolute path to Playwright package]
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const playwrightPath = process.argv[2] || 'playwright';
+const { chromium } = require(playwrightPath);
+const root = path.resolve(__dirname, '..');
+const results = [];
+const faults = [];
+const entry = 'file:///' + path.join(root, 'index.html').replaceAll('\\', '/');
+async function check(name, action) { try { await action(); results.push({ name, pass: true }); } catch (error) { results.push({ name, pass: false, error: error.message }); } }
+(async () => {
+  let browser;
+  try { browser = await chromium.launch({ channel: 'msedge', headless: true }); }
+  catch { browser = await chromium.launch({ headless: true }); }
+  const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 });
+  const external = [];
+  page.on('pageerror', error => faults.push(error.message));
+  page.on('requestfailed', request => faults.push(`${request.url()}: ${request.failure()?.errorText}`));
+  page.on('request', request => { if (/^https?:/i.test(request.url())) external.push(request.url()); });
+  await page.goto(entry); await page.waitForTimeout(800);
+  await check('本地 file:// 页面和全部资源离线加载', async () => { assert.equal(external.length, 0); assert.equal(faults.length, 0, faults.join('\n')); assert.equal(await page.title(), 'ASTRA · 深空驾驶舱'); });
+  await page.screenshot({ path: path.join(root, 'docs', 'preview-desktop.png'), fullPage: true });
+  await check('四种模式正确切换，活动标签与内容一致', async () => { for (const mode of ['navigation', 'tactical', 'engineering', 'flight']) { await page.locator(`[data-mode="${mode}"]`).click(); assert.equal(await page.locator(`[data-mode="${mode}"]`).getAttribute('aria-selected'), 'true'); assert(await page.locator(`.${mode}-only`).isVisible()); assert.equal(await page.locator('.view-mode:visible').count(), 1); } });
+  await check('推进滑杆改变速度、反应堆输出与温度', async () => { await page.locator('#throttle').fill('80'); await page.locator('#throttle').dispatchEvent('input'); assert.equal(await page.locator('#velocity').textContent(), '1053'); assert.match(await page.locator('#reactor-output').textContent(), /4.60/); assert.equal(await page.locator('#core-temp').textContent(), '2,800 K'); });
+  await check('能源预设生效且总功率恒为 100%', async () => { for (const power of ['cruise', 'combat', 'balanced']) { await page.locator(`[data-power="${power}"]`).click(); const values = await page.locator('#eng-value, #shd-value, #wpn-value').allTextContents(); assert.equal(values.reduce((sum, value) => sum + Number(value), 0), 100); assert.equal(await page.locator(`[data-power="${power}"]`).getAttribute('aria-pressed'), 'true'); } });
+  await check('点击联系人进入战术模式，可锁定与解除', async () => { await page.locator('[data-contact="2"]').click(); assert(await page.locator('.tactical-only').isVisible()); assert.equal(await page.locator('#tactical-target').textContent(), 'UNKNOWN SIGNAL'); await page.locator('#lock-target').click(); assert.equal(await page.locator('#lock-target').getAttribute('aria-pressed'), 'true'); await page.locator('#lock-target').click(); assert.equal(await page.locator('#lock-target').getAttribute('aria-pressed'), 'false'); });
+  await check('近域扫描识别未知信号并恢复按钮状态', async () => { await page.locator('#scan').click(); assert(await page.locator('#scan').isDisabled()); await page.waitForTimeout(2650); assert(await page.locator('#scan').isEnabled()); assert.equal(await page.locator('#tactical-target').textContent(), 'SURVEY PROBE 07'); assert.equal(await page.locator('.contact.unknown').count(), 0); });
+  await check('关闭自动驾驶时，跃迁被阻止且有反馈', async () => { await page.locator('#autopilot').click(); await page.locator('#jump').click(); assert(await page.locator('#jump').isEnabled()); assert.match(await page.locator('#toast').textContent(), /先开启自动驾驶/); await page.locator('#autopilot').click(); });
+  await check('航点切换同步当前航线与准星', async () => { await page.locator('[data-mode="navigation"]').click(); await page.locator('[data-route="1"]').click(); assert.equal(await page.locator('#destination').textContent(), 'AURORA RELAY'); assert.equal(await page.locator('#reticle-destination').textContent(), 'AURORA RELAY'); assert.equal(await page.locator('#target-distance').textContent(), '48,200'); });
+  await check('完整跃迁：充能锁定、抵达、耗油与下一航点', async () => { await page.locator('#jump').click(); assert(await page.locator('#jump').isDisabled()); assert(await page.locator('[data-route="2"]').isDisabled()); assert(await page.locator('#autopilot').isDisabled()); await page.waitForTimeout(6700); assert.equal(await page.locator('#target-distance').textContent(), '0'); assert.equal(await page.locator('#fuel-value').textContent(), '72'); assert.match(await page.locator('#jump>span').textContent(), /已抵达/); assert(await page.locator('#jump').isDisabled()); assert(await page.locator('#autopilot').isEnabled()); await page.locator('[data-route="2"]').click(); assert(await page.locator('#jump').isEnabled()); assert.equal(await page.locator('#target-distance').textContent(), '96,750'); });
+  await check('武器状态可切换，工程诊断可完成', async () => { await page.locator('[data-mode="tactical"]').click(); await page.locator('#arm-weapons').click(); assert.equal(await page.locator('#arm-weapons').getAttribute('aria-pressed'), 'true'); await page.locator('#arm-weapons').click(); await page.locator('[data-mode="engineering"]').click(); await page.locator('#diagnostic').click(); assert(await page.locator('#diagnostic').isDisabled()); await page.waitForTimeout(2450); assert.match(await page.locator('#diagnostic-status').textContent(), /12 项检查全部通过/); assert(await page.locator('#diagnostic').isEnabled()); });
+  await check('动态开关和音效开关可操作', async () => { await page.locator('#motion').click(); assert.equal(await page.locator('#motion').getAttribute('aria-pressed'), 'false'); await page.locator('#audio').click(); assert.equal(await page.locator('#audio').getAttribute('aria-pressed'), 'true'); await page.locator('#audio').click(); assert.equal(await page.locator('#audio').getAttribute('aria-pressed'), 'false'); });
+  await check('键盘快捷键、标签方向键和输入焦点隔离', async () => { await page.locator('body').click({ position: { x: 5, y: 5 } }); await page.keyboard.press('1'); assert(await page.locator('.flight-only').isVisible()); await page.locator('[data-mode="flight"]').focus(); await page.keyboard.press('ArrowRight'); assert(await page.locator('.navigation-only').isVisible()); await page.locator('#throttle').focus(); await page.keyboard.press('3'); assert(await page.locator('.navigation-only').isVisible()); });
+  await check('390px 手机布局无横向溢出，模式与雷达可操作', async () => { await page.setViewportSize({ width: 390, height: 844 }); await page.reload(); await page.waitForTimeout(200); const sizes = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: innerWidth })); assert(sizes.scroll <= sizes.width, JSON.stringify(sizes)); await page.screenshot({ path: path.join(root, 'docs', 'preview-mobile.png'), fullPage: true }); await page.locator('[data-mode="navigation"]').click(); await page.locator('[data-route="1"]').click(); assert.equal(await page.locator('#destination').textContent(), 'AURORA RELAY'); });
+  await check('360px 与平板布局无横向溢出', async () => { for (const width of [360, 768, 1024, 1920]) { await page.setViewportSize({ width, height: 1080 }); const sizes = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: innerWidth })); assert(sizes.scroll <= sizes.width, `${width}: ${JSON.stringify(sizes)}`); } });
+  await check('减少动态效果偏好自动生效', async () => { await page.emulateMedia({ reducedMotion: 'reduce' }); await page.reload(); assert.equal(await page.locator('#motion').getAttribute('aria-pressed'), 'false'); });
+  await check('所有交互结束后没有脚本错误或资源失败', async () => { assert.equal(faults.length, 0, faults.join('\n')); });
+  await page.setViewportSize({ width: 1600, height: 1000 }); await page.emulateMedia({ reducedMotion: 'no-preference' }); await page.reload(); await page.waitForTimeout(300); await page.screenshot({ path: path.join(root, 'docs', 'preview-desktop.png'), fullPage: true });
+  for (const mode of ['navigation', 'tactical', 'engineering']) { await page.locator(`[data-mode="${mode}"]`).click(); await page.screenshot({ path: path.join(root, 'docs', `preview-${mode}.png`), fullPage: true }); }
+  const report = ['# ASTRA HUD · 自动验收记录', '', `执行时间：${new Date().toISOString()}`, '', `环境：Playwright + ${browser.browserType().name()} / 本地 file:// 页面`, '', `结果：${results.filter(r => r.pass).length} / ${results.length} 通过`, '', '| 检查项 | 结果 |', '| --- | --- |', ...results.map(r => `| ${r.name} | ${r.pass ? '通过' : `失败：${r.error.replaceAll('|', '/')}`} |`), '', '所有网络请求均受记录；页面运行不依赖互联网。测试用例覆盖完整交互流程与多尺寸横向溢出。截图用于补充人工视觉检查。', ''];
+  fs.writeFileSync(path.join(root, 'docs', 'QA.md'), report.join('\n'));
+  await browser.close(); console.log(report.join('\n'));
+  if (results.some(r => !r.pass)) process.exitCode = 1;
+})().catch(error => { console.error(error); process.exitCode = 1; });
