@@ -2,6 +2,8 @@
 
 一台可互动的三维拍立得。使用原生 HTML、CSS、JavaScript、WebGL2 / GLSL ES 3.00 与 Canvas 2D；无运行依赖、无 CDN、无外部图片、无需安装。
 
+原始实现：**Codex + GPT-6 Astra**。模型信息核对于本任务 2026-09-08 的原始会话记录（`gpt-6-astra`）。
+
 ## 打开
 
 - 双击 `start.bat`：自动启动独立后台服务，再打开相机；重复运行会复用已有服务。无 Node.js 时自动打开离线 HTML。
