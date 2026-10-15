@@ -1,0 +1,68 @@
+{
+  "url": "https://wangxp7.github.io/GoodCase.xAI/codex/jarvis/?v=1e7105d",
+  "screenshots": [
+    {
+      "src": "screenshots/01_ORBITAL_CORE.png",
+      "width": 1582,
+      "height": 913
+    },
+    {
+      "src": "screenshots/02_COMMAND_DECK.png",
+      "width": 1582,
+      "height": 913
+    },
+    {
+      "src": "screenshots/03_GHOST_OVERLAY.png",
+      "width": 1582,
+      "height": 913
+    },
+    {
+      "src": "screenshots/04_TACTICAL_FOCUS.png",
+      "width": 1582,
+      "height": 913
+    },
+    {
+      "src": "screenshots/05_LIVE_OVERLAY_WINDOW.png",
+      "width": 522,
+      "height": 263
+    }
+  ],
+  "mobile": true,
+  "desktop": true,
+  "links": [
+    {
+      "href": "https://wangxp7.github.io/GoodCase.xAI/index.html",
+      "text": "← GoodCase.xAI 案例画廊"
+    },
+    {
+      "href": "https://github.com/WangXP7/GoodCase.xAI/releases/download/jarvis-v0.3.0/JARVIS.VisualPrototype-v0.3.0-win-x64.zip",
+      "text": "下载 Windows ZIP · 83.2 MiB"
+    },
+    {
+      "href": "https://github.com/WangXP7/GoodCase.xAI/tree/main/codex/jarvis/source",
+      "text": "查看源码"
+    },
+    {
+      "href": "https://wangxp7.github.io/GoodCase.xAI/codex/jarvis/JARVIS_PROJECT.md",
+      "text": "项目记录与计划"
+    },
+    {
+      "href": "https://wangxp7.github.io/GoodCase.xAI/codex/jarvis/qa/qa-capture-complete.txt",
+      "text": "查看自动 QA 记录 →"
+    },
+    {
+      "href": "https://wangxp7.github.io/GoodCase.xAI/codex/jarvis/SHA256SUMS-v0.3.0.txt",
+      "text": "SHA-256 校验文件"
+    },
+    {
+      "href": "https://wangxp7.github.io/GoodCase.xAI/codex/jarvis/design/JARVIS_DEMO_CONTACT_SHEET_v0.2.0.png",
+      "text": "四方案概念图总览"
+    },
+    {
+      "href": "https://github.com/WangXP7/GoodCase.xAI/releases/tag/jarvis-v0.3.0",
+      "text": "完整版本发布页"
+    }
+  ],
+  "errors": [],
+  "status": "passed"
+}

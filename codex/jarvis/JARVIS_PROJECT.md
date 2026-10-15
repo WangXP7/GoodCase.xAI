@@ -655,7 +655,11 @@ flowchart LR
 - 中文案例入口为“贾维斯 JARVIS · Windows 动态视觉原型”；工具／模型字段只出现一次：`Codex + GPT-5.6 Sol / GPT-6.1 Sol`。
 - 模型依据为本地原始会话日志 `turn_context.model` 字段；已核实 `gpt-5.6-sol` 与 `gpt-6.1-sol`，不根据工具默认配置推测模型。
 - 本地保留 `showcase/index.html` 作为项目展示页源码、`build/Publish-GoodCase.py` 作为 API 发布入口；发布记录位于 `docs/GITHUB_PUBLICATION.json`。
-- 发布验证结果在本节更新；所有本次临时 QA 文件与测试服务将在验证结束后清理，不创建临时 Git 仓库。
+- 发布提交：`1e7105d7e6a37569a4457bf267c13f2307f33d04`。增量新增 46 个案例文件，仅修改既有首页与 README，无文件删除，保留原站其他案例。
+- GitHub Pages 已成功构建；线上浏览器检查通过：五张图片切换成功、1440px 桌面与 390px 手机布局均无横向溢出、无脚本错误，文档／QA／校验／概念图链接均可访问。
+- Windows Releases 资产为 87,270,799 字节，远端 `digest` 与本地 ZIP SHA-256 一致：`3F56269CA27E39DF6428D2ADB32C970385F03BD0BE72F287F2FACEE87D7243A9`。
+- 线上页面截图与验证结果保存在 `qa/github-pages/`，作为项目相关 QA 证据保留。
+- 本次本地预览服务已停止，自动浏览器会话及其临时配置已关闭清理；未创建临时 Git 仓库，也未在本地保存原仓库文件。保留的新增文件均为 JARVIS 展示源码、发布／验证脚本及项目 QA 证据。
 
 ## 17. 变更日志
 
