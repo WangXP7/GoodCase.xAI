@@ -11,7 +11,7 @@
 | 命名空间 | 内容 |
 |---|---|
 | `zcode/` | ZCode 产出：WebGL/GLSL 3D 场景、霓虹小游戏、鹈鹕骑车 SVG 系列、密室 3D 游戏、诺奖化学科普交互页、星际水族箱、后室游戏等 |
-| `workbuddy/` | WorkBuddy 产出：Minecraft 克隆（零依赖单文件 WebGL2，全程序化生成）、Buckshot Roulette 网页复刻、Eaves 数值沙盘、Tideline 潮汐游戏、tidewater-fish 网页版、火箭发射模拟（含完整 GDD 设计文档工程）、Token 消耗看板、断裂桥梁列车坠水物理仿真（XPBD 桁架渐进坍塌 + 浮力进水沉没，零依赖单文件 Canvas）、NEXUS BREACH（MCP 驱动引擎的 Three.js 第一人称射击，AI 通过 19 个 MCP 工具在线生成关卡 / 调光照 / 自动试玩并截图回看，附 Hy4 preview 与 UE5 MCP 调研笔记）、月面运输 LUNAR CARGO（实时 3D 月球车货运任务：低重力驾驶、碰撞甩货与三站配送，Three.js r160 全程序化生成）；余烬深渊 Emberfall（Three.js 球形开放世界动作 RPG：可朝任意方向持续探索、四类生态区、四档装备掉落与区域霸主，Vite 构建产物）、贾维斯 J.A.R.V.I.S. 赛博朋克 HUD 控制台（零依赖单文件全屏科幻主控界面）、企鹅生存·冰原漂流挑战（Three.js 3D 生存小游戏，漂移浮冰间捕鱼与躲避海豹）、太阳系八大行星 3D 交互模型（9 页 Three.js 科普交互）等 |
+| `workbuddy/` | WorkBuddy 产出：Minecraft 克隆（零依赖单文件 WebGL2，全程序化生成）、Buckshot Roulette 网页复刻、Eaves 数值沙盘、Tideline 潮汐游戏、tidewater-fish 网页版、火箭发射模拟（含完整 GDD 设计文档工程）、Token 消耗看板、断裂桥梁列车坠水物理仿真（XPBD 桁架渐进坍塌 + 浮力进水沉没，零依赖单文件 Canvas）、NEXUS BREACH（MCP 驱动引擎的 Three.js 第一人称射击，AI 通过 19 个 MCP 工具在线生成关卡 / 调光照 / 自动试玩并截图回看，附 Hy4 preview 与 UE5 MCP 调研笔记）、月面运输 LUNAR CARGO（实时 3D 月球车货运任务：低重力驾驶、碰撞甩货与三站配送，Three.js r160 全程序化生成）；余烬深渊 Emberfall（Three.js 球形开放世界动作 RPG：可朝任意方向持续探索、四类生态区、四档装备掉落与区域霸主，Vite 构建产物）、贾维斯 J.A.R.V.I.S. 赛博朋克 HUD 控制台（零依赖单文件全屏科幻主控界面）、企鹅生存·冰原漂流挑战（Three.js 3D 生存小游戏，漂移浮冰间捕鱼与躲避海豹）、太阳系八大行星 3D 交互模型（9 页 Three.js 科普交互）、蛇人幸存者（俯视角纯割草 Roguelite：蛇人战士黑暗废墟 10 分钟生存，尾击/毒瓶/诅咒/召集四技能状态连锁，升级三选一与精英敌潮，单文件 + vendored Three.js r160）等 |
 | `codex/` | Codex 产出：星门纪元深空放置游戏、MIMIC 潜色行动、AIR COURT Vision Pro 空间篮球挑战；Attention Residuals 注意力残差交互科普（逐层动画、权重调节、分块实验，单文件离线运行）；2066 决战世界杯（Three.js + Ammo.js + PixiJS，3D 五人制足球对战）；羊债必须清（3D 肥羊砸罐、磁吸拾币、账单构筑与在线游玩）；墨迹 Ink Trace V2（中日笔顺、毛笔提按、临摹与导出，单文件离线运行）；ASTRA 科幻飞船驾驶舱 HUD（飞行、导航、战术、工程四模式，雷达扫描、能源分配与跃迁模拟，离线可用）；MOMENT 即刻互动拍立得（WebGL2 三维机身、吐纸显影、胶片曝光调整与 PNG 导出）；Night Street 黄金时刻街景（纯代码程序化城市，MIT 开源参考复刻与 Pages 适配） |
 | `trae/` | Trae 产出：AURORA-9 火箭入轨全流程模拟、GLSL 霓虹轨道海报 |
 
@@ -20,7 +20,7 @@
 ## 结构
 
 ```
-index.html            ← 画廊首页(自动生成, 54 个案例入口)
+index.html            ← 画廊首页(自动生成, 56 个案例入口)
 codex/  zcode/  workbuddy/  trae/  codex/
 ```
 
