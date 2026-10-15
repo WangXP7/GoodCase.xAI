@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import assert from 'node:assert/strict';
 
@@ -24,12 +24,26 @@ const report = { errors:[], failed:[], external:[], checks:[] };
 try {
   const page = await browser.newPage({viewport:{width:960,height:540}});
   page.setDefaultTimeout(90000);
+  const chunkDir = resolve('out/_next/static/chunks');
+  let sceneChunk;
+  for (const name of await readdir(chunkDir)) {
+    if (name.endsWith('.js') && (await readFile(resolve(chunkDir, name), 'utf8')).includes('requestPointerLock')) sceneChunk = name;
+  }
+  assert(sceneChunk, 'Scene chunk must exist');
+  let releaseScene;
+  const gate = new Promise(resolve => { releaseScene = resolve; });
+  await page.route('**/' + sceneChunk, async route => { await gate; await route.continue(); });
   page.on('pageerror', e => { report.errors.push(e.message); console.log('Page error:',e.message); });
   page.on('console', msg => { if(msg.type()==='error') { report.errors.push(msg.text()); console.log('Console error:', msg.text().slice(0,500)); } });
   page.on('response', r => { if(r.status() >= 400) report.failed.push({url:r.url(),status:r.status()}); });
   page.on('requestfailed', r => report.failed.push({url:r.url(),error:r.failure()?.errorText}));
   page.on('request', r => { if(!r.url().startsWith('http://127.0.0.1:4178/')) report.external.push(r.url()); });
   await page.addInitScript(() => {
+    window.__qaLoadCompletion = false;
+    new MutationObserver(() => {
+      const veil = document.querySelector('[data-testid="load-veil"]');
+      if (veil?.getAttribute('data-complete') === 'true' && veil.querySelector('.ns-load-percent')?.textContent === '100%') window.__qaLoadCompletion = true;
+    }).observe(document, {subtree:true, childList:true, attributes:true, attributeFilter:['data-complete']});
     window.__qaDraw = 0;
     const draw = WebGL2RenderingContext.prototype.drawElements;
     WebGL2RenderingContext.prototype.drawElements = function(...args) { window.__qaDraw++; return draw.apply(this,args); };
@@ -40,8 +54,30 @@ try {
     };
   });
   await page.goto('http://127.0.0.1:4178' + prefix + '/', {waitUntil:'domcontentloaded',timeout:30000});
-  await page.waitForFunction(() => document.querySelector('canvas') && !Array.from(document.querySelectorAll('p')).some(p => p.textContent.includes('Building the street')), null, {timeout:240000});
+  await page.getByRole('progressbar').waitFor();
+  const samples = [];
+  for (const time of [15000, 30000, 120000]) {
+    const sample = await page.evaluate(time => {
+      const fill = document.querySelector('.ns-load-fill');
+      const digits = document.querySelector('.ns-load-digits');
+      fill.getAnimations()[0].currentTime = time;
+      digits.getAnimations()[0].currentTime = time;
+      return {time, bar:new DOMMatrix(getComputedStyle(fill).transform).a * 100, number:-new DOMMatrix(getComputedStyle(digits).transform).f / 24};
+    }, time);
+    assert(Math.abs(sample.bar - sample.number) <= 1.1, 'Percentage and bar must agree');
+    samples.push(sample);
+  }
+  assert.equal(samples.at(-1).number, 95);
+  assert.equal(await page.locator('[data-complete="true"]').count(), 0);
+  await mkdir('verification', {recursive:true});
+  await page.screenshot({path:'verification/loading-estimate.png'});
+  report.progressSamples = samples;
+  report.checks.push('Estimated bar and percentage agree; capped at 95% before actual frames');
+  releaseScene();
+  await page.getByTestId('load-veil').waitFor({state:'detached',timeout:240000});
   await page.waitForFunction(() => window.__qaDraw > 100, null, {timeout:240000});
+  assert.equal(await page.evaluate(() => window.__qaLoadCompletion), true);
+  report.checks.push('Real scene frames trigger 100% and automatic entry');
   console.log('Street rendered');
   report.checks.push('Static Pages base path and first rendered frame');
   await mkdir('verification', {recursive:true});

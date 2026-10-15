@@ -1,6 +1,7 @@
 'use client';
 
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { useRef } from 'react';
 import * as THREE from 'three';
 import { Street } from './Street';
 import { Rig } from './Rig';
@@ -16,7 +17,7 @@ import { CityAudio, footstep } from '@/audio/CityAudio';
  * shadows and no visible sign of it. */
 installSoftSunShadows();
 
-export default function NightStreet() {
+export default function NightStreet({ onReady }: { onReady?: () => void }) {
   return (
     <div className="fixed inset-0 bg-black">
       <Canvas
@@ -88,10 +89,21 @@ export default function NightStreet() {
           * the existing screenshot archive was judged through. */}
         <Grade />
         <CityAudio />
+        <ReadySignal onReady={onReady} />
       </Canvas>
       <Hud />
     </div>
   );
+}
+
+function ReadySignal({ onReady }: { onReady?: () => void }) {
+  const frames = useRef(0);
+  useFrame(() => {
+    // The eighth scene tick follows seven real renders, including cold shader
+    // compilation. Unlike a DOM rAF heuristic, this cannot fire before mount.
+    if (++frames.current === 8) onReady?.();
+  });
+  return null;
 }
 
 function Hud() {

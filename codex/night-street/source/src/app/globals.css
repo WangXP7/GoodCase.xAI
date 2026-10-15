@@ -20,14 +20,36 @@ canvas {
   touch-action: none;
 }
 
-/* The load veil's bar. Transform-only and infinite, so the compositor runs it
- * without the main thread — which is the whole point, because the thread is
- * blocked baking textures for the entire time the bar is on screen. */
+/* Legacy indeterminate indicator, retained for existing local tools. */
 @keyframes ns-sweep {
   from { transform: translateX(-100%); }
   to { transform: translateX(300%); }
 }
+.ns-sweep { animation: ns-sweep 1.6s ease-in-out infinite; }
 
-.ns-sweep {
-  animation: ns-sweep 1.6s ease-in-out infinite;
+/* Both the fill and the numeric strip animate using transforms. They keep
+ * moving on the compositor while shader compilation blocks JavaScript.
+ * The estimate is capped at 95%; only real rendered frames can finish it. */
+.ns-load-track { height: 8px; overflow: hidden; border-radius: 999px; background: #ffffff14; }
+.ns-load-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #b68b55, #f2ca8b); transform-origin: left; will-change: transform; animation: ns-load-bar 90s linear forwards; }
+.ns-load-percent { display: inline-flex; align-items: baseline; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+.ns-load-digit-window { display: inline-block; height: 24px; overflow: hidden; text-align: right; }
+.ns-load-digits { display: flex; flex-direction: column; will-change: transform; animation: ns-load-number 90s linear forwards; }
+.ns-load-digits > span { display: block; height: 24px; line-height: 24px; flex: 0 0 24px; }
+.ns-load-complete .ns-load-fill { animation: none; transform: scaleX(1); }
+@keyframes ns-load-bar {
+  0% { transform: scaleX(0); }
+  5.5556% { transform: scaleX(.2); }
+  16.6667% { transform: scaleX(.5); }
+  33.3333% { transform: scaleX(.8); }
+  55.5556% { transform: scaleX(.9); }
+  100% { transform: scaleX(.95); }
+}
+@keyframes ns-load-number {
+  0% { transform: translateY(0); animation-timing-function: steps(20, end); }
+  5.5556% { transform: translateY(-480px); animation-timing-function: steps(30, end); }
+  16.6667% { transform: translateY(-1200px); animation-timing-function: steps(30, end); }
+  33.3333% { transform: translateY(-1920px); animation-timing-function: steps(10, end); }
+  55.5556% { transform: translateY(-2160px); animation-timing-function: steps(5, end); }
+  100% { transform: translateY(-2280px); }
 }

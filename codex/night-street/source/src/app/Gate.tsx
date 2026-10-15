@@ -62,58 +62,51 @@ export function Gate() {
   return <TouchCard onStart={start} />;
 }
 
-/** The scene, plus the veil, until frames are arriving steadily. */
+/** Only the mounted 3D scene can confirm that frames have actually rendered. */
 function Scene() {
   const [ready, setReady] = useState(false);
+  const [entered, setEntered] = useState(false);
+  const onReady = useCallback(() => setReady(true), []);
 
   useEffect(() => {
-    /* "Ready" is not the canvas existing — it exists long before it has
-     * anything in it. It is the frame loop running at a sane interval: eight
-     * consecutive animation frames closer together than 120 ms, which cannot
-     * happen while a multi-second bake still holds the thread. */
-    let run = 0;
-    let last = performance.now();
-    let raf = 0;
-    const tick = (now: number) => {
-      const dt = now - last;
-      last = now;
-      run = dt < 120 ? run + 1 : 0;
-      if (run >= 8 && document.querySelector('canvas')) { setReady(true); return; }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+    if (!ready) return;
+    const timer = window.setTimeout(() => setEntered(true), 350);
+    return () => window.clearTimeout(timer);
+  }, [ready]);
 
   return (
     <>
-      <NightStreet />
-      {!ready && <Veil settling />}
+      <NightStreet onReady={onReady} />
+      {!entered && <Veil settling complete={ready} />}
     </>
   );
 }
 
-function Veil({ settling }: { settling: boolean }) {
+function Veil({ settling, complete = false }: { settling: boolean; complete?: boolean }) {
   return (
-    <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[#05070b] px-6">
+    <div data-testid="load-veil" data-complete={complete} className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[#05070b] px-6">
       <div className="w-full max-w-md text-center">
         <p className="text-[11px] font-medium tracking-[0.3em] text-white/40 uppercase">
           Night Street
         </p>
         <p className="mt-6 text-sm leading-relaxed text-white/60">
-          Building the street. Every surface, mesh and sound in this scene is
-          generated in your browser right now, from code — there is nothing to
-          download because there are no assets to download.
+          正在生成黄金时刻街景
         </p>
         <p className="mt-3 text-sm leading-relaxed text-white/35">
-          It takes about thirty seconds on a desktop GPU, and the page will not
-          respond while it works.
+          首次打开通常需要 30–90 秒，较慢设备可能更久。正在准备道路、建筑、材质与光影，请稍候。
         </p>
-        {settling && (
-          <div className="mt-8 h-px w-full overflow-hidden bg-white/10">
-            <div className="ns-sweep h-px w-1/3 bg-white/50" />
+        <div className={`ns-load-progress mt-8${complete ? ' ns-load-complete' : ''}`}>
+          <div className="mb-3 flex items-center justify-between text-sm text-white/70">
+            <span>{complete ? '准备就绪' : settling ? '加载进度（估算）' : '正在准备'}</span>
+            <span className="ns-load-percent" aria-hidden="true">
+              {complete ? '100' : <span className="ns-load-digit-window"><span className="ns-load-digits">{Array.from({ length: 96 }, (_, n) => <span key={n}>{n}</span>)}</span></span>}%
+            </span>
           </div>
-        )}
+          <div className="ns-load-track" role="progressbar" aria-label={complete ? '街景加载完成' : '街景加载中，百分比为估算值'} aria-valuemin={0} aria-valuemax={100} {...(complete ? { 'aria-valuenow': 100 } : {})}>
+            <div className="ns-load-fill" />
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-white/35">{complete ? '即将进入街景' : '进度为大致估算，最后一步完成后会自动进入。'}</p>
+        </div>
       </div>
     </div>
   );

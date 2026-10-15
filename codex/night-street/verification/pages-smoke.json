@@ -3,11 +3,30 @@
   "failed": [],
   "external": [],
   "checks": [
+    "Estimated bar and percentage agree; capped at 95% before actual frames",
+    "Real scene frames trigger 100% and automatic entry",
     "Static Pages base path and first rendered frame",
     "Canvas click captures mouse",
     "W / Shift interaction and Escape release",
     "Runtime procedural audio unlocked",
     "Mobile capability notice, no GPU scene loaded"
+  ],
+  "progressSamples": [
+    {
+      "time": 15000,
+      "bar": 49.999900000000004,
+      "number": 49
+    },
+    {
+      "time": 30000,
+      "bar": 80,
+      "number": 80
+    },
+    {
+      "time": 120000,
+      "bar": 95,
+      "number": 95
+    }
   ],
   "audio": [
     {
