@@ -45,11 +45,12 @@ song-courtyard/
 ├── index.html                          ← 案例页（可直接打开）
 ├── README.md
 ├── build_courtyard.py                  ← 3729 行单文件脚本：地形 / 建筑 / 材质 / 布光 / 自动构图
-├── ChineseCourtyard.blend              ← Blender 5.2.2 工程文件（13.6 MB）
 └── shots/
     ├── render-final.png                ← 定稿 1600×1067
     └── iter-01..13-*.png               ← 十三轮迭代留档(520px)
 ```
+
+工程文件（`.blend`，13.6 MB）未随仓库分发；脚本在 `--factory-startup` 下可完整复现。
 
 ## 迭代过程
 
