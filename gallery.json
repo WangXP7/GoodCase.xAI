@@ -196,6 +196,14 @@
       "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
+      "ns": "workbuddy",
+      "dir": "song-courtyard",
+      "entry": "index.html",
+      "title": "宋代中式庭院 · Song Dynasty Courtyard",
+      "desc": "全程序化 bpy 建模的宋代庭院 · 南门—中央大殿—西水院—东书院—北后园五路院落，歇山顶九脊与六铺作斗拱按材份制推演，Eevee 三分之四俯视出图，零外部模型 / 贴图 / HDRI",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+    },
+    {
       "ns": "zcode",
       "dir": ".",
       "entry": "aurora-ocean.html",
