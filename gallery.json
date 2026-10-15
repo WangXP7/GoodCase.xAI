@@ -133,8 +133,8 @@
     },
     {
       "ns": "workbuddy",
-      "dir": "rocket-launch-sim/src",
-      "entry": "index.html",
+      "dir": "rocket-launch-sim",
+      "entry": "src/index.html",
       "title": "rocket-launch-sim +36 页",
       "desc": "火箭发射模拟器 · Rocket Launch Simulator (MVP 原型)",
       "agent": "WorkBuddy"
@@ -157,8 +157,8 @@
     },
     {
       "ns": "workbuddy",
-      "dir": "tideline/dist",
-      "entry": "index.html",
+      "dir": "tideline",
+      "entry": "dist/index.html",
       "title": "tideline +35 页",
       "desc": "潮线 TIDELINE · 测试版 v0.1.0",
       "agent": "WorkBuddy"

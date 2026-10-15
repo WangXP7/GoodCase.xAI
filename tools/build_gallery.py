@@ -17,8 +17,8 @@
         —— README.md 首行为 `# 中文标题`，紧跟一行 `> **Agent + 模型**`
      2) 在 gallery.json 的 entries 里加一条（title / desc / agent 可人工润色）
      3) python tools/build_gallery.py
-     若只做了第 1 步而没登记，脚本会自动发现并按 README.md 推导卡片，
-     同时在终端提示哪些条目是"自动推导、建议润色"。
+     未登记到 gallery.json 的案例目录会被列出提醒（默认不上架），
+     可用 --with-discovery 试看自动推导出的卡片。
 
  约定（脚本强制保证，不需要人工维护）：
      * 头部两个计数标签
@@ -175,9 +175,13 @@ def parse_readme(path):
     return title, agent, desc
 
 
-def discover(root, known):
-    """自动发现未被 gallery.json 登记的案例目录"""
-    found = []
+def scan_unregistered(root, known):
+    """磁盘上存在但未登记的案例目录 -> [(ns, dir, entry)]
+
+    默认只用于提醒，不自动上架：画廊是策展，发布应当是明确动作；
+    这样也保证 --check 的结果与运行环境无关（换台机器跑一致）。
+    """
+    out = []
     for ns in find_namespaces(root):
         nsdir = os.path.join(root, ns)
         for d in sorted(os.listdir(nsdir)):
@@ -187,18 +191,26 @@ def discover(root, known):
                 continue
             entry = detect_entry(ns, d)
             if entry is None:
-                continue
-            title, agent, desc = parse_readme(os.path.join(nsdir, d, "README.md"))
-            n = count_pages(ns, d)
-            title = title or d
-            if n > 1:
-                title = "%s +%d 页" % (title, n - 1)
-            found.append({
-                "ns": ns, "dir": d, "entry": entry,
-                "title": title, "desc": desc or title,
-                "agent": agent or ns.capitalize(),
-                "_auto": True,
-            })
+                continue          # 无入口文件的资源目录（如 frames/ render/），忽略
+            out.append((ns, d, entry))
+    return out
+
+
+def discover(root, known):
+    """把未登记的案例目录推导成卡片（仅 --with-discovery 时使用）"""
+    found = []
+    for ns, d, entry in scan_unregistered(root, known):
+        title, agent, desc = parse_readme(os.path.join(root, ns, d, "README.md"))
+        n = count_pages(ns, d)
+        title = title or d
+        if n > 1:
+            title = "%s +%d 页" % (title, n - 1)
+        found.append({
+            "ns": ns, "dir": d, "entry": entry,
+            "title": title, "desc": desc or title,
+            "agent": agent or ns.capitalize(),
+            "_auto": True,
+        })
     return found
 
 
@@ -267,13 +279,16 @@ def main():
     ap = argparse.ArgumentParser(description="生成 GoodCase.xAI 画廊首页")
     ap.add_argument("--check", action="store_true", help="只校验，不一致则退出码 1")
     ap.add_argument("--dry-run", action="store_true", help="不写盘")
+    ap.add_argument("--with-discovery", action="store_true",
+                    help="把未登记的案例目录也推导成卡片一并写入（默认只提醒）")
     args = ap.parse_args()
 
     with open(MANIFEST, encoding="utf-8") as fh:
         manifest = json.load(fh)
     known = {(e["ns"], e["dir"]) for e in manifest["entries"]}
 
-    auto = discover(ROOT, known)
+    unreg = scan_unregistered(ROOT, known)
+    auto = discover(ROOT, known) if args.with_discovery else []
     page, total, auto_dirs = render(manifest, auto)
 
     old = ""
@@ -284,8 +299,8 @@ def main():
     if args.check:
         same = (page == old)
         print("[check] index.html %s (共 %d 个案例)" % ("一致" if same else "不一致", total))
-        if auto_dirs:
-            print("[check] 未登记但自动发现的案例：%s" % ", ".join(auto_dirs))
+        for d in sorted(set(auto_dirs) | {"%s/%s" % (a, b) for a, b, _ in unreg}):
+            print("[check] 未登记案例：%s" % d)
         return 0 if same else 1
 
     if args.dry_run:
@@ -295,17 +310,18 @@ def main():
     with open(INDEX, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(page)
     readme_changed = sync_readme(total, True)
-    print("[build] index.html 已生成：共 %d 个案例（%s）"
-          % (total, " · ".join(
-              "%s %d" % (n["label"], sum(1 for e in manifest["entries"] + auto if e["ns"] == n["id"]))
-              for n in manifest["namespaces"])))
+    counts = " · ".join(
+        "%s %d" % (ns["label"], sum(1 for e in manifest["entries"] + auto if e["ns"] == ns["id"]))
+        for ns in manifest["namespaces"])
+    print("[build] index.html 已生成：共 %d 个案例（%s）" % (total, counts))
     print("[build] README.md 案例数 %s"
           % ("未找到 README" if readme_changed is None
              else ("已同步" if readme_changed else "无需改动")))
-    if auto_dirs:
-        print("[build] 以下案例是按 README.md 自动推导的，建议登记到 gallery.json 后润色：")
-        for d in auto_dirs:
-            print("        - " + d)
+    if unreg:
+        print("[warn] 以下目录存在但未登记到 gallery.json，本次未加入页面：")
+        for a, b, _ in unreg:
+            print("        - %s/%s" % (a, b))
+        print("        确认要上架后请登记到 gallery.json；或用 --with-discovery 先看效果")
     return 0
 
 
