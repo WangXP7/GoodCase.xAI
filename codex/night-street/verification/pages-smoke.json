@@ -1,0 +1,19 @@
+{
+  "errors": [],
+  "failed": [],
+  "external": [],
+  "checks": [
+    "Static Pages base path and first rendered frame",
+    "Canvas click captures mouse",
+    "W / Shift interaction and Escape release",
+    "Runtime procedural audio unlocked",
+    "Mobile capability notice, no GPU scene loaded"
+  ],
+  "audio": [
+    {
+      "state": "running",
+      "sampleRate": 48000
+    }
+  ],
+  "passed": true
+}

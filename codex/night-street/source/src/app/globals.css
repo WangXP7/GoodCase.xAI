@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  color: #fff;
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* The load veil's bar. Transform-only and infinite, so the compositor runs it
+ * without the main thread — which is the whole point, because the thread is
+ * blocked baking textures for the entire time the bar is on screen. */
+@keyframes ns-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+.ns-sweep {
+  animation: ns-sweep 1.6s ease-in-out infinite;
+}
