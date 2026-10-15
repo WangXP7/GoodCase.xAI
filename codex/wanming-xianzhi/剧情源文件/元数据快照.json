@@ -1,0 +1,2651 @@
+{
+  "events": [
+    {
+      "id": "M01",
+      "title": "印落在缺口上",
+      "chapter": 0,
+      "month": 1,
+      "category": "主线",
+      "cast": [
+        "shen",
+        "cheng"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "先点实仓，把缺额写进交接",
+          "effect": {
+            "stats": {
+              "standing": -3,
+              "integrity": 5,
+              "trust": 3
+            }
+          }
+        },
+        {
+          "id": "b",
+          "label": "暂接旧额，另立一册暗查",
+          "effect": {
+            "stats": {
+              "standing": 3,
+              "order": 2
+            }
+          }
+        },
+        {
+          "id": "c",
+          "label": "照旧数签收，先让衙门转起来",
+          "effect": {
+            "stats": {
+              "standing": 5,
+              "integrity": -6
+            },
+            "shadow": 1
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "V01",
+      "title": "沈砚的第三种字",
+      "chapter": 0,
+      "month": 1,
+      "category": "人物",
+      "cast": [
+        "shen"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "封存原簿，让沈砚附上亲笔说明",
+          "effect": {
+            "stats": {
+              "integrity": 4
+            },
+            "items": [
+              "ledger"
+            ],
+            "rel": [
+              [
+                "shen",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "抄下可核的条目，暂留原簿在刑房",
+          "effect": {
+            "stats": {
+              "standing": 3
+            },
+            "rel": [
+              [
+                "shen",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "退回簿册，不把前任旧事带入新任",
+          "effect": {
+            "stats": {
+              "order": 3,
+              "integrity": -3
+            },
+            "shadow": 1,
+            "rel": [
+              [
+                "shen",
+                -2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A01",
+      "title": "半枚手印的白契",
+      "chapter": 0,
+      "month": 2,
+      "category": "事务",
+      "cast": [
+        "he",
+        "cheng"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "传四邻询证，补成公开可核的契据",
+          "effect": {
+            "stats": {
+              "silver": -4,
+              "trust": 5
+            },
+            "items": [
+              "white"
+            ],
+            "rel": [
+              [
+                "he",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "先保住铺面，限双方另议租期",
+          "effect": {
+            "stats": {
+              "order": 4,
+              "welfare": 2
+            },
+            "rel": [
+              [
+                "he",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "依现册退还房屋，免去追征旧欠",
+          "effect": {
+            "stats": {
+              "standing": 3,
+              "trust": -3
+            },
+            "rel": [
+              [
+                "he",
+                -3
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "V02",
+      "title": "一把绳尺",
+      "chapter": 0,
+      "month": 2,
+      "category": "人物",
+      "cast": [
+        "lu"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "先付旧工钱，换一张逐段验工表",
+          "effect": {
+            "stats": {
+              "silver": -12,
+              "works": 9,
+              "trust": 3
+            },
+            "rel": [
+              [
+                "lu",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "约定分期，先修最险的四十丈",
+          "effect": {
+            "stats": {
+              "silver": -5,
+              "works": 6
+            },
+            "rel": [
+              [
+                "lu",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "按新差役名额征工，旧欠另查",
+          "effect": {
+            "stats": {
+              "works": 3,
+              "order": -3,
+              "trust": -4
+            },
+            "rel": [
+              [
+                "lu",
+                -3
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A02",
+      "title": "桥下不识字的人",
+      "chapter": 0,
+      "month": 2,
+      "category": "事务",
+      "cast": [
+        "sang"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "把渡税与工役分列，准船户自己报名",
+          "effect": {
+            "stats": {
+              "silver": -3,
+              "order": 3,
+              "trust": 4
+            },
+            "rel": [
+              [
+                "sang",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "用现有里甲作保，先减一季渡税",
+          "effect": {
+            "stats": {
+              "silver": -5,
+              "welfare": 3
+            },
+            "rel": [
+              [
+                "sang",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "保留税额，让渡户分期缴清",
+          "effect": {
+            "stats": {
+              "silver": 6,
+              "standing": 3,
+              "trust": -3
+            },
+            "rel": [
+              [
+                "sang",
+                -2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "R01",
+      "title": "船底那一行小字",
+      "chapter": 0,
+      "month": 2,
+      "category": "回响",
+      "cast": [
+        "sang",
+        "shen"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "存下副单，并记录船户自认的夹带",
+          "effect": {
+            "stats": {
+              "integrity": 4,
+              "standing": -2
+            },
+            "items": [
+              "boats"
+            ],
+            "rel": [
+              [
+                "sang",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "只校正粮数，私盐另案处理",
+          "effect": {
+            "stats": {
+              "order": 4,
+              "standing": 2
+            },
+            "rel": [
+              [
+                "sang",
+                -1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "以船户欠税抵消账差，封结此项",
+          "effect": {
+            "stats": {
+              "silver": 4,
+              "integrity": -5
+            },
+            "shadow": 1
+          }
+        }
+      ],
+      "after": [
+        "A02",
+        "V01"
+      ],
+      "priority": 90,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M02",
+      "title": "仓门打开以前",
+      "chapter": 0,
+      "month": 3,
+      "category": "主线",
+      "cast": [
+        "xu",
+        "cheng",
+        "shen"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "按实际人口开粥，同时留下实名异议栏",
+          "effect": {
+            "stats": {
+              "grain": -12,
+              "welfare": 8,
+              "trust": 4,
+              "standing": -2
+            }
+          }
+        },
+        {
+          "id": "b",
+          "label": "照在册户先发，另设三日补录",
+          "effect": {
+            "stats": {
+              "grain": -8,
+              "welfare": 5,
+              "order": 4
+            }
+          }
+        },
+        {
+          "id": "c",
+          "label": "保留籽种，只向无力做饭者给熟食",
+          "effect": {
+            "stats": {
+              "grain": -5,
+              "welfare": 2,
+              "order": 3
+            }
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M03",
+      "title": "春水没有副本",
+      "chapter": 1,
+      "month": 3,
+      "category": "主线",
+      "cast": [
+        "lu",
+        "wei"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "照实测先修东堤，公开占地与赔偿",
+          "effect": {
+            "stats": {
+              "silver": -10,
+              "works": 10,
+              "integrity": 3
+            },
+            "items": [
+              "survey"
+            ],
+            "rel": [
+              [
+                "lu",
+                3
+              ],
+              [
+                "wei",
+                -2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "先筑临时围堰，给两岸留出协商期",
+          "effect": {
+            "stats": {
+              "silver": -6,
+              "works": 6,
+              "order": 3
+            },
+            "rel": [
+              [
+                "wei",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "沿旧界加高，保证册图与工程相合",
+          "effect": {
+            "stats": {
+              "silver": -4,
+              "works": 3,
+              "standing": 4
+            },
+            "rel": [
+              [
+                "lu",
+                -2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "V03",
+      "title": "魏宅借来的春天",
+      "chapter": 1,
+      "month": 3,
+      "category": "人物",
+      "cast": [
+        "wei"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "收借粮，写明利息上限与公开偿期",
+          "effect": {
+            "stats": {
+              "grain": 16,
+              "standing": -2
+            },
+            "rel": [
+              [
+                "wei",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "收无息捐粮，允许题名但不许包揽工程",
+          "effect": {
+            "stats": {
+              "grain": 10,
+              "trust": 2,
+              "standing": 2
+            },
+            "rel": [
+              [
+                "wei",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "谢绝附带条件，从公银采买",
+          "effect": {
+            "stats": {
+              "silver": -9,
+              "grain": 12,
+              "integrity": 4
+            },
+            "rel": [
+              [
+                "wei",
+                -2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A03",
+      "title": "药渣里的一截根",
+      "chapter": 1,
+      "month": 4,
+      "category": "事务",
+      "cast": [
+        "xu",
+        "cheng"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "暂停涉案药材，逐户追访并公开更正",
+          "effect": {
+            "stats": {
+              "silver": -4,
+              "welfare": 5,
+              "integrity": 3
+            },
+            "rel": [
+              [
+                "xu",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "先赔病户，再请两位医者共同验方",
+          "effect": {
+            "stats": {
+              "silver": -6,
+              "welfare": 4,
+              "order": 3
+            },
+            "rel": [
+              [
+                "xu",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "只查进货与误用，不先判医方有罪",
+          "effect": {
+            "stats": {
+              "order": 3,
+              "standing": 2
+            },
+            "rel": [
+              [
+                "xu",
+                2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A04",
+      "title": "水往谁的田里去",
+      "chapter": 1,
+      "month": 4,
+      "category": "事务",
+      "cast": [
+        "wei",
+        "lu"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "拆私埂，按实损补偿两岸",
+          "effect": {
+            "stats": {
+              "silver": -9,
+              "works": 8,
+              "trust": 3
+            },
+            "rel": [
+              [
+                "wei",
+                -3
+              ],
+              [
+                "lu",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "开限时分水口，让两岸共同守尺",
+          "effect": {
+            "stats": {
+              "works": 5,
+              "order": 5
+            },
+            "rel": [
+              [
+                "wei",
+                2
+              ],
+              [
+                "lu",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "守旧界，另掘小渠救下游急旱",
+          "effect": {
+            "stats": {
+              "silver": -5,
+              "works": 2,
+              "welfare": 3
+            },
+            "rel": [
+              [
+                "wei",
+                3
+              ],
+              [
+                "lu",
+                -2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "V04",
+      "title": "名字写在纸背",
+      "chapter": 1,
+      "month": 5,
+      "category": "人物",
+      "cast": [
+        "he"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "借空廊开夜学，男女分时且自愿入册",
+          "effect": {
+            "stats": {
+              "silver": -4,
+              "welfare": 4,
+              "trust": 3
+            },
+            "rel": [
+              [
+                "he",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "请书铺授字，由学者自备纸笔",
+          "effect": {
+            "stats": {
+              "welfare": 2,
+              "order": 2
+            },
+            "rel": [
+              [
+                "he",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "先教契约与算账，不另立学馆名目",
+          "effect": {
+            "stats": {
+              "silver": -2,
+              "welfare": 3,
+              "standing": 2
+            },
+            "rel": [
+              [
+                "he",
+                1
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "R02",
+      "title": "绳结松开的那夜",
+      "chapter": 1,
+      "month": 5,
+      "category": "回响",
+      "cast": [
+        "lu",
+        "sang"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "依匠首判断撤人保命，次日重测",
+          "effect": {
+            "stats": {
+              "works": -2,
+              "welfare": 5,
+              "trust": 4
+            },
+            "rel": [
+              [
+                "lu",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "增派轮班守堤，把最弱的一段卸压",
+          "effect": {
+            "stats": {
+              "silver": -5,
+              "works": 4,
+              "order": 4
+            }
+          }
+        },
+        {
+          "id": "c",
+          "label": "先转移下游住户，保留少数熟手察看",
+          "effect": {
+            "stats": {
+              "grain": -4,
+              "welfare": 4,
+              "order": 3
+            },
+            "rel": [
+              [
+                "sang",
+                2
+              ]
+            ]
+          }
+        }
+      ],
+      "after": [
+        "V02",
+        "M03",
+        "A04"
+      ],
+      "priority": 90,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M04",
+      "title": "限期之外的第三天",
+      "chapter": 1,
+      "month": 6,
+      "category": "主线",
+      "cast": [
+        "luo",
+        "shen"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "把迟误与补救一并具报",
+          "effect": {
+            "stats": {
+              "standing": -4,
+              "integrity": 6
+            },
+            "rel": [
+              [
+                "luo",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "先交可核部分，申请补卷",
+          "effect": {
+            "stats": {
+              "standing": 5,
+              "order": 2
+            },
+            "rel": [
+              [
+                "luo",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "提前验工日期，赶在封套前送出",
+          "effect": {
+            "stats": {
+              "standing": 7,
+              "integrity": -7
+            },
+            "shadow": 1,
+            "rel": [
+              [
+                "luo",
+                -2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M05",
+      "title": "秋粮的第三联",
+      "chapter": 2,
+      "month": 8,
+      "category": "主线",
+      "cast": [
+        "shen",
+        "luo"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "把争议征解联封存，照实数分批解送",
+          "effect": {
+            "stats": {
+              "standing": -3,
+              "integrity": 5
+            },
+            "items": [
+              "receipt"
+            ],
+            "rel": [
+              [
+                "shen",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "请府县共同复点，留下一份会签说明",
+          "effect": {
+            "stats": {
+              "silver": -4,
+              "standing": 6,
+              "order": 3
+            },
+            "rel": [
+              [
+                "luo",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "以本县余项垫平差额，结清本季",
+          "effect": {
+            "stats": {
+              "silver": -8,
+              "standing": 7,
+              "integrity": -5
+            },
+            "shadow": 1
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "V05",
+      "title": "渡夫不肯领赏",
+      "chapter": 2,
+      "month": 8,
+      "category": "人物",
+      "cast": [
+        "sang"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "补记全部船工，赏钱由他们推举分配",
+          "effect": {
+            "stats": {
+              "silver": -5,
+              "trust": 5
+            },
+            "rel": [
+              [
+                "sang",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "把赏钱转为公用修船料，逐次登记",
+          "effect": {
+            "stats": {
+              "silver": -4,
+              "works": 3,
+              "order": 3
+            },
+            "rel": [
+              [
+                "sang",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "照已有名册发放，允许另报漏名",
+          "effect": {
+            "stats": {
+              "silver": -3,
+              "standing": 3,
+              "trust": 1
+            },
+            "rel": [
+              [
+                "sang",
+                -1
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A05",
+      "title": "一个不能报出的姓",
+      "chapter": 2,
+      "month": 9,
+      "category": "事务",
+      "cast": [
+        "he",
+        "shen"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "以抚养与现居证据记名，封存旧身份争议",
+          "effect": {
+            "stats": {
+              "trust": 4,
+              "integrity": 3
+            },
+            "rel": [
+              [
+                "he",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "先准旁听学习，籍贯留待原乡回文",
+          "effect": {
+            "stats": {
+              "welfare": 3,
+              "standing": 3
+            },
+            "rel": [
+              [
+                "he",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "发临时寄学凭据，写明不得冒认宗族",
+          "effect": {
+            "stats": {
+              "order": 4,
+              "welfare": 2
+            }
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A06",
+      "title": "逃役人的鞋",
+      "chapter": 2,
+      "month": 9,
+      "category": "事务",
+      "cast": [
+        "cheng",
+        "shen"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "查替役钱流向，欠役按实情重新分担",
+          "effect": {
+            "stats": {
+              "order": 2,
+              "trust": 5,
+              "integrity": 3
+            },
+            "rel": [
+              [
+                "cheng",
+                -1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "先给三日照护假，程守义负责复核",
+          "effect": {
+            "stats": {
+              "welfare": 3,
+              "order": 5
+            },
+            "rel": [
+              [
+                "cheng",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "役期不免，以近家轻役替远役",
+          "effect": {
+            "stats": {
+              "order": 4,
+              "standing": 3,
+              "trust": -1
+            },
+            "rel": [
+              [
+                "cheng",
+                2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "R03",
+      "title": "她递来的不是状纸",
+      "chapter": 2,
+      "month": 10,
+      "category": "回响",
+      "cast": [
+        "he"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "请她把错误也写进义学账",
+          "effect": {
+            "stats": {
+              "integrity": 4,
+              "trust": 3
+            },
+            "rel": [
+              [
+                "he",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "准其轮值看账，按月轮换经手人",
+          "effect": {
+            "stats": {
+              "order": 4,
+              "welfare": 2
+            },
+            "rel": [
+              [
+                "he",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "由书吏协助核算，保留她的原稿",
+          "effect": {
+            "stats": {
+              "standing": 3,
+              "welfare": 2
+            },
+            "rel": [
+              [
+                "he",
+                1
+              ]
+            ]
+          }
+        }
+      ],
+      "after": [
+        "A01",
+        "V04",
+        "A05"
+      ],
+      "priority": 90,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M06",
+      "title": "秋闸最后一尺",
+      "chapter": 2,
+      "month": 10,
+      "category": "主线",
+      "cast": [
+        "lu",
+        "wei",
+        "sang"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "先放水保下游，登记上游损失",
+          "effect": {
+            "stats": {
+              "works": 5,
+              "welfare": 4,
+              "standing": -2
+            },
+            "rel": [
+              [
+                "lu",
+                3
+              ],
+              [
+                "wei",
+                -2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "按水尺轮换开闸，两岸各出一名见证",
+          "effect": {
+            "stats": {
+              "works": 5,
+              "order": 5
+            },
+            "rel": [
+              [
+                "wei",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "保留蓄水，多备一批冬粮",
+          "effect": {
+            "stats": {
+              "grain": 8,
+              "works": -2,
+              "welfare": -2
+            },
+            "rel": [
+              [
+                "lu",
+                -2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M07",
+      "title": "靴底上的公银",
+      "chapter": 3,
+      "month": 11,
+      "category": "主线",
+      "cast": [
+        "cheng"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "清偿欠饷，公开差役不得另取的费用",
+          "effect": {
+            "stats": {
+              "silver": -10,
+              "order": 8,
+              "integrity": 4
+            },
+            "rel": [
+              [
+                "cheng",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "先付半饷，以轮休和公食缓一月",
+          "effect": {
+            "stats": {
+              "silver": -5,
+              "grain": -3,
+              "order": 5
+            },
+            "rel": [
+              [
+                "cheng",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "先清空名，实役先发一部分饷",
+          "effect": {
+            "stats": {
+              "silver": -3,
+              "order": 2,
+              "standing": 5
+            },
+            "rel": [
+              [
+                "cheng",
+                -1
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "V06",
+      "title": "族谱少掉的一页",
+      "chapter": 3,
+      "month": 11,
+      "category": "人物",
+      "cast": [
+        "wei"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "准族中自议，公产争议另立公案",
+          "effect": {
+            "stats": {
+              "integrity": 4,
+              "order": 3
+            },
+            "rel": [
+              [
+                "wei",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "暂缓旌表，先核义田受益名册",
+          "effect": {
+            "stats": {
+              "standing": 3,
+              "trust": 3
+            },
+            "rel": [
+              [
+                "wei",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "退回旌表请求，请魏氏先安置佃户",
+          "effect": {
+            "stats": {
+              "trust": 4,
+              "welfare": 2
+            },
+            "rel": [
+              [
+                "wei",
+                -2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A07",
+      "title": "夜航没有凶手",
+      "chapter": 3,
+      "month": 12,
+      "category": "事务",
+      "cast": [
+        "sang",
+        "cheng"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "分别记录过失，先救济失踪者家属",
+          "effect": {
+            "stats": {
+              "silver": -5,
+              "welfare": 4,
+              "integrity": 3
+            },
+            "rel": [
+              [
+                "sang",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "暂封险渡，合请熟手重定夜航规矩",
+          "effect": {
+            "stats": {
+              "order": 6,
+              "works": 2
+            },
+            "rel": [
+              [
+                "sang",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "逐项勘验后再归责，禁止传讯家属",
+          "effect": {
+            "stats": {
+              "order": 3,
+              "standing": 3,
+              "trust": 2
+            },
+            "rel": [
+              [
+                "cheng",
+                2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A08",
+      "title": "墙上写着一个药字",
+      "chapter": 3,
+      "month": 13,
+      "category": "事务",
+      "cast": [
+        "xu"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "清井分水，征用空屋安置病家",
+          "effect": {
+            "stats": {
+              "silver": -7,
+              "welfare": 7,
+              "order": 2
+            },
+            "rel": [
+              [
+                "xu",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "先逐户巡诊，发煮水柴与照护说明",
+          "effect": {
+            "stats": {
+              "grain": -4,
+              "welfare": 5,
+              "order": 3
+            },
+            "rel": [
+              [
+                "xu",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "封病井而不封整坊，设自报症状点",
+          "effect": {
+            "stats": {
+              "welfare": 3,
+              "order": 4,
+              "standing": 2
+            },
+            "rel": [
+              [
+                "xu",
+                1
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "R04",
+      "title": "祠门向哪边开",
+      "chapter": 3,
+      "month": 13,
+      "category": "回响",
+      "cast": [
+        "wei",
+        "xu"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "借祠廊安置，明定归还与清理责任",
+          "effect": {
+            "stats": {
+              "welfare": 6,
+              "order": 3
+            },
+            "rel": [
+              [
+                "wei",
+                3
+              ],
+              [
+                "xu",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "只借外院作物资点，病家另住",
+          "effect": {
+            "stats": {
+              "silver": -3,
+              "welfare": 4,
+              "order": 4
+            },
+            "rel": [
+              [
+                "wei",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "不用祠产，改修废驿作临时病舍",
+          "effect": {
+            "stats": {
+              "silver": -8,
+              "welfare": 5,
+              "works": 2
+            },
+            "rel": [
+              [
+                "wei",
+                -1
+              ]
+            ]
+          }
+        }
+      ],
+      "after": [
+        "V03",
+        "A04",
+        "V06",
+        "A08"
+      ],
+      "priority": 90,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M08",
+      "title": "不许经过的街",
+      "chapter": 3,
+      "month": 14,
+      "category": "主线",
+      "cast": [
+        "xu",
+        "cheng",
+        "he"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "开定时通行口，由邻里报送需求",
+          "effect": {
+            "stats": {
+              "order": 3,
+              "welfare": 6,
+              "trust": 3
+            },
+            "rel": [
+              [
+                "xu",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "维持分区，增设送药与赊粮登记",
+          "effect": {
+            "stats": {
+              "grain": -5,
+              "order": 6,
+              "welfare": 4
+            },
+            "rel": [
+              [
+                "cheng",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "按户解除限制，公布复查与申诉办法",
+          "effect": {
+            "stats": {
+              "order": 4,
+              "standing": 3,
+              "integrity": 3
+            }
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M09",
+      "title": "第二次水声",
+      "chapter": 4,
+      "month": 16,
+      "category": "主线",
+      "cast": [
+        "lu",
+        "sang"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "按旧图提前疏散，保护水尺与救援路",
+          "effect": {
+            "stats": {
+              "grain": -6,
+              "welfare": 6,
+              "order": 3
+            },
+            "rel": [
+              [
+                "lu",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "集中银料补险口，维持粮船往来",
+          "effect": {
+            "stats": {
+              "silver": -7,
+              "works": 8,
+              "standing": 3
+            },
+            "rel": [
+              [
+                "sang",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "分区轮守，让当地熟手决定撤离时点",
+          "effect": {
+            "stats": {
+              "works": 4,
+              "order": 5,
+              "trust": 2
+            }
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "V07",
+      "title": "医案不写功德",
+      "chapter": 4,
+      "month": 16,
+      "category": "人物",
+      "cast": [
+        "xu"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "保留匿名病程，拨纸墨抄给乡间",
+          "effect": {
+            "stats": {
+              "silver": -3,
+              "welfare": 4,
+              "integrity": 3
+            },
+            "items": [
+              "clinic"
+            ],
+            "rel": [
+              [
+                "xu",
+                4
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "交两位医者会阅，只记能重复核对的经验",
+          "effect": {
+            "stats": {
+              "welfare": 3,
+              "standing": 3
+            },
+            "items": [
+              "clinic"
+            ],
+            "rel": [
+              [
+                "xu",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "先留底本，删去未经核实的归因再传抄",
+          "effect": {
+            "stats": {
+              "order": 3,
+              "integrity": 3
+            },
+            "items": [
+              "clinic"
+            ],
+            "rel": [
+              [
+                "xu",
+                1
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A09",
+      "title": "铺面传给谁",
+      "chapter": 4,
+      "month": 17,
+      "category": "事务",
+      "cast": [
+        "he",
+        "wei"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "确认亲笔处分意思，分列铺面与祭产",
+          "effect": {
+            "stats": {
+              "trust": 5,
+              "integrity": 3
+            },
+            "rel": [
+              [
+                "he",
+                3
+              ],
+              [
+                "wei",
+                -1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "先为母女设稳定使用约，再议所有权",
+          "effect": {
+            "stats": {
+              "welfare": 4,
+              "order": 4
+            },
+            "rel": [
+              [
+                "he",
+                1
+              ],
+              [
+                "wei",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "补足各方见证，暂封有争议的租金",
+          "effect": {
+            "stats": {
+              "silver": -2,
+              "standing": 4,
+              "order": 3
+            }
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "R05",
+      "title": "同一册账的两种读法",
+      "chapter": 4,
+      "month": 18,
+      "category": "回响",
+      "cast": [
+        "shen",
+        "luo"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "分清受益、经手与决策人，原件不改",
+          "effect": {
+            "stats": {
+              "integrity": 6,
+              "standing": -3
+            },
+            "rel": [
+              [
+                "shen",
+                3
+              ],
+              [
+                "luo",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "逐项附会签说明，争议留待上级复核",
+          "effect": {
+            "stats": {
+              "standing": 6,
+              "order": 3
+            },
+            "rel": [
+              [
+                "luo",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "将争议并入旧欠，只报本任改善数",
+          "effect": {
+            "stats": {
+              "standing": 7,
+              "integrity": -7
+            },
+            "shadow": 1,
+            "rel": [
+              [
+                "shen",
+                -3
+              ]
+            ]
+          }
+        }
+      ],
+      "after": [
+        "M01",
+        "V01",
+        "R01",
+        "M04",
+        "M05"
+      ],
+      "priority": 90,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "R06",
+      "title": "窗下两盏灯",
+      "chapter": 4,
+      "month": 19,
+      "category": "回响",
+      "cast": [
+        "he",
+        "xu"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "留下相互纠错的办法，公银只付纸墨",
+          "effect": {
+            "stats": {
+              "silver": -3,
+              "welfare": 5,
+              "trust": 3
+            },
+            "rel": [
+              [
+                "he",
+                2
+              ],
+              [
+                "xu",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "将夜学与医案分开保管，按月交换缺漏",
+          "effect": {
+            "stats": {
+              "order": 4,
+              "welfare": 3
+            }
+          }
+        },
+        {
+          "id": "c",
+          "label": "由坊中轮值，把关门钥匙交给两位新学者",
+          "effect": {
+            "stats": {
+              "trust": 4,
+              "welfare": 3
+            }
+          }
+        }
+      ],
+      "after": [
+        "A01",
+        "V04",
+        "R03",
+        "A08",
+        "V07",
+        "A09"
+      ],
+      "priority": 90,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M10",
+      "title": "谁来保管第二把钥匙",
+      "chapter": 4,
+      "month": 20,
+      "category": "主线",
+      "cast": [
+        "wei",
+        "he",
+        "sang",
+        "xu"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "立相济约，明定退约与查账权",
+          "effect": {
+            "stats": {
+              "silver": -6,
+              "grain": -6,
+              "trust": 5
+            },
+            "items": [
+              "pact"
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "由县衙设公簿，先试一季轮值",
+          "effect": {
+            "stats": {
+              "silver": -3,
+              "order": 6,
+              "standing": 4
+            }
+          }
+        },
+        {
+          "id": "c",
+          "label": "各坊自管余粮，县衙只受理争议",
+          "effect": {
+            "stats": {
+              "welfare": 3,
+              "integrity": 4
+            }
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M11",
+      "title": "验官来到县门",
+      "chapter": 5,
+      "month": 21,
+      "category": "主线",
+      "cast": [
+        "luo",
+        "shen",
+        "cheng"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "交原件与经手名单，自己的批语也不摘除",
+          "effect": {
+            "stats": {
+              "integrity": 7,
+              "standing": -2
+            },
+            "rel": [
+              [
+                "shen",
+                3
+              ],
+              [
+                "cheng",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "分为已核与待核两卷，逐事口陈",
+          "effect": {
+            "stats": {
+              "standing": 7,
+              "order": 3
+            },
+            "rel": [
+              [
+                "luo",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "以本任成果为总纲，旧案仅列数字",
+          "effect": {
+            "stats": {
+              "standing": 6,
+              "integrity": -5
+            },
+            "shadow": 1
+          }
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "V08",
+      "title": "程守义请辞",
+      "chapter": 5,
+      "month": 21,
+      "category": "人物",
+      "cast": [
+        "cheng"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "准他卸去领差，留下训练新人的职责",
+          "effect": {
+            "stats": {
+              "order": 3,
+              "trust": 3
+            },
+            "rel": [
+              [
+                "cheng",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "留任一季，先将差费与惩戒办法交接",
+          "effect": {
+            "stats": {
+              "order": 6,
+              "standing": 3
+            },
+            "rel": [
+              [
+                "cheng",
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "准其辞役回家，把旧处分完整留卷",
+          "effect": {
+            "stats": {
+              "integrity": 4,
+              "order": -2
+            },
+            "rel": [
+              [
+                "cheng",
+                2
+              ]
+            ]
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "A10",
+      "title": "牢里寄出的家书",
+      "chapter": 5,
+      "month": 22,
+      "category": "事务",
+      "cast": [
+        "cheng",
+        "shen"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "复核羁押期限，分别上报并安排家属探视",
+          "effect": {
+            "stats": {
+              "silver": -3,
+              "integrity": 5,
+              "welfare": 3
+            }
+          }
+        },
+        {
+          "id": "b",
+          "label": "先补送失联书信，再逐案催结",
+          "effect": {
+            "stats": {
+              "order": 4,
+              "standing": 3,
+              "trust": 2
+            }
+          }
+        },
+        {
+          "id": "c",
+          "label": "请上级会审久悬之案，费用列为公支",
+          "effect": {
+            "stats": {
+              "silver": -5,
+              "standing": 5,
+              "integrity": 3
+            }
+          }
+        }
+      ],
+      "priority": 50,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "R07",
+      "title": "刻度留给后来的人",
+      "chapter": 5,
+      "month": 22,
+      "category": "回响",
+      "cast": [
+        "lu"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "把失误水位也刻上，交两岸共同维护",
+          "effect": {
+            "stats": {
+              "works": 5,
+              "integrity": 4
+            },
+            "rel": [
+              [
+                "lu",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "立常年修缮簿，给继任者列清支出",
+          "effect": {
+            "stats": {
+              "silver": -3,
+              "works": 6,
+              "standing": 3
+            },
+            "rel": [
+              [
+                "lu",
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "把验工权交给常年守堤的工户",
+          "effect": {
+            "stats": {
+              "works": 4,
+              "trust": 4
+            },
+            "rel": [
+              [
+                "lu",
+                3
+              ]
+            ]
+          },
+          "requires": [
+            {
+              "stat": "works",
+              "min": 60
+            }
+          ]
+        }
+      ],
+      "after": [
+        "V02",
+        "M03",
+        "R02",
+        "M06",
+        "M09"
+      ],
+      "priority": 90,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "R08",
+      "title": "名册上的最后一条船",
+      "chapter": 5,
+      "month": 23,
+      "category": "回响",
+      "cast": [
+        "sang",
+        "he"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "按船工自报与互证保留不同姓名",
+          "effect": {
+            "stats": {
+              "trust": 5,
+              "integrity": 3
+            },
+            "rel": [
+              [
+                "sang",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "label": "旧名新名并存，给每户一张可带走的副单",
+          "effect": {
+            "stats": {
+              "silver": -2,
+              "order": 4,
+              "welfare": 3
+            },
+            "rel": [
+              [
+                "sang",
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "id": "c",
+          "label": "将无主款封存，准遗属以后凭证来领",
+          "effect": {
+            "stats": {
+              "silver": 3,
+              "standing": 3,
+              "integrity": 2
+            }
+          }
+        }
+      ],
+      "after": [
+        "A02",
+        "R01",
+        "V05",
+        "A07"
+      ],
+      "priority": 90,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    },
+    {
+      "id": "M12",
+      "title": "去留簿",
+      "chapter": 5,
+      "month": 24,
+      "category": "主线",
+      "cast": [
+        "luo",
+        "shen"
+      ],
+      "options": [
+        {
+          "id": "a",
+          "label": "留任临溪，把未竟之事交给下一季",
+          "effect": {
+            "stats": {}
+          },
+          "requires": [
+            {
+              "stat": "welfare",
+              "min": 50
+            },
+            {
+              "stat": "order",
+              "min": 50
+            }
+          ],
+          "ending": "E01"
+        },
+        {
+          "id": "b",
+          "label": "接受调署，带着可核的办法赴府",
+          "effect": {
+            "stats": {}
+          },
+          "requires": [
+            {
+              "stat": "standing",
+              "min": 60
+            }
+          ],
+          "ending": "E02"
+        },
+        {
+          "id": "c",
+          "label": "缴印归乡，完整交接自己的得失",
+          "effect": {
+            "stats": {}
+          },
+          "ending": "E03"
+        },
+        {
+          "id": "d",
+          "label": "携三份原始凭据，请求上呈复核",
+          "effect": {
+            "stats": {}
+          },
+          "requires": [
+            {
+              "proof": 3
+            }
+          ],
+          "ending": "E04"
+        },
+        {
+          "id": "e",
+          "label": "辞官留县，以平民身份参与相济约",
+          "effect": {
+            "stats": {}
+          },
+          "requires": [
+            {
+              "item": "pact"
+            }
+          ],
+          "ending": "E05"
+        },
+        {
+          "id": "f",
+          "label": "接受改写后的考语，封结争议账目",
+          "effect": {
+            "stats": {}
+          },
+          "requires": [
+            {
+              "shadow": 2
+            }
+          ],
+          "ending": "E06"
+        }
+      ],
+      "priority": 100,
+      "once": true,
+      "role": "知县",
+      "place": "临溪县"
+    }
+  ],
+  "people": [
+    {
+      "id": "shen",
+      "name": "沈砚",
+      "role": "刑房书吏",
+      "place": "刑房",
+      "bio": "字写得极小，账记得极清。他总先把事情说明白，再承认自己也在那件事里。"
+    },
+    {
+      "id": "lu",
+      "name": "陆青禾",
+      "role": "河工匠首",
+      "place": "东堤",
+      "bio": "腰间挂着一截磨亮的绳尺。她不许任何人用一句“尽力了”，替代一个工人的名字。"
+    },
+    {
+      "id": "he",
+      "name": "何素娘",
+      "role": "豆腐坊主人",
+      "place": "南街",
+      "bio": "天不亮便磨豆，一天的亏盈算到文。她要女儿能以自己的名字签一张契。"
+    },
+    {
+      "id": "wei",
+      "name": "魏廷章",
+      "role": "本县举人",
+      "place": "西乡",
+      "bio": "一县的体面和一家人的体面，他盼着两全；水涨起来时，岸却只能有一条。"
+    },
+    {
+      "id": "sang",
+      "name": "桑九",
+      "role": "临溪渡夫",
+      "place": "老渡口",
+      "bio": "熟识夜里的水路，白天却常在名册上找不到自己。笑话说得多，真话藏在最后。"
+    },
+    {
+      "id": "xu",
+      "name": "许照微",
+      "role": "乡间医者",
+      "place": "药铺",
+      "bio": "看病先问昨夜谁守在床边。她记药，也记一个病人能不能喝到干净水。"
+    },
+    {
+      "id": "cheng",
+      "name": "程守义",
+      "role": "本县典史",
+      "place": "县衙",
+      "bio": "一双旧靴补了三回。他信规矩能挡住最坏的事，也怕规矩只是让弱者先低头。"
+    },
+    {
+      "id": "luo",
+      "name": "罗问渠",
+      "role": "府衙承行",
+      "place": "往来府县",
+      "bio": "公文上不多一个字，话却常说到一半。留出的空白究竟给谁，要到最后才知道。"
+    }
+  ],
+  "endingTitles": {
+    "E01": "春在县门外",
+    "E02": "一纸调令",
+    "E03": "归舟无印",
+    "E04": "带卷北行",
+    "E05": "灯火相借",
+    "E06": "无字考语"
+  },
+  "obligations": {
+    "M03": [
+      {
+        "flag": "v02",
+        "equals": 2,
+        "stats": {
+          "silver": -7
+        }
+      }
+    ],
+    "M06": [
+      {
+        "flag": "v03",
+        "equals": 1,
+        "stats": {
+          "grain": -16,
+          "silver": -2
+        }
+      }
+    ],
+    "A07": [
+      {
+        "flag": "m07",
+        "equals": 2,
+        "stats": {
+          "silver": -5
+        }
+      },
+      {
+        "flag": "m07",
+        "equals": 3,
+        "stats": {
+          "silver": -7
+        }
+      }
+    ]
+  }
+}

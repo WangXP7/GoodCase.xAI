@@ -20,7 +20,7 @@
 ## 结构
 
 ```
-index.html            ← 画廊首页(自动生成, 44 个案例入口)
+index.html            ← 画廊首页(自动生成, 50 个案例入口)
 codex/  zcode/  workbuddy/  trae/  codex/
 ```
 
@@ -32,3 +32,16 @@ codex/  zcode/  workbuddy/  trae/  codex/
 [站点展示](https://wangxp7.github.io/GoodCase.xAI/codex/jarvis/) · [Windows 下载](https://github.com/WangXP7/GoodCase.xAI/releases/tag/jarvis-v0.3.0) · [源码](codex/jarvis/source/)
 
 WinUI 3 原生 Windows 程序，包含四种模式、波浪核心、动态声纹和独立悬浮窗。站点提供真实运行截图；桌面程序需下载并完整解压 Windows ZIP。当前对话和遥测为本地模拟数据。
+
+
+## 五款中文文字模拟游戏
+
+| 案例 | 制作工具与模型 | 在线入口 |
+|---|---|---|
+| 汉末青云 | Codex + GPT-6 Astra | [开始游玩](codex/hanmo-qingyun/index.html) |
+| 面壁计划 | Codex + GPT-6 Astra | [开始游玩](codex/wallfacer-plan/index.html) |
+| MB围城 | Codex + GPT-6 Astra | [开始游玩](codex/mb-enclosure/index.html) |
+| 红河青云 | Codex + GPT-6 Astra | [开始游玩](codex/honghe-qingyun/index.html) |
+| 晚明县志 V0.1 | Codex + GPT-6 Astra | [开始游玩](codex/wanming-xianzhi/index.html) |
+
+以上模型取自原始制作会话记录。页面可直接在线运行，也可保存单HTML离线使用；本次仅追加案例及必要的画廊入口，保留已有项目。

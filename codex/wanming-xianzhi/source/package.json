@@ -1,0 +1,6 @@
+{
+  "name": "wanming-xianzhi", "version": "0.1.0", "private": true, "type": "module",
+  "scripts": {"build": "node scripts/build.mjs", "check": "tsc --noEmit", "test": "node scripts/test.mjs", "test:ui": "node scripts/ui-test.mjs"},
+  "dependencies": {"inkjs": "2.4.0"},
+  "devDependencies": {"esbuild": "0.28.2", "typescript": "5.9.3", "playwright": "1.58.2"}
+}
