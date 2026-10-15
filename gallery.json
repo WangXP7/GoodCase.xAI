@@ -61,6 +61,14 @@
     },
     {
       "ns": "workbuddy",
+      "dir": "diorama-winter",
+      "entry": "index.html",
+      "title": "冬日微缩展示台 · Frost-Fold Cabin",
+      "desc": "全程序化 bpy 建模的冬季微缩景观 · 折纸感小屋压着左右不等高的斜屋脊，整面三角玻璃山墙透出暖光，配扫雪小径、结冰池塘、雪压松与暖光路灯；Cycles 1920×1440 出图，零外部模型 / 贴图 / HDRI",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+    },
+    {
+      "ns": "workbuddy",
       "dir": "eaves",
       "entry": "index.html",
       "title": "eaves +21 页",

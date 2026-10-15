@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>冬日微缩展示台 · Frost-Fold Cabin — GoodCase.xAI</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0b0e14; color:#dfe5ee; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; line-height:1.7; }
+  a { color:#7aa2ff; text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 6vw; }
+
+  .back { display:inline-block; margin:26px 0 0; font-size:13px; color:#6f7b93; }
+  .back:hover { color:#7aa2ff; }
+  header { padding:18px 0 26px; border-bottom:1px solid #1c2230; }
+  h1 { font-size:27px; letter-spacing:.02em; line-height:1.4; }
+  h1 span { color:#7aa2ff; }
+  .meta { margin-top:14px; display:flex; flex-wrap:wrap; gap:8px; }
+  .tag { font-size:12px; padding:5px 12px; border:1px solid #2a3245; border-radius:999px; color:#9fb0d0; }
+  .tag.key { border-color:#3b5bdb; color:#a9c2ff; background:rgba(59,91,219,.10); }
+
+  section { padding:38px 0; border-bottom:1px solid #1c2230; }
+  h2 { font-size:16px; color:#e8edf7; margin-bottom:6px; letter-spacing:.04em; }
+  h2 .n { color:#3b5bdb; font-weight:400; margin-right:8px; }
+  .sub { font-size:12.5px; color:#6f7b93; margin-bottom:20px; }
+
+  .hero { border:1px solid #1e2534; border-radius:14px; overflow:hidden; background:#11151f; }
+  .hero img { display:block; width:100%; height:auto; }
+  .hero .cap { padding:14px 18px; font-size:12.5px; color:#8b94a7; border-top:1px solid #1e2534; }
+  .hero .cap b { color:#c9d4e6; font-weight:500; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:14px; }
+  figure { background:#11151f; border:1px solid #1e2534; border-radius:10px; overflow:hidden; }
+  figure img { display:block; width:100%; height:auto; }
+  figcaption { padding:10px 12px; font-size:11.5px; color:#8b94a7; line-height:1.55; }
+  figcaption b { color:#c9d4e6; font-weight:500; display:block; margin-bottom:2px; }
+  figure.win { border-color:#3b5bdb; box-shadow:0 0 0 1px rgba(59,91,219,.35); }
+
+  ul.pts { list-style:none; }
+  ul.pts li { position:relative; padding-left:20px; margin-bottom:11px; font-size:13.5px; color:#b9c4d6; }
+  ul.pts li::before { content:""; position:absolute; left:2px; top:9px; width:6px; height:6px;
+                      border-radius:50%; background:#3b5bdb; }
+  ul.pts li b { color:#e8edf7; font-weight:600; }
+  code { background:#161c28; border:1px solid #232c3d; border-radius:4px; padding:1px 6px;
+         font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#9fd0b6; }
+
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid #1c2230; vertical-align:top; }
+  th { color:#6f7b93; font-weight:500; width:34%; }
+  td { color:#c2cddd; }
+  td code { font-size:11.5px; }
+
+  .files { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
+  .file { display:block; background:#11151f; border:1px solid #1e2534; border-radius:10px;
+          padding:15px 17px; transition:all .18s; }
+  .file:hover { border-color:#3b5bdb; transform:translateY(-2px); text-decoration:none; }
+  .file .fn { font-size:13.5px; color:#e8edf7; margin-bottom:5px; }
+  .file .fd { font-size:11.5px; color:#8b94a7; }
+
+  footer { padding:26px 0 46px; color:#5c6577; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <a class="back" href="../../index.html">← 返回 GoodCase.xAI 画廊</a>
+
+  <header>
+    <h1>冬日微缩展示台 · <span>Frost-Fold Cabin</span></h1>
+    <div class="meta">
+      <span class="tag key">WorkBuddy + DeepSeek-V4.1-Flash</span>
+      <span class="tag">全程序化 bpy 建模</span>
+      <span class="tag">Cycles · 1920×1440</span>
+      <span class="tag">零外部模型 / 贴图 / HDRI</span>
+      <span class="tag">446 个程序化对象</span>
+    </div>
+  </header>
+
+  <section>
+    <h2><span class="n">01</span>成品</h2>
+    <p class="sub">单张定稿：三分之四俯视 · 冬季蓝调时刻 · 冷暖对撞 · Cycles 240 spp</p>
+    <div class="hero">
+      <img src="shots/render-final.png" alt="冬日微缩展示台 · Frost-Fold Cabin 定稿渲染">
+      <div class="cap">
+        <b>渲染 1920×1440 · 240 spp</b>（页面展示 1600×1200）— Cycles / Blender 5.2.2 LTS。
+        1.6 m 见方的圆角石台顶上是起伏的雪原，折纸感小屋压着一条左右不等高的斜屋脊，
+        右侧整面三角玻璃山墙把暖光泼进院子。
+      </div>
+    </div>
+    <div class="hero" style="margin-top:14px;">
+      <img src="shots/render-final-eevee.png" alt="同一机位的 EEVEE 版本">
+      <div class="cap">
+        <b>同一机位 · EEVEE 192 spp</b> — 与上面一张共用同一份场景与灯光，只换渲染器。
+        EEVEE 约 60 秒出图、边缘更锐、天空更蓝；Cycles 花约 8 分钟，换来真实全局光照、
+        雪面的次表面散射和更柔的接触阴影。两版都保留在案例里，方便对照。
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span>迭代过程</h2>
+    <p class="sub">每轮先回看上轮出图再改脚本，共出图 16 版 + 2 轮终稿。前 8 轮几乎全在跟「天空渐变的方向映射」死磕。</p>
+    <div class="grid">
+      <figure>
+        <img src="shots/iter-01-v1.png" alt="v1 初版">
+        <figcaption><b>v1 初版</b>天空渐变整条跑偏，背景是一片暖橙；烟囱的烟是几颗分离的白球</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-02-v2.png" alt="v2">
+        <figcaption><b>v2</b>改用 <code>Geometry.Incoming</code> 驱动渐变，蓝调终于出来，但地平线暖光看不见</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-03-v3.png" alt="v3">
+        <figcaption><b>v3</b>把暖色余晖带上移到可见区间，黄昏感立住了</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-04-v4.png" alt="v4">
+        <figcaption><b>v4</b>加飘雪与体积雾；屋顶雪换成细分位移雪壳，出现起伏</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-05-v5.png" alt="v5">
+        <figcaption><b>v5</b>暖色带放得太宽，整幅画面被染橙，蓝调几乎被吃掉</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-06-v6.png" alt="v6">
+        <figcaption><b>v6</b>渲彩虹标定图反推映射关系，据此收窄暖带</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-07-v7.png" alt="v7">
+        <figcaption><b>v7</b>矫枉过正，暖带整条跑出可见范围，天空变成纯蓝</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-08-v8.png" alt="v8">
+        <figcaption><b>v8</b>色带落回画面中下部，上冷下暖的层次终于对了</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-09-v9.png" alt="v9">
+        <figcaption><b>v9</b>前景枯树挡住房门视线 → 移位；底座雪面内缩加大，露出石台边缘</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-10-v11.png" alt="v11">
+        <figcaption><b>v11</b>雪堆网格加密，把读出「火山口」的圆环压回自然圆丘</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-11-v13.png" alt="v13">
+        <figcaption><b>v13</b>试开合成器辉光（Glare），暖色反过来淹没全图</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/iter-12-v16.png" alt="v16">
+        <figcaption><b>v16</b>辉光压到最低仍改不掉整体偏暖 → 最终关闭，回到干净对比</figcaption>
+      </figure>
+      <figure class="win">
+        <img src="shots/iter-13-final.png" alt="定稿">
+        <figcaption><b>final 定稿</b>同机位 EEVEE 版；玻璃山墙前的遮挡树全部清干净</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">03</span>技术要点</h2>
+    <p class="sub">全部由脚本生成，无任何外部资产。以下几条是这轮里真正决定成败的地方。</p>
+    <ul class="pts">
+      <li><b>俯视 diorama 时，物理正确的天空渐变在画面里根本看不见。</b>相机俯角 22.5°、垂直 FOV 只有 27.6°，整幅画面都落在地平线以上，于是「上冷下暖」的渐变整条跑到画外。v1 的天变成一片暖橙就是这个原因。</li>
+      <li><b>修法是换掉坐标源，而且要先用彩虹图标定。</b><code>TexCoord.Generated</code> 在 World 里返回常量（天空直接变单色），必须改用 <code>NewGeometry.Incoming</code> → <code>SeparateXYZ.Z</code> → <code>MapRange(-1..1 → 0..1)</code> → <code>ColorRamp</code>。但映射关系不直观：先渲一张 8 段 CONSTANT 彩虹 ramp 的 640×480 标定图，反推出「画面高度 ↔ ramp 位置」的对应（本机相机下可见区间约 <b>0.55–0.80</b>），再据此摆暖色余晖带。</li>
+      <li><b>不能靠查 enum 判断引擎能力。</b><code>RenderSettings.engine</code> 的 <code>enum_items</code> 在本机 5.2.2 的 <code>--factory-startup</code> 下只返回 <code>['BLENDER_EEVEE']</code>，但 <code>render.engine = 'CYCLES'</code> 实际是成功的。<code>view_settings.view_transform</code> 同样只报 <code>NONE</code>，而 AgX / Filmic / Standard 都能设。<b>一律实测赋值，别信 enum。</b></li>
+      <li><b>合成器 API 在 5.x 变了。</b><code>Scene.node_tree</code> 已移除，改用 <code>Scene.compositing_node_group</code>（需自建 <code>bpy.data.node_groups.new(name, "CompositorNodeTree")</code> 并用 <code>interface.new_socket</code> 定义进出 socket）；<code>CompositorNodeComposite</code> / <code>MixRGB</code> 已不存在；<b>Glare 节点的全部参数都改成了 input socket</b>（<code>Type</code>、<code>Threshold</code>、<code>Strength</code>、<code>Size</code>、<code>Tint</code> 这些都是 <code>inputs[...]</code> 下的条目），旧属性名一律 AttributeError。</li>
+      <li><b>辉光在这个场景里救不回来，最后关掉了。</b>雪面在强光下的 HDR 亮度与窗光发光体是同一量级，任何「能让窗户发光」的阈值都会连带把整片雪原点亮、把画面整体染暖。代码里保留了 <code>setup_compositor()</code> 并设 <code>USE_BLOOM = False</code>，需要时可以打开。</li>
+      <li><b>EEVEE 阴影池有 2048 tile 硬上限。</b><code>shadow_pool_size</code> 的枚举最大就是 2048，400+ 对象的场景必然报 "Shadow buffer full"。实测 <code>visible_shadow = False</code> 与 <code>shadow_ray_count = 1</code> 都<b>不能</b>降低这个计数——只能合并对象，或者接受它（实际视觉影响极小）。</li>
+      <li><b>屋顶积雪是细分位移雪壳，不是贴片。</b><code>snow_slab_grid()</code> 把四边形细分成 9×9 网格，沿法线按「檐口薄、屋脊厚」的厚度函数抬高，再叠一层带边界衰减的噪声；边缘自动收口到 0，所以檐口不会翘边、屋脊自然堆高。</li>
+      <li><b>Blender 4.1+ 没有 <code>mesh.use_auto_smooth</code>。</b>平滑着色 + 保留硬边要用「<code>polygon.use_smooth = True</code> + 按面夹角标 <code>edge.use_edge_sharp</code>」这个组合，不要再调 <code>shade_smooth_by_angle</code> 算子（它在 background 模式下还要依赖 context）。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">04</span>场景规格</h2>
+    <table>
+      <tr><th>展示底座</th><td>1.6 × 1.6 × 0.15 m 圆角方形石台（倒角半径 0.17），雪原轮廓内缩 24 mm 做浮雕式覆盖，边缘自然收口露出深色台沿</td></tr>
+      <tr><th>小屋</th><td>占地 0.50 × 0.50 m，檐口高 0.262 m；屋脊左右不等高 —— 左翼 0.360 / 右翼 <b>0.505</b>，形成不对称楔形屋顶与整面三角玻璃山墙</td></tr>
+      <tr><th>院落</th><td>扫雪小径与不规则石板、结冰池塘与冻芦苇、7 株雪压雪松 / 5 株挂霜枯桦 / 8 丛雪埋灌木、木栅栏、暖光路灯、柴堆、门口脚印、飘雪与一层有限体积雾</td></tr>
+      <tr><th>相机</th><td>55mm（36mm 画幅），方位角 34° / 仰角 22.5°，距主体 3.02 m，<code>to_track_quat('-Z','Y')</code> 求朝向；f/6.3 微景深强化微缩感</td></tr>
+      <tr><th>灯光</th><td>9 盏：暮色暖阳 Sun + 冷蓝天光面光 + 冷色轮廓光 + 4 处窗口/山墙漏光 + 路灯 + 暖色回弹面光</td></tr>
+      <tr><th>材质</th><td>24 个程序化节点材质：雪（次表面 + 噪声凹凸）、冰（透射 0.6 + Coat）、木材、板岩、暖光玻璃、金属、针叶、烟雾等</td></tr>
+      <tr><th>渲染</th><td>Cycles CPU 240 spp + 降噪（<b>468 秒</b>）／ EEVEE 192 spp（约 60 秒），AgX 色彩管理</td></tr>
+      <tr><th>规模</th><td>446 个对象 · 47,142 面 · 47,509 顶点 · 24 材质 · <b>0 个外部资源</b></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2><span class="n">05</span>文件</h2>
+    <p class="sub">建模脚本与工程文件可直接下载复用。</p>
+    <div class="files">
+      <a class="file" href="build_diorama.py" download>
+        <div class="fn">build_diorama.py</div>
+        <div class="fd">1854 行单文件脚本 · 地形 / 小屋 / 院落 / 材质 / 灯光 / 相机 / 合成器全流程</div>
+      </a>
+      <a class="file" href="render_cycles.py" download>
+        <div class="fn">render_cycles.py</div>
+        <div class="fd">33 行 · 载入工程并以 Cycles 出高清图的独立渲染脚本</div>
+      </a>
+      <a class="file" href="diorama_winter.blend" download>
+        <div class="fn">diorama_winter.blend</div>
+        <div class="fd">Blender 5.2.2 工程文件 · 1.4 MB</div>
+      </a>
+      <a class="file" href="shots/render-final.png" download>
+        <div class="fn">render-final.png</div>
+        <div class="fd">定稿渲染 1600×1200 PNG（Cycles）</div>
+      </a>
+    </div>
+  </section>
+
+  <footer>
+    GoodCase.xAI · 由 AI Agent 独立完成的成品案例 —— 本案例由 WorkBuddy + DeepSeek-V4.1-Flash 生成。
+  </footer>
+
+</div>
+</body>
+</html>
