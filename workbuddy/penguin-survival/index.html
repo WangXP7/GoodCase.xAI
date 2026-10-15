@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penguin Survival - Ice Drift Challenge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: none;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-panel {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(100, 200, 255, 0.3);
+            border-radius: 12px;
+            padding: 15px 20px;
+            min-width: 150px;
+        }
+
+        .hud-label {
+            font-size: 12px;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .hud-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        #timer {
+            color: #ffcc00;
+        }
+
+        #score {
+            color: #00ff88;
+        }
+
+        #lives {
+            color: #ff6666;
+        }
+
+        /* Start Screen */
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a1628 0%, #1a3a5c 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        #startScreen h1 {
+            font-size: 64px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(100, 200, 255, 0.5);
+            color: #fff;
+        }
+
+        #startScreen .subtitle {
+            font-size: 18px;
+            color: #88ccff;
+            margin-bottom: 40px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4a9eff 0%, #2a7ed4 100%);
+            border: none;
+            color: white;
+            padding: 15px 40px;
+            font-size: 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(74, 158, 255, 0.4);
+            pointer-events: auto;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 158, 255, 0.6);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .controls-info {
+            margin-top: 40px;
+            text-align: center;
+            color: #88ccff;
+            line-height: 1.8;
+        }
+
+        .controls-info kbd {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-family: monospace;
+        }
+
+        /* End Screen */
+        #endScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        #endScreen h2 {
+            font-size: 56px;
+            margin-bottom: 20px;
+        }
+
+        #endScreen .final-score {
+            font-size: 24px;
+            color: #88ccff;
+            margin-bottom: 30px;
+        }
+
+        /* Damage Flash */
+        #damageFlash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 0, 0, 0.3);
+            pointer-events: none;
+            opacity: 0;
+            z-index: 50;
+            transition: opacity 0.1s;
+        }
+
+        #damageFlash.active {
+            opacity: 1;
+        }
+
+        /* Fall Flash */
+        #fallFlash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            opacity: 0;
+            z-index: 50;
+            transition: opacity 0.2s;
+        }
+
+        #fallFlash.active {
+            opacity: 1;
+        }
+
+        /* Victory Screen specific */
+        #endScreen.victory h2 {
+            color: #ffcc00;
+        }
+
+        #endScreen.defeat h2 {
+            color: #ff6666;
+        }
+
+        /* Difficulty indicator */
+        #difficultyIndicator {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 165, 0, 0.3);
+            border-radius: 10px;
+            padding: 10px 20px;
+            display: none;
+            z-index: 10;
+        }
+
+        #difficultyIndicator .label {
+            font-size: 12px;
+            color: #aaa;
+            text-transform: uppercase;
+        }
+
+        #difficultyIndicator .value {
+            font-size: 18px;
+            color: #ffaa00;
+            font-weight: bold;
+        }
+
+        /* Message popup */
+        #messagePopup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(100, 200, 255, 0.5);
+            border-radius: 15px;
+            padding: 20px 40px;
+            font-size: 24px;
+            color: #fff;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 60;
+        }
+
+        #messagePopup.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- HUD -->
+        <div id="hud">
+            <div class="hud-panel">
+                <div class="hud-label">Time</div>
+                <div class="hud-value" id="timer">90</div>
+            </div>
+            <div class="hud-panel">
+                <div class="hud-label">Score</div>
+                <div class="hud-value" id="score">0</div>
+            </div>
+            <div class="hud-panel">
+                <div class="hud-label">Lives</div>
+                <div class="hud-value" id="lives">3</div>
+            </div>
+        </div>
+
+        <!-- Difficulty Indicator -->
+        <div id="difficultyIndicator">
+            <div class="label">Difficulty</div>
+            <div class="value" id="difficultyValue">Normal</div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="startScreen">
+            <h1>🐧 Penguin Survival</h1>
+            <div class="subtitle">Survive the melting ice for 90 seconds!</div>
+            <button class="btn" id="startBtn">Start Game</button>
+            <div class="controls-info">
+                <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> to move</p>
+                <p><kbd>Space</kbd> to jump</p>
+                <p>Collect fish 🐟 | Avoid seals 🦭 | Don't fall in water!</p>
+            </div>
+        </div>
+
+        <!-- End Screen -->
+        <div id="endScreen">
+            <h2 id="endTitle">Game Over</h2>
+            <div class="final-score" id="finalScore">Score: 0</div>
+            <button class="btn" id="restartBtn">Play Again</button>
+        </div>
+
+        <!-- Damage Flash -->
+        <div id="damageFlash"></div>
+        <div id="fallFlash"></div>
+
+        <!-- Message Popup -->
+        <div id="messagePopup"></div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // ============ GAME STATE ============
+        const GameState = {
+            MENU: 'menu',
+            PLAYING: 'playing',
+            VICTORY: 'victory',
+            DEFEAT: 'defeat'
+        };
+
+        let gameState = GameState.MENU;
+        let score = 0;
+        let timeRemaining = 90;
+        let lives = 3;
+        let difficulty = 1;
+        let gameTime = 0;
+
+        // ============ THREE.JS SETUP ============
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x1a3a5c, 30, 100);
+        scene.background = new THREE.Color(0x0a1628);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0, 25, 30);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('gameContainer').insertBefore(renderer.domElement, document.getElementById('hud'));
+
+        // ============ LIGHTING ============
+        const ambientLight = new THREE.AmbientLight(0x4488cc, 0.5);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffeedd, 1);
+        sunLight.position.set(50, 80, 30);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 200;
+        sunLight.shadow.camera.left = -50;
+        sunLight.shadow.camera.right = 50;
+        sunLight.shadow.camera.top = 50;
+        sunLight.shadow.camera.bottom = -50;
+        scene.add(sunLight);
+
+        const rimLight = new THREE.DirectionalLight(0x88aaff, 0.3);
+        rimLight.position.set(-30, 20, -30);
+        scene.add(rimLight);
+
+        // ============ OCEAN ============
+        const oceanGeometry = new THREE.PlaneGeometry(200, 200, 50, 50);
+        const oceanMaterial = new THREE.MeshStandardMaterial({
+            color: 0x1a5f8a,
+            roughness: 0.3,
+            metalness: 0.1,
+            transparent: true,
+            opacity: 0.9
+        });
+        const ocean = new THREE.Mesh(oceanGeometry, oceanMaterial);
+        ocean.rotation.x = -Math.PI / 2;
+        ocean.position.y = -2;
+        ocean.receiveShadow = true;
+        scene.add(ocean);
+
+        // Ocean waves animation data
+        const oceanPositions = oceanGeometry.attributes.position;
+        const originalOceanPositions = new Float32Array(oceanPositions.array);
+
+        // ============ ICE FLOE SYSTEM ============
+        const iceFloes = [];
+        const iceGeometry = new THREE.CylinderGeometry(1, 1, 0.3, 8);
+        const iceMaterial = new THREE.MeshStandardMaterial({
+            color: 0xddeeff,
+            roughness: 0.2,
+            metalness: 0.1,
+            transparent: true,
+            opacity: 0.9
+        });
+
+        function createIceFloe(x, z, scale) {
+            const floe = new THREE.Mesh(iceGeometry, iceMaterial.clone());
+            floe.position.set(x, 0, z);
+            floe.scale.set(scale, 1 + Math.random() * 0.5, scale);
+            floe.castShadow = true;
+            floe.receiveShadow = true;
+
+            // Ice floe properties
+            floe.userData = {
+                scale: scale,
+                originalScale: scale,
+                driftSpeed: 0.15 + Math.random() * 0.25,
+                driftAngle: Math.random() * Math.PI * 2,
+                breaking: false,
+                breakProgress: 0,
+                breakSpeed: 0.3 + Math.random() * 0.4,
+                lifetime: 0
+            };
+
+            scene.add(floe);
+            iceFloes.push(floe);
+            return floe;
+        }
+
+        function initIceFloes() {
+            // Clear existing
+            iceFloes.forEach(floe => scene.remove(floe));
+            iceFloes.length = 0;
+
+            // Always create a safe starting floe at center
+            createIceFloe(0, 0, 2.5);
+
+            // Create additional floes
+            const gridSize = 4;
+            const spacing = 6;
+            for (let i = -gridSize; i <= gridSize; i++) {
+                for (let j = -gridSize; j <= gridSize; j++) {
+                    if (i === 0 && j === 0) continue; // Skip center, already created
+                    if (Math.random() > 0.4) {
+                        const x = i * spacing + (Math.random() - 0.5) * 2;
+                        const z = j * spacing + (Math.random() - 0.5) * 2;
+                        const scale = 1.5 + Math.random() * 2;
+                        createIceFloe(x, z, scale);
+                    }
+                }
+            }
+        }
+
+        // ============ PENGUIN ============
+        const penguin = new THREE.Group();
+
+        // Body
+        const bodyGeometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
+        const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.5 });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 1;
+        body.castShadow = true;
+        penguin.add(body);
+
+        // White belly
+        const bellyGeometry = new THREE.CapsuleGeometry(0.35, 0.7, 4, 8);
+        const bellyMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+        const belly = new THREE.Mesh(bellyGeometry, bellyMaterial);
+        belly.position.set(0, 0.9, 0.25);
+        belly.rotation.x = 0.2;
+        penguin.add(belly);
+
+        // Eyes
+        const eyeGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 });
+        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        leftEye.position.set(-0.2, 1.4, 0.4);
+        penguin.add(leftEye);
+
+        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+        rightEye.position.set(0.2, 1.4, 0.4);
+        penguin.add(rightEye);
+
+        // Pupils
+        const pupilGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+        const pupilMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+        const leftPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+        leftPupil.position.set(-0.2, 1.4, 0.5);
+        penguin.add(leftPupil);
+
+        const rightPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+        rightPupil.position.set(0.2, 1.4, 0.5);
+        penguin.add(rightPupil);
+
+        // Beak
+        const beakGeometry = new THREE.ConeGeometry(0.1, 0.3, 8);
+        const beakMaterial = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.5 });
+        const beak = new THREE.Mesh(beakGeometry, beakMaterial);
+        beak.position.set(0, 1.2, 0.55);
+        beak.rotation.x = Math.PI / 2;
+        penguin.add(beak);
+
+        // Wings
+        const wingGeometry = new THREE.CapsuleGeometry(0.15, 0.6, 4, 8);
+        const wingMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.5 });
+
+        const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
+        leftWing.position.set(-0.55, 1, 0);
+        leftWing.rotation.z = 0.3;
+        leftWing.castShadow = true;
+        penguin.add(leftWing);
+
+        const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
+        rightWing.position.set(0.55, 1, 0);
+        rightWing.rotation.z = -0.3;
+        rightWing.castShadow = true;
+        penguin.add(rightWing);
+
+        // Feet
+        const footGeometry = new THREE.BoxGeometry(0.3, 0.1, 0.4);
+        const footMaterial = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.5 });
+
+        const leftFoot = new THREE.Mesh(footGeometry, footMaterial);
+        leftFoot.position.set(-0.2, 0.05, 0.1);
+        penguin.add(leftFoot);
+
+        const rightFoot = new THREE.Mesh(footGeometry, footMaterial);
+        rightFoot.position.set(0.2, 0.05, 0.1);
+        penguin.add(rightFoot);
+
+        penguin.position.set(0, 0.5, 0);
+        scene.add(penguin);
+
+        // Penguin physics
+        const penguinVelocity = new THREE.Vector3();
+        const penguinOnGround = { value: false };
+        let currentIceFloe = null;
+
+        // ============ FISH (Collectibles) ============
+        const fish = [];
+        const fishGeometry = new THREE.ConeGeometry(0.2, 0.8, 8);
+        const fishMaterial = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.3, metalness: 0.5 });
+
+        function createFish(x, y, z) {
+            const fishMesh = new THREE.Mesh(fishGeometry, fishMaterial.clone());
+            fishMesh.position.set(x, y, z);
+            fishMesh.rotation.x = Math.PI / 2;
+            fishMesh.castShadow = true;
+            fishMesh.userData = {
+                bobOffset: Math.random() * Math.PI * 2,
+                bobSpeed: 1 + Math.random() * 0.5
+            };
+            scene.add(fishMesh);
+            fish.push(fishMesh);
+            return fishMesh;
+        }
+
+        function spawnFish() {
+            if (iceFloes.length === 0) return;
+
+            const randomFloe = iceFloes[Math.floor(Math.random() * iceFloes.length)];
+            const floeScale = randomFloe.userData.scale;
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * floeScale * 0.5;
+            const x = randomFloe.position.x + Math.cos(angle) * distance;
+            const z = randomFloe.position.z + Math.sin(angle) * distance;
+            createFish(x, 0.8, z);
+        }
+
+        // ============ SEALS (Enemies) ============
+        const seals = [];
+        const sealGeometry = new THREE.CapsuleGeometry(0.6, 1.2, 4, 8);
+        const sealMaterial = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.6 });
+
+        function createSeal(x, z) {
+            const seal = new THREE.Mesh(sealGeometry, sealMaterial.clone());
+            seal.position.set(x, 0.6, z);
+            seal.castShadow = true;
+            seal.userData = {
+                patrolCenter: new THREE.Vector3(x, 0.6, z),
+                patrolRadius: 3 + Math.random() * 2,
+                patrolSpeed: 0.5 + Math.random() * 0.3,
+                patrolAngle: Math.random() * Math.PI * 2,
+                hitCooldown: 0
+            };
+            scene.add(seal);
+            seals.push(seal);
+            return seal;
+        }
+
+        function spawnSeal() {
+            if (iceFloes.length === 0) return;
+
+            const randomFloe = iceFloes[Math.floor(Math.random() * iceFloes.length)];
+            createSeal(
+                randomFloe.position.x + (Math.random() - 0.5) * 3,
+                randomFloe.position.z + (Math.random() - 0.5) * 3
+            );
+        }
+
+        // ============ PARTICLES ============
+        const particles = [];
+
+        function createParticle(position, color, velocity, lifetime) {
+            const geometry = new THREE.SphereGeometry(0.1, 4, 4);
+            const material = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 1 });
+            const particle = new THREE.Mesh(geometry, material);
+            particle.position.copy(position);
+            particle.userData = {
+                velocity: velocity,
+                lifetime: lifetime,
+                maxLifetime: lifetime
+            };
+            scene.add(particle);
+            particles.push(particle);
+        }
+
+        function createCollectEffect(position) {
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const velocity = new THREE.Vector3(
+                    Math.cos(angle) * 3,
+                    2 + Math.random() * 2,
+                    Math.sin(angle) * 3
+                );
+                createParticle(position.clone(), 0xffcc00, velocity, 1);
+            }
+        }
+
+        function createDamageEffect(position) {
+            for (let i = 0; i < 12; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 3;
+                const velocity = new THREE.Vector3(
+                    Math.cos(angle) * speed,
+                    1 + Math.random() * 2,
+                    Math.sin(angle) * speed
+                );
+                createParticle(position.clone(), 0xff3333, velocity, 0.8);
+            }
+        }
+
+        // ============ INPUT ============
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // ============ GAME LOGIC ============
+        const gravity = -15;
+        const moveSpeed = 8;
+        const jumpForce = 8;
+
+        function updatePenguin(delta) {
+            if (gameState !== GameState.PLAYING) return;
+
+            // Input
+            const moveX = (keys['KeyD'] || keys['ArrowRight'] ? 1 : 0) - (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0);
+            const moveZ = (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0) - (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0);
+
+            // Normalize diagonal movement
+            const inputLength = Math.sqrt(moveX * moveX + moveZ * moveZ);
+            if (inputLength > 0) {
+                moveX /= inputLength;
+                moveZ /= inputLength;
+            }
+
+            // Apply movement
+            penguinVelocity.x = moveX * moveSpeed;
+            penguinVelocity.z = moveZ * moveSpeed;
+
+            // Jump
+            if ((keys['Space']) && penguinOnGround.value) {
+                penguinVelocity.y = jumpForce;
+                penguinOnGround.value = false;
+            }
+
+            // Gravity
+            penguinVelocity.y += gravity * delta;
+
+            // Update position
+            penguin.position.x += penguinVelocity.x * delta;
+            penguin.position.y += penguinVelocity.y * delta;
+            penguin.position.z += penguinVelocity.z * delta;
+
+            // Rotate penguin to face movement direction
+            if (inputLength > 0.1) {
+                const targetRotation = Math.atan2(moveX, moveZ);
+                penguin.rotation.y = THREE.MathUtils.lerp(penguin.rotation.y, targetRotation, 0.1);
+            }
+
+            // Wing flapping animation
+            const wingFlap = Math.sin(gameTime * 10) * 0.2;
+            leftWing.rotation.z = 0.3 + wingFlap;
+            rightWing.rotation.z = -0.3 - wingFlap;
+
+            // Ground check
+            penguinOnGround.value = false;
+            currentIceFloe = null;
+
+            for (const floe of iceFloes) {
+                const dx = penguin.position.x - floe.position.x;
+                const dz = penguin.position.z - floe.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                const currentScale = floe.userData.breaking ?
+                    floe.userData.originalScale * (1 - floe.userData.breakProgress) :
+                    floe.userData.scale;
+                const floeRadius = currentScale * 0.8;
+
+                if (dist < floeRadius && penguin.position.y <= 0.6) {
+                    penguin.position.y = 0.5;
+                    penguinVelocity.y = 0;
+                    penguinOnGround.value = true;
+                    currentIceFloe = floe;
+
+                    // Move penguin with drifting ice
+                    if (floe.userData.driftSpeed > 0) {
+                        penguin.position.x += Math.cos(floe.userData.driftAngle) * floe.userData.driftSpeed * delta * 0.5;
+                        penguin.position.z += Math.sin(floe.userData.driftAngle) * floe.userData.driftSpeed * delta * 0.5;
+                    }
+                    break;
+                }
+            }
+
+            // Check if fallen in water
+            if (penguin.position.y < -5) {
+                gameOver(false, "You fell in the water!");
+            }
+        }
+
+        function updateIceFloes(delta) {
+            for (let i = iceFloes.length - 1; i >= 0; i--) {
+                const floe = iceFloes[i];
+                floe.userData.lifetime += delta;
+
+                // Drift
+                floe.position.x += Math.cos(floe.userData.driftAngle) * floe.userData.driftSpeed * delta * 0.5;
+                floe.position.z += Math.sin(floe.userData.driftAngle) * floe.userData.driftSpeed * delta * 0.5;
+
+                // Change drift direction occasionally
+                if (Math.random() < 0.01) {
+                    floe.userData.driftAngle += (Math.random() - 0.5) * 0.5;
+                }
+
+                // Breaking logic (increases with difficulty)
+                const breakChance = 0.0005 * difficulty;
+                if (!floe.userData.breaking && Math.random() < breakChance) {
+                    floe.userData.breaking = true;
+                }
+
+                if (floe.userData.breaking) {
+                    floe.userData.breakProgress += delta * floe.userData.breakSpeed;
+                    const newScale = floe.userData.originalScale * (1 - floe.userData.breakProgress);
+                    floe.scale.setScalar(Math.max(0, newScale));
+
+                    if (floe.userData.breakProgress >= 1) {
+                        scene.remove(floe);
+                        iceFloes.splice(i, 1);
+                    }
+                }
+            }
+
+            // Spawn new floes to replace broken ones
+            const targetFloeCount = Math.max(12, 22 - difficulty * 1.2);
+            while (iceFloes.length < targetFloeCount) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 15 + Math.random() * 15;
+                createIceFloe(
+                    Math.cos(angle) * distance,
+                    Math.sin(angle) * distance,
+                    1.5 + Math.random() * 2
+                );
+            }
+        }
+
+        function updateFish(delta) {
+            // Bobbing animation and collection check
+            for (let i = fish.length - 1; i >= 0; i--) {
+                const fishMesh = fish[i];
+                fishMesh.position.y = 0.8 + Math.sin(gameTime * fishMesh.userData.bobSpeed + fishMesh.userData.bobOffset) * 0.2;
+                fishMesh.rotation.y += delta * 2;
+
+                // Collection check
+                const dist = penguin.position.distanceTo(fishMesh.position);
+                if (dist < 1.5) {
+                    score += 10;
+                    updateHUD();
+                    createCollectEffect(fishMesh.position);
+                    scene.remove(fishMesh);
+                    fish.splice(i, 1);
+                    showMessage("+10");
+                }
+            }
+
+            // Spawn fish occasionally
+            if (Math.random() < 0.02 && fish.length < 10) {
+                spawnFish();
+            }
+        }
+
+        function updateSeals(delta) {
+            for (const seal of seals) {
+                // Patrol movement
+                seal.userData.patrolAngle += seal.userData.patrolSpeed * delta * 0.5;
+                const px = seal.userData.patrolCenter.x + Math.cos(seal.userData.patrolAngle) * seal.userData.patrolRadius;
+                const pz = seal.userData.patrolCenter.z + Math.sin(seal.userData.patrolAngle) * seal.userData.patrolRadius;
+                seal.position.x = px;
+                seal.position.z = pz;
+
+                // Face movement direction
+                seal.rotation.y = seal.userData.patrolAngle + Math.PI / 2;
+
+                // Hit cooldown
+                if (seal.userData.hitCooldown > 0) {
+                    seal.userData.hitCooldown -= delta;
+                }
+
+                // Collision with penguin
+                const dist = penguin.position.distanceTo(seal.position);
+                if (dist < 1.5 && seal.userData.hitCooldown <= 0) {
+                    lives--;
+                    updateHUD();
+                    createDamageEffect(seal.position);
+                    showDamageFlash();
+                    seal.userData.hitCooldown = 1;
+
+                    if (lives <= 0) {
+                        gameOver(false, "You were caught by a seal!");
+                    }
+                }
+            }
+
+            // Spawn seals based on difficulty
+            const targetSealCount = Math.floor(1 + difficulty * 0.6);
+            while (seals.length < targetSealCount) {
+                spawnSeal();
+            }
+        }
+
+        function updateParticles(delta) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const particle = particles[i];
+                particle.userData.lifetime -= delta;
+
+                if (particle.userData.lifetime <= 0) {
+                    scene.remove(particle);
+                    particles.splice(i, 1);
+                } else {
+                    particle.position.add(particle.userData.velocity.clone().multiplyScalar(delta));
+                    particle.userData.velocity.y += gravity * 0.5 * delta;
+                    particle.material.opacity = particle.userData.lifetime / particle.userData.maxLifetime;
+                }
+            }
+        }
+
+        function updateOcean(delta) {
+            const positions = oceanGeometry.attributes.position;
+            for (let i = 0; i < positions.count; i++) {
+                const x = originalOceanPositions[i * 3];
+                const y = originalOceanPositions[i * 3 + 1];
+                const z = originalOceanPositions[i * 3 + 2];
+
+                const wave = Math.sin(x * 0.1 + gameTime) * 0.3 +
+                            Math.cos(z * 0.1 + gameTime * 0.8) * 0.3;
+                positions.setY(i, y + wave);
+            }
+            positions.needsUpdate = true;
+            oceanGeometry.computeVertexNormals();
+        }
+
+        function updateCamera() {
+            // Smooth follow camera
+            const targetX = penguin.position.x;
+            const targetZ = penguin.position.z + 20;
+            const targetY = 15 + penguin.position.y * 0.5;
+
+            camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetX, 0.05);
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, 0.05);
+            camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetZ, 0.05);
+
+            camera.lookAt(penguin.position.x, penguin.position.y + 2, penguin.position.z);
+        }
+
+        function updateDifficulty() {
+            // Increase difficulty every 15 seconds
+            const newDifficulty = Math.floor(gameTime / 15) + 1;
+            if (newDifficulty !== difficulty) {
+                difficulty = newDifficulty;
+                const difficultyNames = ['Easy', 'Normal', 'Hard', 'Insane', 'Impossible'];
+                const diffName = difficultyNames[Math.min(difficulty - 1, difficultyNames.length - 1)];
+                document.getElementById('difficultyValue').textContent = diffName;
+                showMessage(diffName + " Mode!");
+            }
+        }
+
+        // ============ UI ============
+        function updateHUD() {
+            document.getElementById('timer').textContent = Math.ceil(timeRemaining);
+            document.getElementById('score').textContent = score;
+            document.getElementById('lives').textContent = '❤️'.repeat(lives);
+        }
+
+        function showMessage(text) {
+            const popup = document.getElementById('messagePopup');
+            popup.textContent = text;
+            popup.classList.add('show');
+            setTimeout(() => popup.classList.remove('show'), 1000);
+        }
+
+        function showDamageFlash() {
+            const flash = document.getElementById('damageFlash');
+            flash.classList.add('active');
+            setTimeout(() => flash.classList.remove('active'), 200);
+        }
+
+        function showFallFlash() {
+            const flash = document.getElementById('fallFlash');
+            flash.classList.add('active');
+            setTimeout(() => flash.classList.remove('active'), 300);
+        }
+
+        function startGame() {
+            gameState = GameState.PLAYING;
+            score = 0;
+            timeRemaining = 90;
+            lives = 3;
+            difficulty = 1;
+            gameTime = 0;
+
+            // Reset penguin
+            penguin.position.set(0, 0.5, 0);
+            penguinVelocity.set(0, 0, 0);
+            penguin.rotation.y = 0;
+
+            // Clear entities
+            fish.forEach(f => scene.remove(f));
+            fish.length = 0;
+            seals.forEach(s => scene.remove(s));
+            seals.length = 0;
+            particles.forEach(p => scene.remove(p));
+            particles.length = 0;
+
+            // Initialize ice floes
+            initIceFloes();
+
+            // Spawn initial fish and seals
+            for (let i = 0; i < 8; i++) spawnFish();
+            for (let i = 0; i < 2; i++) spawnSeal();
+
+            // UI
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('endScreen').style.display = 'none';
+            document.getElementById('hud').style.display = 'flex';
+            document.getElementById('difficultyIndicator').style.display = 'block';
+            document.getElementById('difficultyValue').textContent = 'Normal';
+            updateHUD();
+        }
+
+        function gameOver(victory, reason) {
+            gameState = victory ? GameState.VICTORY : GameState.DEFEAT;
+
+            const endScreen = document.getElementById('endScreen');
+            const endTitle = document.getElementById('endTitle');
+            const finalScore = document.getElementById('finalScore');
+
+            endScreen.className = victory ? 'victory' : 'defeat';
+            endTitle.textContent = victory ? 'Victory!' : 'Game Over';
+            finalScore.textContent = `Score: ${score} | ${reason}`;
+
+            endScreen.style.display = 'flex';
+
+            if (!victory && penguin.position.y < -2) {
+                showFallFlash();
+            }
+        }
+
+        // ============ GAME LOOP ============
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            if (gameState === GameState.PLAYING) {
+                gameTime += delta;
+                timeRemaining -= delta;
+
+                updatePenguin(delta);
+                updateIceFloes(delta);
+                updateFish(delta);
+                updateSeals(delta);
+                updateParticles(delta);
+                updateOcean(delta);
+                updateCamera();
+                updateDifficulty();
+                updateHUD();
+
+                // Check win condition
+                if (timeRemaining <= 0) {
+                    timeRemaining = 0;
+                    updateHUD();
+                    gameOver(true, "You survived 90 seconds!");
+                }
+            } else if (gameState === GameState.MENU || gameState === GameState.VICTORY || gameState === GameState.DEFEAT) {
+                // Keep ocean animation running for visual appeal
+                updateOcean(delta);
+
+                // Gentle camera movement
+                if (gameState === GameState.MENU) {
+                    camera.position.x = Math.sin(gameTime * 0.2) * 5;
+                    camera.position.z = 20 + Math.cos(gameTime * 0.2) * 5;
+                    camera.lookAt(0, 0, 0);
+                    gameTime += delta;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // ============ EVENT LISTENERS ============
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('restartBtn').addEventListener('click', startGame);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ============ INIT ============
+        initIceFloes();
+        animate();
+
+        // Export for testing
+        window.game = {
+            startGame,
+            gameOver,
+            getState: () => gameState,
+            getScore: () => score,
+            getTimeRemaining: () => timeRemaining,
+            getLives: () => lives,
+            getDifficulty: () => difficulty,
+            getPenguinPosition: () => penguin.position.clone(),
+            getIceFloeCount: () => iceFloes.length,
+            getFishCount: () => fish.length,
+            getSealCount: () => seals.length,
+            reset: () => {
+                gameState = GameState.MENU;
+                score = 0;
+                timeRemaining = 90;
+                lives = 3;
+                difficulty = 1;
+                gameTime = 0;
+                document.getElementById('startScreen').style.display = 'flex';
+                document.getElementById('endScreen').style.display = 'none';
+                document.getElementById('hud').style.display = 'none';
+                document.getElementById('difficultyIndicator').style.display = 'none';
+                updateHUD();
+            }
+        };
+    </script>
+</body>
+</html>
