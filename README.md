@@ -21,10 +21,34 @@
 
 ```
 index.html            ← 画廊首页(自动生成, 58 个案例入口)
-codex/  zcode/  workbuddy/  trae/  codex/
+gallery.json          ← 画廊条目清单：标题 / 描述 / Agent + 模型
+tools/build_gallery.py← 生成器：gallery.json + 目录结构 → 重写 index.html
+trae/  workbuddy/  zcode/  codex/
 ```
 
 案例持续补充中。所有页面均为纯静态实现，可直接在浏览器中运行。
+
+## 新增案例
+
+1. 建目录 `<命名空间>/<案例名>/`，放入 `index.html` 与 `README.md`
+   （README 首行为 `# 中文标题`，紧跟一行 `> **Agent + 模型**`）。
+2. 在 `gallery.json` 的 `entries` 里登记一条，可人工润色 `title` / `desc` / `agent`。
+3. 运行 `python tools/build_gallery.py`。
+
+案例总数、命名空间计数、卡片排序、卡片缩进与 `.ns` 标签格式全部由脚本负责，不需要手改，
+因此不会再出现计数漂移。提交前可用 `python tools/build_gallery.py --check` 校验 `index.html`
+是否与清单同步（不一致时退出码为 1）。若只做了第 1 步而忘记登记，脚本会自动发现该案例、
+按 README 推导卡片，并在终端提示哪些条目是"自动推导、建议润色"。
+
+两个约定：
+
+- `.ns` 标签统一写成 `Agent + 模型`（例如 `WorkBuddy + DeepSeek-V4.1-Flash`），
+  不再附带命名空间目录名——命名空间已由分组顺序体现，重复书写只会让标签变长。
+- 卡片按目录名不区分大小写排序；命名空间根目录下的独立文件按文件名排序。
+  个别需要钉住位置的条目可在 `gallery.json` 里加 `"sort": "..."` 覆盖排序键。
+
+> `zcode/gen_gallery.py` 是某个 ZCode 案例自带的、面向另一个仓库的脚本，与本仓库画廊无关，
+> 请勿与 `tools/build_gallery.py` 混淆。
 
 
 ## JARVIS · Windows 动态视觉原型
