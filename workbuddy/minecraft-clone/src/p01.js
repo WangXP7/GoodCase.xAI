@@ -87,22 +87,30 @@ const M4 = {
     const c = Math.cos(r), s = Math.sin(r);
     M4.identity(o); o[0]=c; o[1]=s; o[4]=-s; o[5]=c; return o;
   },
-  /** 第一人称视角矩阵：view = Rx(pitch) · Ry(-yaw) · T(-eye) */
+  /**
+   * 第一人称视角矩阵：view = Rx(-pitch) · Ry(-yaw) · Rz(roll) · T(-eye)
+   * 约定：yaw=0 朝 -Z，pitch>0 抬头（与 lookDir 一致）。
+   * 旋转矩阵的「行 i」= 相机第 i 轴在世界中的方向；列主序写入。
+   */
   fpsView(o, ex, ey, ez, yaw, pitch, roll = 0) {
-    const cp = Math.cos(pitch), sp = Math.sin(pitch);
-    const cy = Math.cos(-yaw), sy = Math.sin(-yaw);
-    const cr = Math.cos(roll), sr = Math.sin(roll);
-    // 旋转部分 R = Rx(pitch) * Ry(-yaw) * Rz(roll)
-    const r00 = cy * cr,                r01 = -cy * sr,               r02 = sy;
-    const r10 = sp * sy * cr + cp * sr, r11 = -sp * sy * sr + cp * cr, r12 = -sp * cy;
-    const r20 = -cp * sy * cr + sp * sr,r21 = cp * sy * sr + sp * cr,  r22 = cp * cy;
-    o[0]=r00;o[1]=r10;o[2]=r20;o[3]=0;
-    o[4]=r01;o[5]=r11;o[6]=r21;o[7]=0;
-    o[8]=r02;o[9]=r12;o[10]=r22;o[11]=0;
-    o[12]=-(r00*ex + r01*ey + r02*ez);
-    o[13]=-(r10*ex + r11*ey + r12*ez);
-    o[14]=-(r20*ex + r21*ey + r22*ez);
-    o[15]=1;
+    const cP = Math.cos(pitch), sP = Math.sin(pitch);
+    const cY = Math.cos(yaw),   sY = Math.sin(yaw);
+    const cr = Math.cos(roll),  sr = Math.sin(roll);
+
+    // 相机基向量在世界坐标下的表示（旋转矩阵的三行）
+    const r0x = cY * cr,                       r0y = -cY * sr,                    r0z = -sY;
+    const r1x = sP * sY * cr + cP * sr,        r1y = cP * cr - sP * sY * sr,      r1z = sP * cY;
+    const r2x = cP * sY * cr - sP * sr,        r2y = -sP * cr - cP * sY * sr,     r2z = cP * cY;
+
+    o[0] = r0x; o[1] = r1x; o[2] = r2x;  o[3] = 0;
+    o[4] = r0y; o[5] = r1y; o[6] = r2y;  o[7] = 0;
+    o[8] = r0z; o[9] = r1z; o[10] = r2z; o[11] = 0;
+
+    // 平移列 = -R · eye
+    o[12] = -(r0x * ex + r0y * ey + r0z * ez);
+    o[13] = -(r1x * ex + r1y * ey + r1z * ez);
+    o[14] = -(r2x * ex + r2y * ey + r2z * ez);
+    o[15] = 1;
     return o;
   },
   invert(o, a) {

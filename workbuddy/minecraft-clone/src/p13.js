@@ -6,8 +6,10 @@ const SETTINGS = {
   renderDistance: 8,
   fov: 70,
   brightness: 50,
+  sensitivity: 25,          // 鼠标灵敏度 0..100（映射到 rad/px）
+  invertY: false,
   smoothLighting: true,
-  viewBob: true,
+  bobAmount: 60,            // 视角摇晃幅度 0..100（0 = 关闭）
   dayCycle: true,
   deco: true,
   caves: true,
@@ -15,6 +17,11 @@ const SETTINGS = {
   clouds: true,
   sound: true,
 };
+
+/** 灵敏度滑块(0..100) → 弧度/像素。默认 25 约 0.063°/px，比原版更稳。 */
+function sensToRad(v) {
+  return 0.0002 + (v / 100) * 0.0036;
+}
 
 class Game {
   constructor() {
@@ -90,7 +97,7 @@ class Game {
     this.renderer.renderDistance = SETTINGS.renderDistance;
     this.player.baseFov = SETTINGS.fov;
     this.player.fovBase = SETTINGS.fov;
-    this.player.bobEnabled = SETTINGS.viewBob;
+    this.player.bobScale = SETTINGS.bobAmount / 60;
     this.applySettings();
   }
 
@@ -183,7 +190,7 @@ class Game {
     this.world.renderDistance = SETTINGS.renderDistance;
     this.player.baseFov = SETTINGS.fov;
     this.player.fovBase = SETTINGS.fov;
-    this.player.bobEnabled = SETTINGS.viewBob;
+    this.player.bobScale = SETTINGS.bobAmount / 60;
     this.renderer.brightness = 0.35 + SETTINGS.brightness / 100 * 1.25;
     this.sfx.setVolume(SETTINGS.sound ? 0.55 : 0);
     this.sfx.enabled = SETTINGS.sound;
@@ -298,9 +305,10 @@ class Game {
 
     document.addEventListener('mousemove', e => {
       if (!this.pointerLocked || this.menuOpen || this.invOpen) return;
-      const sens = 0.0022;
+      const sens = sensToRad(SETTINGS.sensitivity);
+      const invert = SETTINGS.invertY ? -1 : 1;
       this.player.yaw -= e.movementX * sens;
-      this.player.pitch -= e.movementY * sens;
+      this.player.pitch -= e.movementY * sens * invert;   // 鼠标上移 → pitch 增大 → 抬头
       const lim = Math.PI / 2 - 0.0008;
       this.player.pitch = clamp(this.player.pitch, -lim, lim);
       this.player.yaw = ((this.player.yaw % TAU) + TAU) % TAU;
@@ -327,6 +335,7 @@ class Game {
         case 'F3': this.debugOn = !this.debugOn; e.preventDefault(); break;
         case 'F5': this.cycleView(); e.preventDefault(); break;
         case 'KeyR': if (this.player.creative || this.player.dead) this.player.respawn(); break;
+        case 'KeyQ': if (!this.invOpen) this.dropHeld(); break;
         case 'Space': e.preventDefault(); break;
         default: break;
       }
@@ -462,8 +471,8 @@ class Game {
 
     W.setBlock(x, y, z, 0);
 
-    // 掉落物
-    if (drop && B.tab !== 0) {
+    // 掉落物（创造模式不掉落，与原版一致）
+    if (drop && !this.player.creative && B.tab !== 0) {
       let dropId = id;
       if (B.drops && B.drops.item) {
         if (B.drops.chance === undefined || Math.random() < B.drops.chance) dropId = BID[B.drops.item];
@@ -506,6 +515,29 @@ class Game {
     UI.showItemName(BLOCKS[id].display);
   }
 
+  /** Q 键：把手上的方块朝视线方向丢出去（生成掉落物实体） */
+  dropHeld() {
+    const id = this.hotbar[this.selected];
+    if (!id) return;
+    const B = BLOCKS[id];
+    if (!B || B.tab === 0) return;
+    const cam = this.player.camera();
+    const d = lookDir(cam.yaw, cam.pitch, [0, 0, 0]);
+    const e = new DropEntity(
+      cam.x + d[0] * 0.55,
+      cam.y - 0.28 + d[1] * 0.55,
+      cam.z + d[2] * 0.55,
+      id
+    );
+    e.vx = d[0] * 7.5;
+    e.vy = d[1] * 7.5 + 1.6;
+    e.vz = d[2] * 7.5;
+    e.pickupDelay = 1.4;      // 刚丢出时不会被立刻吸回来
+    this.drops.push(e);
+    this.player.startSwing();
+    this.sfx.pop();
+  }
+
   selectSlot(i) {
     this.selected = i;
     UI.selectSlot(i);
@@ -538,10 +570,25 @@ class Game {
     if (this._fpsAcc > 0.4) { this.fps = this._fpsN / this._fpsAcc; this._fpsAcc = 0; this._fpsN = 0; }
 
     if (!this.menuOpen && !this.invOpen) {
-      this.updateGame(dt);
+      try {
+        this.updateGame(dt);
+      } catch (err) {
+        if (!this._loopErr) {
+          this._loopErr = 1;
+          console.error('[MC] 游戏逻辑异常（已捕获，渲染继续）:', err);
+          UI.toast('运行时异常已捕获：' + err.message);
+        }
+      }
     }
-    this.tickWork(dt);
-    this.render(dt);
+    try {
+      this.tickWork(dt);
+      this.render(dt);
+    } catch (err) {
+      if (!this._renderErr) {
+        this._renderErr = 1;
+        console.error('[MC] 渲染异常（已捕获）:', err);
+      }
+    }
 
     requestAnimationFrame(this.loop);
   }

@@ -149,7 +149,7 @@ class World {
       c.hm[hi] = h;
     }
 
-    this.updateLightAt(wx, wy, wz, old, id);
+    updateLightAt(this, wx, wy, wz, old, id);
     this.markMeshDirty(wx, wy, wz, id, old);
     return true;
   }
@@ -165,9 +165,7 @@ class World {
     if (lz === 0) mark(0, -1);
     if (lz === 15) mark(0, 1);
     // 光照变化会外溢到更大范围，保守地把 3x3 全部标脏
-    if (BLOCKS[this.getBlockOrAir(wx, wy, wz)] && (BLOCKS[this.getBlockOrAir(wx, wy, wz)].light > 0 || true)) {
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) mark(dx, dz);
-    }
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) mark(dx, dz);
   }
 }
 

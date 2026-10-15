@@ -185,7 +185,7 @@
   <div class="mcbtn" id="startBtn">开始游戏</div>
   <div id="splashNote">
     移动 <b>W A S D</b> &nbsp; 跳跃 <b>空格</b> &nbsp; 潜行 <b>Shift</b> &nbsp; 疾跑 <b>Ctrl</b> / 双击 W<br>
-    破坏 <b>左键</b> &nbsp; 放置 <b>右键</b> &nbsp; 拾取方块 <b>中键</b> &nbsp; 快捷栏 <b>1-9</b> / <b>滚轮</b><br>
+    破坏 <b>左键</b> &nbsp; 放置 <b>右键</b> &nbsp; 丢弃 <b>Q</b> &nbsp; 拾取方块 <b>中键</b> &nbsp; 快捷栏 <b>1-9</b> / <b>滚轮</b><br>
     物品栏 <b>E</b> &nbsp; 调试信息 <b>F3</b> &nbsp; 暂停菜单 <b>Esc</b> &nbsp; 切换视角 <b>F5</b> &nbsp; 全屏 <b>F11</b>
   </div>
 </div>
@@ -214,7 +214,10 @@
     <div class="opt"><span>视野角度 FOV</span><input type="range" id="optFov" min="50" max="110" step="1" value="70"><span id="optFovv">70</span></div>
     <div class="opt"><span>亮度</span><input type="range" id="optBri" min="0" max="100" step="1" value="50"><span id="optBriv">50%</span></div>
     <div class="opt"><span>平滑光照</span><div class="tgl on" id="optSmooth"><i></i></div></div>
-    <div class="opt"><span>视角摇晃</span><div class="tgl on" id="optBob"><i></i></div></div>
+    <div class="opt"><span>视角摇晃幅度</span><input type="range" id="optBob" min="0" max="100" step="5" value="60"><span id="optBobv">60%</span></div>
+    <div class="lbl">操作</div>
+    <div class="opt"><span>鼠标灵敏度</span><input type="range" id="optSens" min="5" max="100" step="1" value="25"><span id="optSensv">25</span></div>
+    <div class="opt"><span>反转 Y 轴</span><div class="tgl" id="optInvertY"><i></i></div></div>
     <div class="lbl">世界</div>
     <div class="opt"><span>时间流动</span><div class="tgl on" id="optDayCycle"><i></i></div></div>
     <div class="opt"><span>生成植被</span><div class="tgl on" id="optDeco"><i></i></div></div>

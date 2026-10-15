@@ -75,9 +75,10 @@ class Player {
   }
 
   _bob() {
-    if (!this.bobEnabled) return [0, 0, 0, 0];
+    const s = this.bobScale || 0;
+    if (s <= 0) return [0, 0, 0, 0];
     const p = this.bobPhase;
-    const amt = clamp(this._speedH() / PLAYER.SPEED_WALK, 0, 1.35);
+    const amt = clamp(this._speedH() / PLAYER.SPEED_WALK, 0, 1.35) * s;
     return [
       Math.cos(p) * 0.055 * amt,
       Math.abs(Math.sin(p)) * 0.062 * amt,

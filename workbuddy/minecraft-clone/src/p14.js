@@ -99,7 +99,9 @@
     // 立即重建视野内网格
     for (const [, c] of game.world.chunks) c.dirtyMesh = true;
   });
-  bindToggle('optBob', 'viewBob');
+  bindSlider('optBob', 'optBobv', v => v + '%', v => { SETTINGS.bobAmount = v; game.applySettings(); });
+  bindSlider('optSens', 'optSensv', v => String(Math.round(v)), v => { SETTINGS.sensitivity = v; });
+  bindToggle('optInvertY', 'invertY');
   bindToggle('optDayCycle', 'dayCycle');
   bindToggle('optDeco', 'deco');
   bindToggle('optCaves', 'caves');

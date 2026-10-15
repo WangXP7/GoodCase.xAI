@@ -185,7 +185,7 @@
   <div class="mcbtn" id="startBtn">开始游戏</div>
   <div id="splashNote">
     移动 <b>W A S D</b> &nbsp; 跳跃 <b>空格</b> &nbsp; 潜行 <b>Shift</b> &nbsp; 疾跑 <b>Ctrl</b> / 双击 W<br>
-    破坏 <b>左键</b> &nbsp; 放置 <b>右键</b> &nbsp; 拾取方块 <b>中键</b> &nbsp; 快捷栏 <b>1-9</b> / <b>滚轮</b><br>
+    破坏 <b>左键</b> &nbsp; 放置 <b>右键</b> &nbsp; 丢弃 <b>Q</b> &nbsp; 拾取方块 <b>中键</b> &nbsp; 快捷栏 <b>1-9</b> / <b>滚轮</b><br>
     物品栏 <b>E</b> &nbsp; 调试信息 <b>F3</b> &nbsp; 暂停菜单 <b>Esc</b> &nbsp; 切换视角 <b>F5</b> &nbsp; 全屏 <b>F11</b>
   </div>
 </div>
@@ -214,7 +214,10 @@
     <div class="opt"><span>视野角度 FOV</span><input type="range" id="optFov" min="50" max="110" step="1" value="70"><span id="optFovv">70</span></div>
     <div class="opt"><span>亮度</span><input type="range" id="optBri" min="0" max="100" step="1" value="50"><span id="optBriv">50%</span></div>
     <div class="opt"><span>平滑光照</span><div class="tgl on" id="optSmooth"><i></i></div></div>
-    <div class="opt"><span>视角摇晃</span><div class="tgl on" id="optBob"><i></i></div></div>
+    <div class="opt"><span>视角摇晃幅度</span><input type="range" id="optBob" min="0" max="100" step="5" value="60"><span id="optBobv">60%</span></div>
+    <div class="lbl">操作</div>
+    <div class="opt"><span>鼠标灵敏度</span><input type="range" id="optSens" min="5" max="100" step="1" value="25"><span id="optSensv">25</span></div>
+    <div class="opt"><span>反转 Y 轴</span><div class="tgl" id="optInvertY"><i></i></div></div>
     <div class="lbl">世界</div>
     <div class="opt"><span>时间流动</span><div class="tgl on" id="optDayCycle"><i></i></div></div>
     <div class="opt"><span>生成植被</span><div class="tgl on" id="optDeco"><i></i></div></div>
@@ -345,22 +348,30 @@ const M4 = {
     const c = Math.cos(r), s = Math.sin(r);
     M4.identity(o); o[0]=c; o[1]=s; o[4]=-s; o[5]=c; return o;
   },
-  /** 第一人称视角矩阵：view = Rx(pitch) · Ry(-yaw) · T(-eye) */
+  /**
+   * 第一人称视角矩阵：view = Rx(-pitch) · Ry(-yaw) · Rz(roll) · T(-eye)
+   * 约定：yaw=0 朝 -Z，pitch>0 抬头（与 lookDir 一致）。
+   * 旋转矩阵的「行 i」= 相机第 i 轴在世界中的方向；列主序写入。
+   */
   fpsView(o, ex, ey, ez, yaw, pitch, roll = 0) {
-    const cp = Math.cos(pitch), sp = Math.sin(pitch);
-    const cy = Math.cos(-yaw), sy = Math.sin(-yaw);
-    const cr = Math.cos(roll), sr = Math.sin(roll);
-    // 旋转部分 R = Rx(pitch) * Ry(-yaw) * Rz(roll)
-    const r00 = cy * cr,                r01 = -cy * sr,               r02 = sy;
-    const r10 = sp * sy * cr + cp * sr, r11 = -sp * sy * sr + cp * cr, r12 = -sp * cy;
-    const r20 = -cp * sy * cr + sp * sr,r21 = cp * sy * sr + sp * cr,  r22 = cp * cy;
-    o[0]=r00;o[1]=r10;o[2]=r20;o[3]=0;
-    o[4]=r01;o[5]=r11;o[6]=r21;o[7]=0;
-    o[8]=r02;o[9]=r12;o[10]=r22;o[11]=0;
-    o[12]=-(r00*ex + r01*ey + r02*ez);
-    o[13]=-(r10*ex + r11*ey + r12*ez);
-    o[14]=-(r20*ex + r21*ey + r22*ez);
-    o[15]=1;
+    const cP = Math.cos(pitch), sP = Math.sin(pitch);
+    const cY = Math.cos(yaw),   sY = Math.sin(yaw);
+    const cr = Math.cos(roll),  sr = Math.sin(roll);
+
+    // 相机基向量在世界坐标下的表示（旋转矩阵的三行）
+    const r0x = cY * cr,                       r0y = -cY * sr,                    r0z = -sY;
+    const r1x = sP * sY * cr + cP * sr,        r1y = cP * cr - sP * sY * sr,      r1z = sP * cY;
+    const r2x = cP * sY * cr - sP * sr,        r2y = -sP * cr - cP * sY * sr,     r2z = cP * cY;
+
+    o[0] = r0x; o[1] = r1x; o[2] = r2x;  o[3] = 0;
+    o[4] = r0y; o[5] = r1y; o[6] = r2y;  o[7] = 0;
+    o[8] = r0z; o[9] = r1z; o[10] = r2z; o[11] = 0;
+
+    // 平移列 = -R · eye
+    o[12] = -(r0x * ex + r0y * ey + r0z * ez);
+    o[13] = -(r1x * ex + r1y * ey + r1z * ez);
+    o[14] = -(r2x * ex + r2y * ey + r2z * ez);
+    o[15] = 1;
     return o;
   },
   invert(o, a) {
@@ -1738,7 +1749,7 @@ class World {
       c.hm[hi] = h;
     }
 
-    this.updateLightAt(wx, wy, wz, old, id);
+    updateLightAt(this, wx, wy, wz, old, id);
     this.markMeshDirty(wx, wy, wz, id, old);
     return true;
   }
@@ -1754,9 +1765,7 @@ class World {
     if (lz === 0) mark(0, -1);
     if (lz === 15) mark(0, 1);
     // 光照变化会外溢到更大范围，保守地把 3x3 全部标脏
-    if (BLOCKS[this.getBlockOrAir(wx, wy, wz)] && (BLOCKS[this.getBlockOrAir(wx, wy, wz)].light > 0 || true)) {
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) mark(dx, dz);
-    }
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) mark(dx, dz);
   }
 }
 
@@ -4005,9 +4014,10 @@ class Player {
   }
 
   _bob() {
-    if (!this.bobEnabled) return [0, 0, 0, 0];
+    const s = this.bobScale || 0;
+    if (s <= 0) return [0, 0, 0, 0];
     const p = this.bobPhase;
-    const amt = clamp(this._speedH() / PLAYER.SPEED_WALK, 0, 1.35);
+    const amt = clamp(this._speedH() / PLAYER.SPEED_WALK, 0, 1.35) * s;
     return [
       Math.cos(p) * 0.055 * amt,
       Math.abs(Math.sin(p)) * 0.062 * amt,
@@ -4999,8 +5009,10 @@ const SETTINGS = {
   renderDistance: 8,
   fov: 70,
   brightness: 50,
+  sensitivity: 25,          // 鼠标灵敏度 0..100（映射到 rad/px）
+  invertY: false,
   smoothLighting: true,
-  viewBob: true,
+  bobAmount: 60,            // 视角摇晃幅度 0..100（0 = 关闭）
   dayCycle: true,
   deco: true,
   caves: true,
@@ -5008,6 +5020,11 @@ const SETTINGS = {
   clouds: true,
   sound: true,
 };
+
+/** 灵敏度滑块(0..100) → 弧度/像素。默认 25 约 0.063°/px，比原版更稳。 */
+function sensToRad(v) {
+  return 0.0002 + (v / 100) * 0.0036;
+}
 
 class Game {
   constructor() {
@@ -5083,7 +5100,7 @@ class Game {
     this.renderer.renderDistance = SETTINGS.renderDistance;
     this.player.baseFov = SETTINGS.fov;
     this.player.fovBase = SETTINGS.fov;
-    this.player.bobEnabled = SETTINGS.viewBob;
+    this.player.bobScale = SETTINGS.bobAmount / 60;
     this.applySettings();
   }
 
@@ -5176,7 +5193,7 @@ class Game {
     this.world.renderDistance = SETTINGS.renderDistance;
     this.player.baseFov = SETTINGS.fov;
     this.player.fovBase = SETTINGS.fov;
-    this.player.bobEnabled = SETTINGS.viewBob;
+    this.player.bobScale = SETTINGS.bobAmount / 60;
     this.renderer.brightness = 0.35 + SETTINGS.brightness / 100 * 1.25;
     this.sfx.setVolume(SETTINGS.sound ? 0.55 : 0);
     this.sfx.enabled = SETTINGS.sound;
@@ -5291,9 +5308,10 @@ class Game {
 
     document.addEventListener('mousemove', e => {
       if (!this.pointerLocked || this.menuOpen || this.invOpen) return;
-      const sens = 0.0022;
+      const sens = sensToRad(SETTINGS.sensitivity);
+      const invert = SETTINGS.invertY ? -1 : 1;
       this.player.yaw -= e.movementX * sens;
-      this.player.pitch -= e.movementY * sens;
+      this.player.pitch -= e.movementY * sens * invert;   // 鼠标上移 → pitch 增大 → 抬头
       const lim = Math.PI / 2 - 0.0008;
       this.player.pitch = clamp(this.player.pitch, -lim, lim);
       this.player.yaw = ((this.player.yaw % TAU) + TAU) % TAU;
@@ -5320,6 +5338,7 @@ class Game {
         case 'F3': this.debugOn = !this.debugOn; e.preventDefault(); break;
         case 'F5': this.cycleView(); e.preventDefault(); break;
         case 'KeyR': if (this.player.creative || this.player.dead) this.player.respawn(); break;
+        case 'KeyQ': if (!this.invOpen) this.dropHeld(); break;
         case 'Space': e.preventDefault(); break;
         default: break;
       }
@@ -5455,8 +5474,8 @@ class Game {
 
     W.setBlock(x, y, z, 0);
 
-    // 掉落物
-    if (drop && B.tab !== 0) {
+    // 掉落物（创造模式不掉落，与原版一致）
+    if (drop && !this.player.creative && B.tab !== 0) {
       let dropId = id;
       if (B.drops && B.drops.item) {
         if (B.drops.chance === undefined || Math.random() < B.drops.chance) dropId = BID[B.drops.item];
@@ -5499,6 +5518,29 @@ class Game {
     UI.showItemName(BLOCKS[id].display);
   }
 
+  /** Q 键：把手上的方块朝视线方向丢出去（生成掉落物实体） */
+  dropHeld() {
+    const id = this.hotbar[this.selected];
+    if (!id) return;
+    const B = BLOCKS[id];
+    if (!B || B.tab === 0) return;
+    const cam = this.player.camera();
+    const d = lookDir(cam.yaw, cam.pitch, [0, 0, 0]);
+    const e = new DropEntity(
+      cam.x + d[0] * 0.55,
+      cam.y - 0.28 + d[1] * 0.55,
+      cam.z + d[2] * 0.55,
+      id
+    );
+    e.vx = d[0] * 7.5;
+    e.vy = d[1] * 7.5 + 1.6;
+    e.vz = d[2] * 7.5;
+    e.pickupDelay = 1.4;      // 刚丢出时不会被立刻吸回来
+    this.drops.push(e);
+    this.player.startSwing();
+    this.sfx.pop();
+  }
+
   selectSlot(i) {
     this.selected = i;
     UI.selectSlot(i);
@@ -5531,10 +5573,25 @@ class Game {
     if (this._fpsAcc > 0.4) { this.fps = this._fpsN / this._fpsAcc; this._fpsAcc = 0; this._fpsN = 0; }
 
     if (!this.menuOpen && !this.invOpen) {
-      this.updateGame(dt);
+      try {
+        this.updateGame(dt);
+      } catch (err) {
+        if (!this._loopErr) {
+          this._loopErr = 1;
+          console.error('[MC] 游戏逻辑异常（已捕获，渲染继续）:', err);
+          UI.toast('运行时异常已捕获：' + err.message);
+        }
+      }
     }
-    this.tickWork(dt);
-    this.render(dt);
+    try {
+      this.tickWork(dt);
+      this.render(dt);
+    } catch (err) {
+      if (!this._renderErr) {
+        this._renderErr = 1;
+        console.error('[MC] 渲染异常（已捕获）:', err);
+      }
+    }
 
     requestAnimationFrame(this.loop);
   }
@@ -5919,7 +5976,9 @@ class Game {
     // 立即重建视野内网格
     for (const [, c] of game.world.chunks) c.dirtyMesh = true;
   });
-  bindToggle('optBob', 'viewBob');
+  bindSlider('optBob', 'optBobv', v => v + '%', v => { SETTINGS.bobAmount = v; game.applySettings(); });
+  bindSlider('optSens', 'optSensv', v => String(Math.round(v)), v => { SETTINGS.sensitivity = v; });
+  bindToggle('optInvertY', 'invertY');
   bindToggle('optDayCycle', 'dayCycle');
   bindToggle('optDeco', 'deco');
   bindToggle('optCaves', 'caves');
