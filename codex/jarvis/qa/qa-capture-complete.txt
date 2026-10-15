@@ -1,0 +1,11 @@
+completed=2026-08-01T23:23:01.3604420+08:00
+runtime=10.0.10
+os=Microsoft Windows NT 10.0.19045.0
+modes=ORBITAL_CORE,COMMAND_DECK,GHOST_OVERLAY,TACTICAL_FOCUS,LIVE_OVERLAY_WINDOW
+navigation_check=passed
+state_cycle_check=passed
+command_entry_check=passed
+overlay_window_check=passed
+data_source=SIMULATED
+external_ai_connected=false
+system_actions_applied=false

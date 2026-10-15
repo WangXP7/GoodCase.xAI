@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Codex 独立完成的 JARVIS Windows 动态视觉原型：四种模式、波浪核心、独立悬浮窗与 Windows 下载。">
+<title>JARVIS · Windows 动态视觉原型 | GoodCase.xAI</title>
+<style>
+*{box-sizing:border-box;margin:0}body{background:#0b0e14;color:#dfe5ee;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;line-height:1.7}a{color:#7aa2ff}header,main,footer{max-width:1160px;margin:auto;padding:28px 24px}header{padding-top:48px;border-bottom:1px solid #1c2230}.ns{font-size:12px;letter-spacing:.08em;color:#9fb0d0}h1{font-size:clamp(28px,5vw,48px);letter-spacing:.05em;margin:14px 0}h1 b{color:#7aa2ff}h2{font-size:22px;margin:24px 0 12px}p{color:#9ba6bc}nav,.tags{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}.tag{font-size:12px;padding:5px 12px;border:1px solid #2a3245;border-radius:999px;color:#9fb0d0}.button{display:inline-block;padding:10px 18px;border:1px solid #2a3245;border-radius:9px;text-decoration:none;background:#11151f}.button.primary{background:#233d7a;border-color:#3b5bdb;color:#edf3ff}.card{background:#11151f;border:1px solid #1e2534;border-radius:12px;padding:20px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}ul,ol{padding-left:22px;color:#aab5cb}li{margin:7px 0}.viewer{margin:16px 0 30px}.viewer img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid #2a3245;background:#080d15}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.tabs button{font:inherit;font-size:13px;color:#aab5cb;background:#11151f;border:1px solid #2a3245;border-radius:7px;padding:8px 12px;cursor:pointer}.tabs button[aria-pressed=true]{color:#e4ecff;background:#233d7a;border-color:#7aa2ff}figcaption{font-size:13px;color:#8b94a7;margin-top:10px}code{overflow-wrap:anywhere;font-size:12px;color:#a8bfe8}footer{border-top:1px solid #1c2230;color:#6f7b93;font-size:12px}a:focus-visible,button:focus-visible{outline:2px solid #a6c9ff;outline-offset:4px}@media(max-width:680px){.grid{grid-template-columns:1fr}header,main,footer{padding-left:18px;padding-right:18px}.card{padding:16px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header>
+<a href="../../index.html">← GoodCase.xAI 案例画廊</a>
+<div class="ns" style="margin-top:24px">Codex + GPT-5.6 Sol / GPT-6.1 Sol</div>
+<h1>JARVIS<b> / </b>Orbital Core</h1>
+<p>由 AI Agent 完成的 Windows 原生动态视觉原型。玻璃指挥台、不规则波浪核心、动态声纹、独立置顶悬浮窗与诊断拓扑，构成一个可运行的科技管家界面。</p>
+<div class="tags"><span class="tag">v0.3.0</span><span class="tag">Windows 10 / 11 · x64</span><span class="tag">WinUI 3 · .NET 10</span><span class="tag">本地模拟交互</span></div>
+<nav><a class="button primary" href="https://github.com/WangXP7/GoodCase.xAI/releases/download/jarvis-v0.3.0/JARVIS.VisualPrototype-v0.3.0-win-x64.zip">下载 Windows ZIP · 83.2 MiB</a><a class="button" href="https://github.com/WangXP7/GoodCase.xAI/tree/main/codex/jarvis/source">查看源码</a><a class="button" href="JARVIS_PROJECT.md">项目记录与计划</a></nav>
+</header>
+<main>
+<section aria-labelledby="preview-title"><h2 id="preview-title">真实 EXE 运行截图</h2><p>本页展示 Windows 程序的实际运行画面。点击切换五种视图；运行桌面动画与窗口交互请下载完整 Windows 包。</p>
+<div class="tabs" aria-label="运行截图选择">
+<button type="button" aria-pressed="true" data-image="01_ORBITAL_CORE.png">Orbital Core</button><button type="button" aria-pressed="false" data-image="02_COMMAND_DECK.png">Command Deck</button><button type="button" aria-pressed="false" data-image="03_GHOST_OVERLAY.png">Ghost Overlay</button><button type="button" aria-pressed="false" data-image="04_TACTICAL_FOCUS.png">Tactical Focus</button><button type="button" aria-pressed="false" data-image="05_LIVE_OVERLAY_WINDOW.png">独立悬浮窗</button>
+</div><figure class="viewer"><img id="preview" src="screenshots/01_ORBITAL_CORE.png" alt="Orbital Core · Windows 程序实际运行截图" width="1582" height="913"><figcaption id="caption">Orbital Core · Windows 10、125% DPI 下的真实运行画面；界面数据为模拟值。</figcaption></figure></section>
+<div class="grid">
+<section class="card"><h2 style="margin-top:0">现在可以做什么</h2><ul><li>四种主模式切换与六态动画循环。</li><li>波浪球体、多层轨道、扫描与加大声纹。</li><li>输入命令并获得本地模拟反馈。</li><li>启动真实独立置顶悬浮窗。</li><li>动态诊断拓扑、事件与遥测演示。</li></ul></section>
+<section class="card"><h2 style="margin-top:0">当前能力边界</h2><p>当前交付为动态视觉原型。命令结果和遥测是模拟数据，尚未连接大语言模型、天气服务或语音识别，也不会执行 Windows 系统操作。</p><p style="margin-top:12px">天气、时间、日期、计算和基础对话已列入下一版本方案；文档版 v0.3.1，可执行版仍为 v0.3.0。</p></section>
+<section class="card"><h2 style="margin-top:0">运行方法</h2><ol><li>下载并完整解压 ZIP。</li><li>双击 <code>Jarvis.VisualPrototype.exe</code>。</li><li>切换左侧模式、点击状态按钮、输入模拟命令，或启动 Ghost Overlay。</li></ol><p>保留整个解压目录；无需额外安装 .NET。程序未签名，Windows 可能提示未知发布者。</p></section>
+<section class="card"><h2 style="margin-top:0">验证与交付</h2><ul><li>x64 Release：0 warnings、0 errors。</li><li>已验证 Windows 10 build 19045、125% DPI。</li><li>四页导航、状态循环、输入、悬浮窗检查通过。</li><li>五张截图、源码、构建脚本与校验值随案例公开。</li></ul><a href="qa/qa-capture-complete.txt">查看自动 QA 记录 →</a></section>
+</div>
+<section class="card" style="margin-top:20px"><h2 style="margin-top:0">下载校验与项目资料</h2><p>ZIP SHA-256</p><code>3F56269CA27E39DF6428D2ADB32C970385F03BD0BE72F287F2FACEE87D7243A9</code><nav><a href="SHA256SUMS-v0.3.0.txt">SHA-256 校验文件</a><a href="design/JARVIS_DEMO_CONTACT_SHEET_v0.2.0.png">四方案概念图总览</a><a href="https://github.com/WangXP7/GoodCase.xAI/releases/tag/jarvis-v0.3.0">完整版本发布页</a></nav></section>
+</main><footer>GoodCase.xAI · Codex 案例 · 原创界面概念；JARVIS 为项目工作名，与 Marvel 无隶属或授权关系。</footer>
+<script>
+const preview=document.querySelector('#preview');
+const caption=document.querySelector('#caption');
+document.querySelectorAll('[data-image]').forEach(button=>button.addEventListener('click',()=>{
+ document.querySelectorAll('[data-image]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+ preview.src='screenshots/'+button.dataset.image;
+ preview.alt=button.textContent+' · Windows 程序实际运行截图';
+ preview.removeAttribute('height');preview.removeAttribute('width');
+ caption.textContent=button.textContent+' · Windows 10、125% DPI 下的真实运行画面；界面数据为模拟值。';
+}));
+</script>
+</body>
+</html>

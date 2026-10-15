@@ -20,8 +20,15 @@
 ## 结构
 
 ```
-index.html            ← 画廊首页(自动生成, 43 个案例入口)
+index.html            ← 画廊首页(自动生成, 44 个案例入口)
 codex/  zcode/  workbuddy/  trae/  codex/
 ```
 
 案例持续补充中。所有页面均为纯静态实现，可直接在浏览器中运行。
+
+
+## JARVIS · Windows 动态视觉原型
+
+[站点展示](https://wangxp7.github.io/GoodCase.xAI/codex/jarvis/) · [Windows 下载](https://github.com/WangXP7/GoodCase.xAI/releases/tag/jarvis-v0.3.0) · [源码](codex/jarvis/source/)
+
+WinUI 3 原生 Windows 程序，包含四种模式、波浪核心、动态声纹和独立悬浮窗。站点提供真实运行截图；桌面程序需下载并完整解压 Windows ZIP。当前对话和遥测为本地模拟数据。

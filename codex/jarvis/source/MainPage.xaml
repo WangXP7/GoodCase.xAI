@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Jarvis_VisualPrototype.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:Jarvis_VisualPrototype"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Background="#050B13"
+    Loaded="Page_Loaded"
+    Unloaded="Page_Unloaded"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <Style x:Key="PanelStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource JarvisPanelBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource JarvisBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="18" />
+        </Style>
+        <Style x:Key="MicroLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#6F8AA3" />
+            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="CharacterSpacing" Value="100" />
+        </Style>
+    </Page.Resources>
+
+    <Grid x:Name="RootShell">
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#07121F" Offset="0" />
+                <GradientStop Color="#03080E" Offset="0.55" />
+                <GradientStop Color="#071727" Offset="1" />
+            </LinearGradientBrush>
+        </Grid.Background>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="104" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="316" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="82" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="86" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.RowSpan="3" Background="#D907111C" BorderBrush="#2538E7FF" BorderThickness="0,0,1,0">
+            <Grid Padding="12,18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel HorizontalAlignment="Center" Spacing="7">
+                    <Grid Width="56" Height="56">
+                        <Ellipse Stroke="#6338E7FF" StrokeThickness="1" />
+                        <Ellipse Width="38" Height="38" Stroke="#CC38E7FF" StrokeThickness="1.5" StrokeDashArray="5,3" />
+                        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontFamily="Consolas" FontSize="19" Foreground="#E8FBFF" Text="J" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource MicroLabelStyle}" HorizontalAlignment="Center" Text="ONLINE" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Margin="0,34,0,0" HorizontalAlignment="Center">
+                    <Button x:Name="CoreNavButton" Style="{StaticResource NavButtonStyle}" Click="CoreNav_Click">
+                        <StackPanel Spacing="5"><TextBlock HorizontalAlignment="Center" FontSize="17" Text="◉" /><TextBlock Text="CORE" /></StackPanel>
+                    </Button>
+                    <Button x:Name="CommandNavButton" Style="{StaticResource NavButtonStyle}" Click="CommandNav_Click">
+                        <StackPanel Spacing="5"><TextBlock HorizontalAlignment="Center" FontSize="17" Text="⌁" /><TextBlock Text="COMMAND" /></StackPanel>
+                    </Button>
+                    <Button x:Name="OverlayNavButton" Style="{StaticResource NavButtonStyle}" Click="OverlayNav_Click">
+                        <StackPanel Spacing="5"><TextBlock HorizontalAlignment="Center" FontSize="17" Text="▱" /><TextBlock Text="OVERLAY" /></StackPanel>
+                    </Button>
+                    <Button x:Name="DiagnosticsNavButton" Style="{StaticResource NavButtonStyle}" Click="DiagnosticsNav_Click">
+                        <StackPanel Spacing="5"><TextBlock HorizontalAlignment="Center" FontSize="17" Text="⌬" /><TextBlock Text="DIAGNOSTIC" /></StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" HorizontalAlignment="Center" Spacing="5">
+                    <Ellipse x:Name="PrivacyDot" Width="7" Height="7" Fill="#3CFFB4" />
+                    <TextBlock Style="{StaticResource MicroLabelStyle}" HorizontalAlignment="Center" Text="LOCAL" />
+                    <TextBlock Style="{StaticResource MicroLabelStyle}" HorizontalAlignment="Center" Opacity="0.65" Text="v0.3.0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Column="1" Grid.ColumnSpan="2" BorderBrush="#2538E7FF" BorderThickness="0,0,0,1" Padding="26,0,22,0">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Spacing="4">
+                    <TextBlock x:Name="ModeTitle" Style="{StaticResource SectionLabelStyle}" FontSize="13" Text="ORBITAL CORE" />
+                    <TextBlock x:Name="ModeSubtitle" Foreground="#8BA5BC" FontFamily="Consolas" FontSize="11" Text="COGNITIVE SIGNAL / REAL-TIME VISUALIZATION" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="18">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock x:Name="ClockText" Foreground="#EAFBFF" FontFamily="Consolas" FontSize="20" Text="20:30:00" />
+                        <TextBlock x:Name="DateText" HorizontalAlignment="Right" Style="{StaticResource MicroLabelStyle}" Text="THU / 31 JUL 2026" />
+                    </StackPanel>
+                    <Button x:Name="StateButton" Style="{StaticResource JarvisButtonStyle}" Width="140" Height="42" Click="StateButton_Click" Content="LISTENING" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid x:Name="CoreView" Grid.Row="1" Grid.Column="1" Margin="22,18,18,18">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="272" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,16,0" Spacing="14">
+                <Border Style="{StaticResource PanelStyle}" Height="150">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Style="{StaticResource SectionLabelStyle}" Text="VOICE SIGNAL" />
+                            <TextBlock x:Name="SignalDbText" HorizontalAlignment="Right" Style="{StaticResource MicroLabelStyle}" Text="-18 dB" />
+                        </Grid>
+                        <Canvas x:Name="WaveCanvas" Height="82" Margin="0,9,0,0" />
+                        <TextBlock x:Name="SignalStatusText" HorizontalAlignment="Center" Foreground="#86F5FF" FontFamily="Consolas" FontSize="10" Text="LISTENING / CHANNEL 01" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource PanelStyle}" Height="188">
+                    <StackPanel Spacing="11">
+                        <TextBlock Style="{StaticResource SectionLabelStyle}" Text="ACTIVE OBJECTIVE" />
+                        <TextBlock Foreground="#E8F7FF" FontSize="18" FontWeight="SemiBold" Text="Dynamic visual prototype" TextWrapping="Wrap" />
+                        <TextBlock Foreground="#7890A8" FontSize="12" Text="Render a responsive local command surface with four visual modes." TextWrapping="Wrap" />
+                        <Grid Margin="0,6,0,0">
+                            <Rectangle Height="3" Fill="#173346" RadiusX="2" RadiusY="2" />
+                            <Rectangle x:Name="ObjectiveProgress" Height="3" Width="164" HorizontalAlignment="Left" Fill="#38E7FF" RadiusX="2" RadiusY="2" />
+                        </Grid>
+                        <TextBlock Style="{StaticResource MicroLabelStyle}" Text="PROTOTYPE ONLINE / SAFE MODE" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource PanelStyle}" Height="180">
+                    <StackPanel Spacing="10">
+                        <TextBlock Style="{StaticResource SectionLabelStyle}" Text="STATE PIPELINE" />
+                        <Grid><Ellipse Width="7" Height="7" HorizontalAlignment="Left" Fill="#3CFFB4" /><TextBlock Margin="18,0,0,0" Style="{StaticResource ValueTextStyle}" FontSize="12" Text="01  INPUT ACQUIRED" /></Grid>
+                        <Grid><Ellipse Width="7" Height="7" HorizontalAlignment="Left" Fill="#38E7FF" /><TextBlock Margin="18,0,0,0" Style="{StaticResource ValueTextStyle}" FontSize="12" Text="02  CONTEXT FUSED" /></Grid>
+                        <Grid><Ellipse x:Name="PipelinePulse" Width="7" Height="7" HorizontalAlignment="Left" Fill="#287CFF" /><TextBlock Margin="18,0,0,0" Style="{StaticResource ValueTextStyle}" FontSize="12" Text="03  RESPONSE READY" /></Grid>
+                        <TextBlock Margin="0,6,0,0" Style="{StaticResource MicroLabelStyle}" Foreground="#FFB84A" Text="NO SYSTEM CHANGES APPLIED" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <Grid Grid.Column="1">
+                <Border Background="#52091520" BorderBrush="#2638E7FF" BorderThickness="1" CornerRadius="18" />
+                <Canvas x:Name="CoreCanvas" Width="620" Height="620" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Spacing="6">
+                    <TextBlock x:Name="CoreStateText" HorizontalAlignment="Center" Foreground="#F0FBFF" FontFamily="Consolas" FontSize="24" CharacterSpacing="260" Text="LISTENING" />
+                    <TextBlock x:Name="CorePhaseText" HorizontalAlignment="Center" Foreground="#6DEBFF" FontFamily="Consolas" FontSize="10" CharacterSpacing="160" Text="COGNITIVE PHASE 03" />
+                </StackPanel>
+                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20" Style="{StaticResource MicroLabelStyle}" Text="IRREGULAR WAVE TOPOLOGY / 60 Hz TARGET" />
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="CommandView" Grid.Row="1" Grid.Column="1" Margin="22,18,18,18" Visibility="Collapsed">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="286" /></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="210" /></Grid.RowDefinitions>
+            <Border Style="{StaticResource PanelStyle}" Margin="0,0,14,14">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <Grid>
+                        <TextBlock Style="{StaticResource SectionLabelStyle}" Text="CONVERSATION / LOCAL SESSION" />
+                        <TextBlock HorizontalAlignment="Right" Style="{StaticResource MicroLabelStyle}" Text="ENCRYPTED MEMORY: OFF" />
+                    </Grid>
+                    <StackPanel Grid.Row="1" Margin="0,26,0,0" Spacing="16">
+                        <Border HorizontalAlignment="Left" MaxWidth="540" Background="#14253749" CornerRadius="12" Padding="16,12">
+                            <TextBlock Foreground="#BDD0DF" FontSize="14" Text="Show me the current prototype status." TextWrapping="Wrap" />
+                        </Border>
+                        <Border HorizontalAlignment="Left" MaxWidth="680" Background="#15217895" BorderBrush="#3638E7FF" BorderThickness="1" CornerRadius="12" Padding="18,14">
+                            <StackPanel Spacing="8">
+                                <TextBlock Style="{StaticResource SectionLabelStyle}" Text="JARVIS" />
+                                <TextBlock x:Name="AssistantResponseText" Foreground="#EAF8FF" FontSize="15" Text="All four visual modes are online. Animation and navigation are running locally; no external AI or system actions are connected in this prototype." TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                        <Border HorizontalAlignment="Left" Background="#101D2B39" CornerRadius="8" Padding="12,8">
+                            <TextBlock Style="{StaticResource MicroLabelStyle}" Text="SOURCE: LOCAL SIMULATION  •  LATENCY: 12 ms" />
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Style="{StaticResource PanelStyle}" Margin="0,0,0,14">
+                <StackPanel Spacing="14">
+                    <TextBlock Style="{StaticResource SectionLabelStyle}" Text="TODAY" />
+                    <TextBlock Foreground="#E8F7FF" FontSize="17" Text="Prototype review" />
+                    <TextBlock Foreground="#7890A8" FontSize="12" Text="Inspect visual modes and approve interaction direction." TextWrapping="Wrap" />
+                    <Rectangle Height="1" Fill="#2638E7FF" />
+                    <TextBlock Style="{StaticResource SectionLabelStyle}" Text="TOOLS" />
+                    <Grid ColumnSpacing="12" RowSpacing="12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource ValueTextStyle}" FontSize="12" Text="◫  FILES" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource ValueTextStyle}" FontSize="12" Text="⌁  NOTES" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource ValueTextStyle}" FontSize="12" Text="◇  WEB" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueTextStyle}" FontSize="12" Text="⌘  CODE" />
+                        <TextBlock Grid.Row="2" Style="{StaticResource ValueTextStyle}" FontSize="12" Text="◌  VOICE" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource ValueTextStyle}" FontSize="12" Text="◎  VISION" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource PanelStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Spacing="13">
+                        <TextBlock Style="{StaticResource SectionLabelStyle}" Text="TASK SEQUENCE" />
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <Border Background="#13293A47" CornerRadius="8" Padding="12"><StackPanel><TextBlock Foreground="#3CFFB4" FontFamily="Consolas" Text="01 / DONE" /><TextBlock Foreground="#C4D4E0" FontSize="12" Text="Visual approval" /></StackPanel></Border>
+                            <Border Grid.Column="1" Background="#13293A47" CornerRadius="8" Padding="12"><StackPanel><TextBlock Foreground="#3CFFB4" FontFamily="Consolas" Text="02 / DONE" /><TextBlock Foreground="#C4D4E0" FontSize="12" Text="UI architecture" /></StackPanel></Border>
+                            <Border Grid.Column="2" Background="#16217895" BorderBrush="#4338E7FF" BorderThickness="1" CornerRadius="8" Padding="12"><StackPanel><TextBlock Foreground="#38E7FF" FontFamily="Consolas" Text="03 / LIVE" /><TextBlock Foreground="#E7F8FF" FontSize="12" Text="Dynamic prototype" /></StackPanel></Border>
+                            <Border Grid.Column="3" Background="#10152231" CornerRadius="8" Padding="12"><StackPanel><TextBlock Foreground="#70869A" FontFamily="Consolas" Text="04 / NEXT" /><TextBlock Foreground="#9BAEBC" FontSize="12" Text="AI integration" /></StackPanel></Border>
+                        </Grid>
+                    </StackPanel>
+                    <Grid Grid.Column="1" Width="118" Margin="24,0,0,0">
+                        <Ellipse Stroke="#4438E7FF" StrokeThickness="2" StrokeDashArray="4,5" />
+                        <Ellipse Width="74" Height="74" Stroke="#AA38E7FF" StrokeThickness="2" />
+                        <Ellipse Width="28" Height="28" Fill="#CC38E7FF" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="OverlayView" Grid.Row="1" Grid.Column="1" Margin="22,18,18,18" Visibility="Collapsed">
+            <Border Background="#07101A" BorderBrush="#2638E7FF" BorderThickness="1" CornerRadius="18">
+                <Grid>
+                    <Grid.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#091829" /><GradientStop Color="#03070C" Offset="1" /></LinearGradientBrush>
+                    </Grid.Background>
+                    <StackPanel Margin="28" HorizontalAlignment="Left" VerticalAlignment="Bottom" Spacing="8" Opacity="0.58">
+                        <Rectangle Width="430" Height="20" HorizontalAlignment="Left" Fill="#193D5261" RadiusX="4" RadiusY="4" />
+                        <Rectangle Width="320" Height="12" HorizontalAlignment="Left" Fill="#173D5261" RadiusX="3" RadiusY="3" />
+                        <Rectangle Width="380" Height="12" HorizontalAlignment="Left" Fill="#173D5261" RadiusX="3" RadiusY="3" />
+                        <Rectangle Width="250" Height="12" HorizontalAlignment="Left" Fill="#173D5261" RadiusX="3" RadiusY="3" />
+                    </StackPanel>
+
+                    <Border Width="470" Height="252" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,34,34,0" Background="#E60A1724" BorderBrush="#6638E7FF" BorderThickness="1" CornerRadius="20" Padding="22">
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="9"><Ellipse Width="8" Height="8" Fill="#38E7FF" /><TextBlock Style="{StaticResource SectionLabelStyle}" Text="JARVIS / LISTENING" /></StackPanel>
+                                <TextBlock HorizontalAlignment="Right" Style="{StaticResource MicroLabelStyle}" Text="ALWAYS ON TOP" />
+                            </Grid>
+                            <Grid Grid.Row="1" Margin="0,12,0,8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="128" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <Grid Width="112" Height="112">
+                                    <Ellipse Stroke="#4438E7FF" StrokeThickness="1" StrokeDashArray="3,4" />
+                                    <Ellipse Width="80" Height="80" Stroke="#BB38E7FF" StrokeThickness="2" StrokeDashArray="8,3" />
+                                    <Ellipse Width="38" Height="38" Fill="#B8287CFF" />
+                                </Grid>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8">
+                                    <TextBlock Foreground="#F1FBFF" FontSize="18" Text="Ready when you are." />
+                                    <TextBlock Foreground="#8299AC" FontSize="12" Text="Compact assistance without covering your workspace." TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+                            <Grid Grid.Row="2">
+                                <TextBlock Style="{StaticResource MicroLabelStyle}" Text="MIC ON  •  PRIVACY LOCAL  •  CTRL + SPACE" />
+                                <Button HorizontalAlignment="Right" Style="{StaticResource JarvisButtonStyle}" Padding="12,6" Click="LaunchOverlay_Click" Content="LAUNCH LIVE OVERLAY" />
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,26" Spacing="7">
+                        <TextBlock HorizontalAlignment="Center" Style="{StaticResource SectionLabelStyle}" Text="GHOST OVERLAY PREVIEW" />
+                        <TextBlock Foreground="#7890A8" FontSize="12" Text="The launch button opens a separate, draggable, always-on-top window." />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="DiagnosticsView" Grid.Row="1" Grid.Column="1" Margin="22,18,18,18" Visibility="Collapsed">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="304" /></Grid.ColumnDefinitions>
+            <Border Style="{StaticResource PanelStyle}" Margin="0,0,14,0">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Grid>
+                        <TextBlock Style="{StaticResource SectionLabelStyle}" Text="SYSTEM TOPOLOGY / DEFENSIVE DIAGNOSTICS" />
+                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8"><Ellipse Width="7" Height="7" Fill="#FFB84A" /><TextBlock Style="{StaticResource MicroLabelStyle}" Foreground="#FFB84A" Text="ANOMALY DETECTED" /></StackPanel>
+                    </Grid>
+                    <Canvas x:Name="TopologyCanvas" Grid.Row="1" Width="480" Height="490" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Grid Grid.Row="2">
+                        <TextBlock Style="{StaticResource MicroLabelStyle}" Text="FLOW TRACE  24 NODES  /  31 LINKS  /  1 REVIEW" />
+                        <TextBlock HorizontalAlignment="Right" Style="{StaticResource MicroLabelStyle}" Foreground="#3CFFB4" Text="SAFE MODE READY" />
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Column="1" Spacing="14">
+                <Border Style="{StaticResource PanelStyle}">
+                    <StackPanel Spacing="10">
+                        <TextBlock Style="{StaticResource SectionLabelStyle}" Foreground="#FFB84A" Text="REVIEW ACTION" />
+                        <TextBlock Foreground="#F1F8FC" FontSize="17" Text="Isolate simulated service?" TextWrapping="Wrap" />
+                        <TextBlock Foreground="#8299AC" FontSize="12" Text="A dependency is producing abnormal retry traffic. This is demo telemetry only." TextWrapping="Wrap" />
+                        <Border Background="#1EFFB84A" BorderBrush="#55FFB84A" BorderThickness="1" CornerRadius="7" Padding="10">
+                            <TextBlock Foreground="#FFD28A" FontFamily="Consolas" FontSize="10" Text="NO CHANGES APPLIED" />
+                        </Border>
+                        <Button Style="{StaticResource JarvisButtonStyle}" Click="ReviewAction_Click" Content="REVIEW SAFE ACTION" />
+                        <TextBlock x:Name="ReviewResultText" Foreground="#6F8AA3" FontSize="11" Text="Permission gate is active." TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource PanelStyle}">
+                    <StackPanel Spacing="9">
+                        <TextBlock Style="{StaticResource SectionLabelStyle}" Text="REASONING TRACE" />
+                        <TextBlock Style="{StaticResource ValueTextStyle}" FontSize="11" Text="01  Observe retry spike" />
+                        <TextBlock Style="{StaticResource ValueTextStyle}" FontSize="11" Text="02  Map dependencies" />
+                        <TextBlock Style="{StaticResource ValueTextStyle}" FontSize="11" Text="03  Check blast radius" />
+                        <TextBlock Style="{StaticResource ValueTextStyle}" FontSize="11" Text="04  Request permission" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1" Grid.RowSpan="2" Grid.Column="2" Margin="0,18,18,18" Style="{StaticResource PanelStyle}">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                <StackPanel Spacing="14">
+                    <Grid><TextBlock Style="{StaticResource SectionLabelStyle}" Text="SYSTEM HEALTH" /><TextBlock x:Name="HealthText" HorizontalAlignment="Right" Foreground="#3CFFB4" FontFamily="Consolas" FontSize="11" Text="NOMINAL" /></Grid>
+                    <StackPanel Spacing="6"><Grid><TextBlock Style="{StaticResource MicroLabelStyle}" Text="CPU" /><TextBlock x:Name="CpuText" HorizontalAlignment="Right" Style="{StaticResource ValueTextStyle}" Text="24%" /></Grid><ProgressBar x:Name="CpuBar" Height="3" Maximum="100" Value="24" Foreground="#38E7FF" /></StackPanel>
+                    <StackPanel Spacing="6"><Grid><TextBlock Style="{StaticResource MicroLabelStyle}" Text="MEMORY" /><TextBlock x:Name="MemoryText" HorizontalAlignment="Right" Style="{StaticResource ValueTextStyle}" Text="41%" /></Grid><ProgressBar x:Name="MemoryBar" Height="3" Maximum="100" Value="41" Foreground="#287CFF" /></StackPanel>
+                    <StackPanel Spacing="6"><Grid><TextBlock Style="{StaticResource MicroLabelStyle}" Text="NETWORK" /><TextBlock x:Name="NetworkText" HorizontalAlignment="Right" Style="{StaticResource ValueTextStyle}" Text="18 Mbps" /></Grid><ProgressBar x:Name="NetworkBar" Height="3" Maximum="100" Value="35" Foreground="#38E7FF" /></StackPanel>
+                </StackPanel>
+
+                <Rectangle Grid.Row="1" Height="1" Margin="0,20" Fill="#2638E7FF" />
+
+                <StackPanel Grid.Row="2" Spacing="12">
+                    <TextBlock Style="{StaticResource SectionLabelStyle}" Text="CONTEXT" />
+                    <Grid><TextBlock Style="{StaticResource MicroLabelStyle}" Text="ACTIVE MODE" /><TextBlock x:Name="ActiveModeText" HorizontalAlignment="Right" Style="{StaticResource ValueTextStyle}" FontSize="11" Text="CORE" /></Grid>
+                    <Grid><TextBlock Style="{StaticResource MicroLabelStyle}" Text="DATA SOURCE" /><TextBlock HorizontalAlignment="Right" Style="{StaticResource ValueTextStyle}" FontSize="11" Text="SIMULATED" /></Grid>
+                    <Grid><TextBlock Style="{StaticResource MicroLabelStyle}" Text="PRIVACY" /><TextBlock HorizontalAlignment="Right" Foreground="#3CFFB4" FontFamily="Consolas" FontSize="11" Text="LOCAL ONLY" /></Grid>
+                    <Grid><TextBlock Style="{StaticResource MicroLabelStyle}" Text="UPTIME" /><TextBlock x:Name="UptimeText" HorizontalAlignment="Right" Style="{StaticResource ValueTextStyle}" FontSize="11" Text="00:00:00" /></Grid>
+                </StackPanel>
+
+                <StackPanel Grid.Row="3" Margin="0,24,0,0" Spacing="12">
+                    <TextBlock Style="{StaticResource SectionLabelStyle}" Text="EVENT STREAM" />
+                    <Border Background="#101D2B39" CornerRadius="7" Padding="10"><StackPanel><TextBlock Foreground="#3CFFB4" FontFamily="Consolas" FontSize="10" Text="STARTUP / ONLINE" /><TextBlock Foreground="#8CA2B3" FontSize="11" Text="Visual engine initialized" /></StackPanel></Border>
+                    <Border Background="#101D2B39" CornerRadius="7" Padding="10"><StackPanel><TextBlock Foreground="#38E7FF" FontFamily="Consolas" FontSize="10" Text="STARTUP / RENDER" /><TextBlock Foreground="#8CA2B3" FontSize="11" Text="Four modes registered" /></StackPanel></Border>
+                    <Border Background="#101D2B39" CornerRadius="7" Padding="10"><StackPanel><TextBlock x:Name="EventTimeText" Foreground="#38E7FF" FontFamily="Consolas" FontSize="10" Text="20:30:03 / SIGNAL" /><TextBlock x:Name="EventText" Foreground="#8CA2B3" FontSize="11" Text="Awaiting local input" TextWrapping="Wrap" /></StackPanel></Border>
+                </StackPanel>
+
+                <StackPanel Grid.Row="4" Spacing="8">
+                    <Rectangle Height="1" Fill="#2638E7FF" />
+                    <TextBlock HorizontalAlignment="Center" Style="{StaticResource MicroLabelStyle}" Text="VISUAL PROTOTYPE / NOT CONNECTED TO AI" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2" Grid.Column="1" Margin="22,0,18,18" Background="#B30A1724" BorderBrush="#3438E7FF" BorderThickness="1" CornerRadius="12" Padding="10">
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <Grid Width="42" Height="42"><Ellipse Stroke="#7738E7FF" /><Ellipse Width="18" Height="18" Fill="#AA38E7FF" /></Grid>
+                <TextBox x:Name="CommandInput" Grid.Column="1" Background="Transparent" BorderThickness="0" Foreground="#EAF8FF" PlaceholderForeground="#6F8AA3" FontSize="14" PlaceholderText="Type a local demo command…" KeyDown="CommandInput_KeyDown" />
+                <Button Grid.Column="2" Style="{StaticResource JarvisButtonStyle}" Width="92" Click="SendCommand_Click" Content="SEND" />
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

@@ -1,0 +1,25 @@
+﻿{
+    "version":  "v0.3.0",
+    "assembled_at":  "2026-08-01T23:22:11.4879501+08:00",
+    "target":  "win-x64",
+    "minimum_windows":  "10.0.19041.0",
+    "framework":  "net10.0-windows10.0.19041.0",
+    "self_contained":  true,
+    "folder_based":  true,
+    "executable":  "Jarvis.VisualPrototype.exe",
+    "executable_bytes":  330752,
+    "executable_sha256":  "5C7C989ECA5AD442201D7E886473F2650A9AF90304DF342C34E7DC397EC4059E",
+    "payload_measurement_scope":  "release payload excluding release-manifest.json",
+    "payload_file_count":  521,
+    "payload_total_bytes":  224075070,
+    "verified_runtime_resources":  [
+                                       "Jarvis.VisualPrototype.exe",
+                                       "Jarvis.VisualPrototype.dll",
+                                       "Jarvis.VisualPrototype.pri",
+                                       "App.xbf",
+                                       "MainWindow.xbf",
+                                       "MainPage.xbf",
+                                       "OverlayWindow.xbf",
+                                       "Assets\\AppIcon.ico"
+                                   ]
+}
