@@ -20,7 +20,7 @@
 ## 结构
 
 ```
-index.html            ← 画廊首页(自动生成, 56 个案例入口)
+index.html            ← 画廊首页(自动生成, 57 个案例入口)
 codex/  zcode/  workbuddy/  trae/  codex/
 ```
 
@@ -45,3 +45,10 @@ WinUI 3 原生 Windows 程序，包含四种模式、波浪核心、动态声纹
 | 晚明县志 V0.1 | Codex + GPT-6 Astra | [开始游玩](codex/wanming-xianzhi/index.html) |
 
 以上模型取自原始制作会话记录。页面可直接在线运行，也可保存单HTML离线使用；本次仅追加案例及必要的画廊入口，保留已有项目。
+
+
+## 三国人物关系图 · 国风鎏金长卷
+
+[在线查看](codex/three-kingdoms-gilded/index.html) · Codex + GPT-5 / GPT-6
+
+514位人物、562条关系，国风鎏金人物长卷；支持搜索、关系详情、阵营跳转、缩放及高清图下载。

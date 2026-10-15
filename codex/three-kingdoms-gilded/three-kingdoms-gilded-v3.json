@@ -1,0 +1,10307 @@
+{
+  "groups": [
+    {
+      "id": "han",
+      "title": "汉室余晖",
+      "subtitle": "皇室 · 外戚 · 朝臣 · 汉末名士",
+      "color": "#7797bd",
+      "names": [
+        "刘志",
+        "刘宏",
+        "刘辩",
+        "刘协",
+        "何进",
+        "何苗",
+        "何太后",
+        "董太后",
+        "窦武",
+        "陈蕃",
+        "张让",
+        "赵忠",
+        "曹节",
+        "段珪",
+        "蹇硕",
+        "侯览",
+        "封谞",
+        "夏恽",
+        "郭胜",
+        "王允",
+        "董承",
+        "伏完",
+        "伏寿",
+        "杨彪",
+        "杨琦",
+        "卢植",
+        "皇甫嵩",
+        "朱儁",
+        "蔡邕",
+        "蔡琰",
+        "孔融",
+        "祢衡",
+        "郑玄",
+        "许劭",
+        "陈纪",
+        "应劭",
+        "马日磾",
+        "荀爽",
+        "何颙",
+        "桥玄",
+        "管宁",
+        "王烈"
+      ]
+    },
+    {
+      "id": "yellow",
+      "title": "黄巾与民变",
+      "subtitle": "太平道 · 黄巾军 · 地方豪强",
+      "color": "#c49b56",
+      "names": [
+        "张角",
+        "张宝",
+        "张梁",
+        "马元义",
+        "唐周",
+        "程远志",
+        "邓茂",
+        "高升",
+        "波才",
+        "彭脱",
+        "韩忠",
+        "孙仲",
+        "赵弘",
+        "张曼成",
+        "管亥",
+        "龚都",
+        "刘辟",
+        "何仪",
+        "黄邵",
+        "许昌",
+        "张燕",
+        "张牛角"
+      ]
+    },
+    {
+      "id": "warlords",
+      "title": "群雄逐鹿",
+      "subtitle": "董卓 · 吕布 · 袁氏 · 公孙氏",
+      "color": "#c07072",
+      "names": [
+        "董卓",
+        "董旻",
+        "董璜",
+        "李儒",
+        "李傕",
+        "郭汜",
+        "樊稠",
+        "张济",
+        "张绣",
+        "吕布",
+        "陈宫",
+        "高顺",
+        "貂蝉",
+        "严氏",
+        "魏续",
+        "宋宪",
+        "侯成",
+        "郝萌",
+        "成廉",
+        "曹性",
+        "袁绍",
+        "袁术",
+        "袁隗",
+        "袁谭",
+        "袁熙",
+        "袁尚",
+        "颜良",
+        "文丑",
+        "田丰",
+        "沮授",
+        "许攸",
+        "审配",
+        "逢纪",
+        "高干",
+        "公孙瓒",
+        "公孙越",
+        "公孙度",
+        "公孙康",
+        "公孙渊",
+        "刘虞",
+        "张杨",
+        "张邈",
+        "张超",
+        "王匡",
+        "鲍信",
+        "陶谦",
+        "陈珪",
+        "陈登",
+        "刘繇",
+        "严白虎",
+        "纪灵",
+        "雷薄",
+        "陈兰",
+        "乔瑁",
+        "丁原",
+        "华雄",
+        "徐荣"
+      ]
+    },
+    {
+      "id": "frontier",
+      "title": "荆益与西凉",
+      "subtitle": "荆州 · 益州 · 汉中 · 凉州 · 交州",
+      "color": "#bd8c68",
+      "names": [
+        "马腾",
+        "马休",
+        "马铁",
+        "马玩",
+        "韩遂",
+        "成宜",
+        "梁兴",
+        "刘表",
+        "蔡瑁",
+        "蔡夫人",
+        "刘琦",
+        "刘琮",
+        "黄祖",
+        "蒯良",
+        "蒯越",
+        "文聘",
+        "张允",
+        "刘璋",
+        "刘循",
+        "刘瑁",
+        "刘范",
+        "张鲁",
+        "张卫",
+        "杨松",
+        "阎圃",
+        "杨任",
+        "杨昂",
+        "杨柏",
+        "庞羲",
+        "金旋",
+        "刘度",
+        "邢道荣",
+        "韩玄",
+        "士燮",
+        "士徽",
+        "姜叙",
+        "刘璝",
+        "刘焉"
+      ]
+    },
+    {
+      "id": "wei",
+      "title": "曹魏",
+      "subtitle": "曹氏宗室 · 诸夏侯 · 谋臣武将",
+      "color": "#88abd3",
+      "names": [
+        "曹操",
+        "曹丕",
+        "曹植",
+        "曹彰",
+        "曹仁",
+        "曹洪",
+        "曹纯",
+        "曹休",
+        "曹真",
+        "曹爽",
+        "曹睿",
+        "曹芳",
+        "曹髦",
+        "曹奂",
+        "曹昂",
+        "曹冲",
+        "曹宇",
+        "曹熊",
+        "曹安民",
+        "曹嵩",
+        "曹腾",
+        "夏侯惇",
+        "夏侯渊",
+        "夏侯尚",
+        "夏侯霸",
+        "夏侯楙",
+        "夏侯玄",
+        "夏侯威",
+        "夏侯惠",
+        "夏侯和",
+        "夏侯恩",
+        "夏侯杰",
+        "荀彧",
+        "荀攸",
+        "荀谌",
+        "郭嘉",
+        "程昱",
+        "董昭",
+        "刘晔",
+        "蒋济",
+        "刘放",
+        "孙资",
+        "陈群",
+        "陈泰",
+        "陈矫",
+        "王朗",
+        "王肃",
+        "钟繇",
+        "钟会",
+        "王基",
+        "邓艾",
+        "王凌",
+        "毌丘俭",
+        "诸葛诞",
+        "文钦",
+        "文鸯",
+        "许褚",
+        "典韦",
+        "李典",
+        "李通",
+        "臧霸",
+        "吕虔",
+        "徐晃",
+        "乐进",
+        "于禁",
+        "张郃",
+        "朱灵",
+        "满宠",
+        "田豫",
+        "郭淮",
+        "贾逵",
+        "牵招",
+        "牵弘",
+        "赵俨",
+        "梁习",
+        "杜畿",
+        "毛玠",
+        "崔琰",
+        "司马懿",
+        "司马师",
+        "司马昭",
+        "司马孚",
+        "司马朗",
+        "司马望",
+        "司马伷",
+        "华歆",
+        "陈琳",
+        "张辽",
+        "贾诩",
+        "庞德",
+        "魏平",
+        "卞氏",
+        "甄宓",
+        "杨修"
+      ]
+    },
+    {
+      "id": "shu",
+      "title": "蜀汉",
+      "subtitle": "刘氏宗室 · 荆益将相 · 北伐群英",
+      "color": "#7ec2a4",
+      "names": [
+        "刘备",
+        "刘禅",
+        "刘封",
+        "刘永",
+        "刘理",
+        "刘谌",
+        "刘璿",
+        "甘夫人",
+        "糜夫人",
+        "吴皇后",
+        "孙尚香",
+        "关羽",
+        "关平",
+        "关兴",
+        "关索",
+        "关彝",
+        "关银屏",
+        "张飞",
+        "张苞",
+        "张绍",
+        "赵云",
+        "赵统",
+        "赵广",
+        "马良",
+        "马谡",
+        "马忠",
+        "黄忠",
+        "黄叙",
+        "魏延",
+        "廖化",
+        "姜维",
+        "诸葛亮",
+        "诸葛瞻",
+        "诸葛尚",
+        "诸葛均",
+        "诸葛玄",
+        "庞统",
+        "法正",
+        "孙乾",
+        "简雍",
+        "伊籍",
+        "秦宓",
+        "董和",
+        "董允",
+        "陈震",
+        "李严",
+        "杨仪",
+        "王平",
+        "张翼",
+        "张嶷",
+        "蒋琬",
+        "费祎",
+        "邓芝",
+        "宗预",
+        "向宠",
+        "霍峻",
+        "霍弋",
+        "王连",
+        "向朗",
+        "费诗",
+        "来敏",
+        "谯周",
+        "郤正",
+        "李恢",
+        "吕凯",
+        "刘巴",
+        "刘琰",
+        "刘敏",
+        "冯习",
+        "张南",
+        "傅彤",
+        "陈式",
+        "高翔",
+        "句扶",
+        "廖立",
+        "彭羕",
+        "孟达",
+        "孟光",
+        "周群",
+        "杜琼",
+        "许靖",
+        "许慈",
+        "尹默",
+        "李譔",
+        "杨洪",
+        "马超",
+        "马岱",
+        "吴懿",
+        "吴班",
+        "吴兰",
+        "黄权",
+        "周仓",
+        "徐庶",
+        "糜竺",
+        "糜芳",
+        "黄月英"
+      ]
+    },
+    {
+      "id": "wu",
+      "title": "孙吴",
+      "subtitle": "孙氏宗室 · 江东将相 · 吴末人物",
+      "color": "#d98b79",
+      "names": [
+        "孙坚",
+        "孙策",
+        "孙权",
+        "孙翊",
+        "孙匡",
+        "孙朗",
+        "孙静",
+        "孙贲",
+        "孙辅",
+        "孙韶",
+        "孙桓",
+        "孙登",
+        "孙和",
+        "孙霸",
+        "孙亮",
+        "孙休",
+        "孙皓",
+        "孙鲁班",
+        "孙鲁育",
+        "吴夫人",
+        "吴国太",
+        "步夫人",
+        "潘夫人",
+        "徐夫人",
+        "全夫人",
+        "周瑜",
+        "周泰",
+        "周尚",
+        "周循",
+        "周胤",
+        "鲁肃",
+        "吕蒙",
+        "吕范",
+        "吕岱",
+        "吕据",
+        "张昭",
+        "张纮",
+        "顾雍",
+        "诸葛瑾",
+        "诸葛恪",
+        "步骘",
+        "张温",
+        "陆逊",
+        "陆抗",
+        "陆绩",
+        "陆凯",
+        "陆胤",
+        "陆景",
+        "虞翻",
+        "虞汜",
+        "骆统",
+        "吾粲",
+        "是仪",
+        "胡综",
+        "徐详",
+        "程普",
+        "黄盖",
+        "韩当",
+        "蒋钦",
+        "陈武",
+        "董袭",
+        "甘宁",
+        "凌统",
+        "徐盛",
+        "潘璋",
+        "丁奉",
+        "朱治",
+        "朱然",
+        "朱桓",
+        "朱异",
+        "太史慈",
+        "太史亨",
+        "贺齐",
+        "全琮",
+        "周鲂",
+        "潘濬",
+        "张承",
+        "朱据",
+        "孙峻",
+        "孙綝",
+        "孙据",
+        "留赞",
+        "留平",
+        "滕胤",
+        "濮阳兴",
+        "祖茂",
+        "陶濬",
+        "大乔",
+        "小乔"
+      ]
+    },
+    {
+      "id": "south",
+      "title": "南中与外族",
+      "subtitle": "南蛮 · 羌胡 · 乌桓 · 西域",
+      "color": "#a681b4",
+      "names": [
+        "孟获",
+        "祝融夫人",
+        "孟优",
+        "孟节",
+        "带来洞主",
+        "木鹿大王",
+        "朵思大王",
+        "金环三结",
+        "董荼那",
+        "阿会喃",
+        "兀突骨",
+        "蹋顿",
+        "轲比能",
+        "越吉",
+        "彻里吉",
+        "雅丹",
+        "迷当",
+        "俄何烧戈",
+        "沙摩柯",
+        "雍闿",
+        "高定",
+        "朱褒",
+        "鄂焕",
+        "土安",
+        "奚泥"
+      ]
+    },
+    {
+      "id": "jin",
+      "title": "魏晋嬗代",
+      "subtitle": "司马家族后继 · 西晋朝臣 · 灭吴诸将",
+      "color": "#9c8bba",
+      "names": [
+        "司马炎",
+        "司马攸",
+        "羊祜",
+        "杜预",
+        "王濬",
+        "王浑",
+        "王戎",
+        "张华",
+        "贾充",
+        "何曾",
+        "石苞",
+        "王祥",
+        "陈骞",
+        "胡奋",
+        "胡烈",
+        "胡渊",
+        "邓忠",
+        "诸葛靓",
+        "卫瓘",
+        "卫恒",
+        "向秀",
+        "嵇康",
+        "阮籍",
+        "贾南风",
+        "羊徽瑜",
+        "荀顗",
+        "荀勖",
+        "王元姬",
+        "陈寿"
+      ]
+    },
+    {
+      "id": "other",
+      "title": "名士与传说",
+      "subtitle": "医者 · 文士 · 逸民 · 演义方士",
+      "color": "#a28e68",
+      "names": [
+        "华佗",
+        "张仲景",
+        "左慈",
+        "于吉",
+        "管辂",
+        "朱建平",
+        "南华老仙",
+        "紫虚上人",
+        "乔国老",
+        "司马徽",
+        "吴质",
+        "阮瑀",
+        "应玚",
+        "刘桢",
+        "徐干",
+        "路粹",
+        "邯郸淳",
+        "繁钦",
+        "仲长统",
+        "庞德公",
+        "黄承彦",
+        "董奉"
+      ]
+    }
+  ],
+  "people": [
+    {
+      "name": "刘志",
+      "group": "han"
+    },
+    {
+      "name": "刘宏",
+      "group": "han"
+    },
+    {
+      "name": "刘辩",
+      "group": "han"
+    },
+    {
+      "name": "刘协",
+      "group": "han"
+    },
+    {
+      "name": "何进",
+      "group": "han"
+    },
+    {
+      "name": "何苗",
+      "group": "han"
+    },
+    {
+      "name": "何太后",
+      "group": "han"
+    },
+    {
+      "name": "董太后",
+      "group": "han"
+    },
+    {
+      "name": "窦武",
+      "group": "han"
+    },
+    {
+      "name": "陈蕃",
+      "group": "han"
+    },
+    {
+      "name": "张让",
+      "group": "han"
+    },
+    {
+      "name": "赵忠",
+      "group": "han"
+    },
+    {
+      "name": "曹节",
+      "group": "han"
+    },
+    {
+      "name": "段珪",
+      "group": "han"
+    },
+    {
+      "name": "蹇硕",
+      "group": "han"
+    },
+    {
+      "name": "侯览",
+      "group": "han"
+    },
+    {
+      "name": "封谞",
+      "group": "han"
+    },
+    {
+      "name": "夏恽",
+      "group": "han"
+    },
+    {
+      "name": "郭胜",
+      "group": "han"
+    },
+    {
+      "name": "王允",
+      "group": "han"
+    },
+    {
+      "name": "董承",
+      "group": "han"
+    },
+    {
+      "name": "伏完",
+      "group": "han"
+    },
+    {
+      "name": "伏寿",
+      "group": "han"
+    },
+    {
+      "name": "杨彪",
+      "group": "han"
+    },
+    {
+      "name": "杨琦",
+      "group": "han"
+    },
+    {
+      "name": "卢植",
+      "group": "han"
+    },
+    {
+      "name": "皇甫嵩",
+      "group": "han"
+    },
+    {
+      "name": "朱儁",
+      "group": "han"
+    },
+    {
+      "name": "蔡邕",
+      "group": "han"
+    },
+    {
+      "name": "蔡琰",
+      "group": "han"
+    },
+    {
+      "name": "孔融",
+      "group": "han"
+    },
+    {
+      "name": "祢衡",
+      "group": "han"
+    },
+    {
+      "name": "郑玄",
+      "group": "han"
+    },
+    {
+      "name": "许劭",
+      "group": "han"
+    },
+    {
+      "name": "陈纪",
+      "group": "han"
+    },
+    {
+      "name": "应劭",
+      "group": "han"
+    },
+    {
+      "name": "马日磾",
+      "group": "han"
+    },
+    {
+      "name": "荀爽",
+      "group": "han"
+    },
+    {
+      "name": "何颙",
+      "group": "han"
+    },
+    {
+      "name": "桥玄",
+      "group": "han"
+    },
+    {
+      "name": "管宁",
+      "group": "han"
+    },
+    {
+      "name": "王烈",
+      "group": "han"
+    },
+    {
+      "name": "张角",
+      "group": "yellow"
+    },
+    {
+      "name": "张宝",
+      "group": "yellow"
+    },
+    {
+      "name": "张梁",
+      "group": "yellow"
+    },
+    {
+      "name": "马元义",
+      "group": "yellow"
+    },
+    {
+      "name": "唐周",
+      "group": "yellow"
+    },
+    {
+      "name": "程远志",
+      "group": "yellow"
+    },
+    {
+      "name": "邓茂",
+      "group": "yellow"
+    },
+    {
+      "name": "高升",
+      "group": "yellow"
+    },
+    {
+      "name": "波才",
+      "group": "yellow"
+    },
+    {
+      "name": "彭脱",
+      "group": "yellow"
+    },
+    {
+      "name": "韩忠",
+      "group": "yellow"
+    },
+    {
+      "name": "孙仲",
+      "group": "yellow"
+    },
+    {
+      "name": "赵弘",
+      "group": "yellow"
+    },
+    {
+      "name": "张曼成",
+      "group": "yellow"
+    },
+    {
+      "name": "管亥",
+      "group": "yellow"
+    },
+    {
+      "name": "龚都",
+      "group": "yellow"
+    },
+    {
+      "name": "刘辟",
+      "group": "yellow"
+    },
+    {
+      "name": "何仪",
+      "group": "yellow"
+    },
+    {
+      "name": "黄邵",
+      "group": "yellow"
+    },
+    {
+      "name": "许昌",
+      "group": "yellow"
+    },
+    {
+      "name": "张燕",
+      "group": "yellow"
+    },
+    {
+      "name": "张牛角",
+      "group": "yellow"
+    },
+    {
+      "name": "董卓",
+      "group": "warlords"
+    },
+    {
+      "name": "董旻",
+      "group": "warlords"
+    },
+    {
+      "name": "董璜",
+      "group": "warlords"
+    },
+    {
+      "name": "李儒",
+      "group": "warlords"
+    },
+    {
+      "name": "李傕",
+      "group": "warlords"
+    },
+    {
+      "name": "郭汜",
+      "group": "warlords"
+    },
+    {
+      "name": "樊稠",
+      "group": "warlords"
+    },
+    {
+      "name": "张济",
+      "group": "warlords"
+    },
+    {
+      "name": "张绣",
+      "group": "warlords"
+    },
+    {
+      "name": "吕布",
+      "group": "warlords"
+    },
+    {
+      "name": "陈宫",
+      "group": "warlords"
+    },
+    {
+      "name": "高顺",
+      "group": "warlords"
+    },
+    {
+      "name": "貂蝉",
+      "group": "warlords"
+    },
+    {
+      "name": "严氏",
+      "group": "warlords"
+    },
+    {
+      "name": "魏续",
+      "group": "warlords"
+    },
+    {
+      "name": "宋宪",
+      "group": "warlords"
+    },
+    {
+      "name": "侯成",
+      "group": "warlords"
+    },
+    {
+      "name": "郝萌",
+      "group": "warlords"
+    },
+    {
+      "name": "成廉",
+      "group": "warlords"
+    },
+    {
+      "name": "曹性",
+      "group": "warlords"
+    },
+    {
+      "name": "袁绍",
+      "group": "warlords"
+    },
+    {
+      "name": "袁术",
+      "group": "warlords"
+    },
+    {
+      "name": "袁隗",
+      "group": "warlords"
+    },
+    {
+      "name": "袁谭",
+      "group": "warlords"
+    },
+    {
+      "name": "袁熙",
+      "group": "warlords"
+    },
+    {
+      "name": "袁尚",
+      "group": "warlords"
+    },
+    {
+      "name": "颜良",
+      "group": "warlords"
+    },
+    {
+      "name": "文丑",
+      "group": "warlords"
+    },
+    {
+      "name": "田丰",
+      "group": "warlords"
+    },
+    {
+      "name": "沮授",
+      "group": "warlords"
+    },
+    {
+      "name": "许攸",
+      "group": "warlords"
+    },
+    {
+      "name": "审配",
+      "group": "warlords"
+    },
+    {
+      "name": "逢纪",
+      "group": "warlords"
+    },
+    {
+      "name": "高干",
+      "group": "warlords"
+    },
+    {
+      "name": "公孙瓒",
+      "group": "warlords"
+    },
+    {
+      "name": "公孙越",
+      "group": "warlords"
+    },
+    {
+      "name": "公孙度",
+      "group": "warlords"
+    },
+    {
+      "name": "公孙康",
+      "group": "warlords"
+    },
+    {
+      "name": "公孙渊",
+      "group": "warlords"
+    },
+    {
+      "name": "刘虞",
+      "group": "warlords"
+    },
+    {
+      "name": "张杨",
+      "group": "warlords"
+    },
+    {
+      "name": "张邈",
+      "group": "warlords"
+    },
+    {
+      "name": "张超",
+      "group": "warlords"
+    },
+    {
+      "name": "王匡",
+      "group": "warlords"
+    },
+    {
+      "name": "鲍信",
+      "group": "warlords"
+    },
+    {
+      "name": "陶谦",
+      "group": "warlords"
+    },
+    {
+      "name": "陈珪",
+      "group": "warlords"
+    },
+    {
+      "name": "陈登",
+      "group": "warlords"
+    },
+    {
+      "name": "刘繇",
+      "group": "warlords"
+    },
+    {
+      "name": "严白虎",
+      "group": "warlords"
+    },
+    {
+      "name": "纪灵",
+      "group": "warlords"
+    },
+    {
+      "name": "雷薄",
+      "group": "warlords"
+    },
+    {
+      "name": "陈兰",
+      "group": "warlords"
+    },
+    {
+      "name": "乔瑁",
+      "group": "warlords"
+    },
+    {
+      "name": "丁原",
+      "group": "warlords"
+    },
+    {
+      "name": "华雄",
+      "group": "warlords"
+    },
+    {
+      "name": "徐荣",
+      "group": "warlords"
+    },
+    {
+      "name": "马腾",
+      "group": "frontier"
+    },
+    {
+      "name": "马休",
+      "group": "frontier"
+    },
+    {
+      "name": "马铁",
+      "group": "frontier"
+    },
+    {
+      "name": "马玩",
+      "group": "frontier"
+    },
+    {
+      "name": "韩遂",
+      "group": "frontier"
+    },
+    {
+      "name": "成宜",
+      "group": "frontier"
+    },
+    {
+      "name": "梁兴",
+      "group": "frontier"
+    },
+    {
+      "name": "刘表",
+      "group": "frontier"
+    },
+    {
+      "name": "蔡瑁",
+      "group": "frontier"
+    },
+    {
+      "name": "蔡夫人",
+      "group": "frontier"
+    },
+    {
+      "name": "刘琦",
+      "group": "frontier"
+    },
+    {
+      "name": "刘琮",
+      "group": "frontier"
+    },
+    {
+      "name": "黄祖",
+      "group": "frontier"
+    },
+    {
+      "name": "蒯良",
+      "group": "frontier"
+    },
+    {
+      "name": "蒯越",
+      "group": "frontier"
+    },
+    {
+      "name": "文聘",
+      "group": "frontier"
+    },
+    {
+      "name": "张允",
+      "group": "frontier"
+    },
+    {
+      "name": "刘璋",
+      "group": "frontier"
+    },
+    {
+      "name": "刘循",
+      "group": "frontier"
+    },
+    {
+      "name": "刘瑁",
+      "group": "frontier"
+    },
+    {
+      "name": "刘范",
+      "group": "frontier"
+    },
+    {
+      "name": "张鲁",
+      "group": "frontier"
+    },
+    {
+      "name": "张卫",
+      "group": "frontier"
+    },
+    {
+      "name": "杨松",
+      "group": "frontier"
+    },
+    {
+      "name": "阎圃",
+      "group": "frontier"
+    },
+    {
+      "name": "杨任",
+      "group": "frontier"
+    },
+    {
+      "name": "杨昂",
+      "group": "frontier"
+    },
+    {
+      "name": "杨柏",
+      "group": "frontier"
+    },
+    {
+      "name": "庞羲",
+      "group": "frontier"
+    },
+    {
+      "name": "金旋",
+      "group": "frontier"
+    },
+    {
+      "name": "刘度",
+      "group": "frontier"
+    },
+    {
+      "name": "邢道荣",
+      "group": "frontier"
+    },
+    {
+      "name": "韩玄",
+      "group": "frontier"
+    },
+    {
+      "name": "士燮",
+      "group": "frontier"
+    },
+    {
+      "name": "士徽",
+      "group": "frontier"
+    },
+    {
+      "name": "姜叙",
+      "group": "frontier"
+    },
+    {
+      "name": "刘璝",
+      "group": "frontier"
+    },
+    {
+      "name": "刘焉",
+      "group": "frontier"
+    },
+    {
+      "name": "曹操",
+      "group": "wei"
+    },
+    {
+      "name": "曹丕",
+      "group": "wei"
+    },
+    {
+      "name": "曹植",
+      "group": "wei"
+    },
+    {
+      "name": "曹彰",
+      "group": "wei"
+    },
+    {
+      "name": "曹仁",
+      "group": "wei"
+    },
+    {
+      "name": "曹洪",
+      "group": "wei"
+    },
+    {
+      "name": "曹纯",
+      "group": "wei"
+    },
+    {
+      "name": "曹休",
+      "group": "wei"
+    },
+    {
+      "name": "曹真",
+      "group": "wei"
+    },
+    {
+      "name": "曹爽",
+      "group": "wei"
+    },
+    {
+      "name": "曹睿",
+      "group": "wei"
+    },
+    {
+      "name": "曹芳",
+      "group": "wei"
+    },
+    {
+      "name": "曹髦",
+      "group": "wei"
+    },
+    {
+      "name": "曹奂",
+      "group": "wei"
+    },
+    {
+      "name": "曹昂",
+      "group": "wei"
+    },
+    {
+      "name": "曹冲",
+      "group": "wei"
+    },
+    {
+      "name": "曹宇",
+      "group": "wei"
+    },
+    {
+      "name": "曹熊",
+      "group": "wei"
+    },
+    {
+      "name": "曹安民",
+      "group": "wei"
+    },
+    {
+      "name": "曹嵩",
+      "group": "wei"
+    },
+    {
+      "name": "曹腾",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯惇",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯渊",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯尚",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯霸",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯楙",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯玄",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯威",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯惠",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯和",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯恩",
+      "group": "wei"
+    },
+    {
+      "name": "夏侯杰",
+      "group": "wei"
+    },
+    {
+      "name": "荀彧",
+      "group": "wei"
+    },
+    {
+      "name": "荀攸",
+      "group": "wei"
+    },
+    {
+      "name": "荀谌",
+      "group": "wei"
+    },
+    {
+      "name": "郭嘉",
+      "group": "wei"
+    },
+    {
+      "name": "程昱",
+      "group": "wei"
+    },
+    {
+      "name": "董昭",
+      "group": "wei"
+    },
+    {
+      "name": "刘晔",
+      "group": "wei"
+    },
+    {
+      "name": "蒋济",
+      "group": "wei"
+    },
+    {
+      "name": "刘放",
+      "group": "wei"
+    },
+    {
+      "name": "孙资",
+      "group": "wei"
+    },
+    {
+      "name": "陈群",
+      "group": "wei"
+    },
+    {
+      "name": "陈泰",
+      "group": "wei"
+    },
+    {
+      "name": "陈矫",
+      "group": "wei"
+    },
+    {
+      "name": "王朗",
+      "group": "wei"
+    },
+    {
+      "name": "王肃",
+      "group": "wei"
+    },
+    {
+      "name": "钟繇",
+      "group": "wei"
+    },
+    {
+      "name": "钟会",
+      "group": "wei"
+    },
+    {
+      "name": "王基",
+      "group": "wei"
+    },
+    {
+      "name": "邓艾",
+      "group": "wei"
+    },
+    {
+      "name": "王凌",
+      "group": "wei"
+    },
+    {
+      "name": "毌丘俭",
+      "group": "wei"
+    },
+    {
+      "name": "诸葛诞",
+      "group": "wei"
+    },
+    {
+      "name": "文钦",
+      "group": "wei"
+    },
+    {
+      "name": "文鸯",
+      "group": "wei"
+    },
+    {
+      "name": "许褚",
+      "group": "wei"
+    },
+    {
+      "name": "典韦",
+      "group": "wei"
+    },
+    {
+      "name": "李典",
+      "group": "wei"
+    },
+    {
+      "name": "李通",
+      "group": "wei"
+    },
+    {
+      "name": "臧霸",
+      "group": "wei"
+    },
+    {
+      "name": "吕虔",
+      "group": "wei"
+    },
+    {
+      "name": "徐晃",
+      "group": "wei"
+    },
+    {
+      "name": "乐进",
+      "group": "wei"
+    },
+    {
+      "name": "于禁",
+      "group": "wei"
+    },
+    {
+      "name": "张郃",
+      "group": "wei"
+    },
+    {
+      "name": "朱灵",
+      "group": "wei"
+    },
+    {
+      "name": "满宠",
+      "group": "wei"
+    },
+    {
+      "name": "田豫",
+      "group": "wei"
+    },
+    {
+      "name": "郭淮",
+      "group": "wei"
+    },
+    {
+      "name": "贾逵",
+      "group": "wei"
+    },
+    {
+      "name": "牵招",
+      "group": "wei"
+    },
+    {
+      "name": "牵弘",
+      "group": "wei"
+    },
+    {
+      "name": "赵俨",
+      "group": "wei"
+    },
+    {
+      "name": "梁习",
+      "group": "wei"
+    },
+    {
+      "name": "杜畿",
+      "group": "wei"
+    },
+    {
+      "name": "毛玠",
+      "group": "wei"
+    },
+    {
+      "name": "崔琰",
+      "group": "wei"
+    },
+    {
+      "name": "司马懿",
+      "group": "wei"
+    },
+    {
+      "name": "司马师",
+      "group": "wei"
+    },
+    {
+      "name": "司马昭",
+      "group": "wei"
+    },
+    {
+      "name": "司马孚",
+      "group": "wei"
+    },
+    {
+      "name": "司马朗",
+      "group": "wei"
+    },
+    {
+      "name": "司马望",
+      "group": "wei"
+    },
+    {
+      "name": "司马伷",
+      "group": "wei"
+    },
+    {
+      "name": "华歆",
+      "group": "wei"
+    },
+    {
+      "name": "陈琳",
+      "group": "wei"
+    },
+    {
+      "name": "张辽",
+      "group": "wei"
+    },
+    {
+      "name": "贾诩",
+      "group": "wei"
+    },
+    {
+      "name": "庞德",
+      "group": "wei"
+    },
+    {
+      "name": "魏平",
+      "group": "wei"
+    },
+    {
+      "name": "卞氏",
+      "group": "wei"
+    },
+    {
+      "name": "甄宓",
+      "group": "wei"
+    },
+    {
+      "name": "杨修",
+      "group": "wei"
+    },
+    {
+      "name": "刘备",
+      "group": "shu"
+    },
+    {
+      "name": "刘禅",
+      "group": "shu"
+    },
+    {
+      "name": "刘封",
+      "group": "shu"
+    },
+    {
+      "name": "刘永",
+      "group": "shu"
+    },
+    {
+      "name": "刘理",
+      "group": "shu"
+    },
+    {
+      "name": "刘谌",
+      "group": "shu"
+    },
+    {
+      "name": "刘璿",
+      "group": "shu"
+    },
+    {
+      "name": "甘夫人",
+      "group": "shu"
+    },
+    {
+      "name": "糜夫人",
+      "group": "shu"
+    },
+    {
+      "name": "吴皇后",
+      "group": "shu"
+    },
+    {
+      "name": "孙尚香",
+      "group": "shu"
+    },
+    {
+      "name": "关羽",
+      "group": "shu"
+    },
+    {
+      "name": "关平",
+      "group": "shu"
+    },
+    {
+      "name": "关兴",
+      "group": "shu"
+    },
+    {
+      "name": "关索",
+      "group": "shu"
+    },
+    {
+      "name": "关彝",
+      "group": "shu"
+    },
+    {
+      "name": "关银屏",
+      "group": "shu"
+    },
+    {
+      "name": "张飞",
+      "group": "shu"
+    },
+    {
+      "name": "张苞",
+      "group": "shu"
+    },
+    {
+      "name": "张绍",
+      "group": "shu"
+    },
+    {
+      "name": "赵云",
+      "group": "shu"
+    },
+    {
+      "name": "赵统",
+      "group": "shu"
+    },
+    {
+      "name": "赵广",
+      "group": "shu"
+    },
+    {
+      "name": "马良",
+      "group": "shu"
+    },
+    {
+      "name": "马谡",
+      "group": "shu"
+    },
+    {
+      "name": "马忠",
+      "group": "shu"
+    },
+    {
+      "name": "黄忠",
+      "group": "shu"
+    },
+    {
+      "name": "黄叙",
+      "group": "shu"
+    },
+    {
+      "name": "魏延",
+      "group": "shu"
+    },
+    {
+      "name": "廖化",
+      "group": "shu"
+    },
+    {
+      "name": "姜维",
+      "group": "shu"
+    },
+    {
+      "name": "诸葛亮",
+      "group": "shu"
+    },
+    {
+      "name": "诸葛瞻",
+      "group": "shu"
+    },
+    {
+      "name": "诸葛尚",
+      "group": "shu"
+    },
+    {
+      "name": "诸葛均",
+      "group": "shu"
+    },
+    {
+      "name": "诸葛玄",
+      "group": "shu"
+    },
+    {
+      "name": "庞统",
+      "group": "shu"
+    },
+    {
+      "name": "法正",
+      "group": "shu"
+    },
+    {
+      "name": "孙乾",
+      "group": "shu"
+    },
+    {
+      "name": "简雍",
+      "group": "shu"
+    },
+    {
+      "name": "伊籍",
+      "group": "shu"
+    },
+    {
+      "name": "秦宓",
+      "group": "shu"
+    },
+    {
+      "name": "董和",
+      "group": "shu"
+    },
+    {
+      "name": "董允",
+      "group": "shu"
+    },
+    {
+      "name": "陈震",
+      "group": "shu"
+    },
+    {
+      "name": "李严",
+      "group": "shu"
+    },
+    {
+      "name": "杨仪",
+      "group": "shu"
+    },
+    {
+      "name": "王平",
+      "group": "shu"
+    },
+    {
+      "name": "张翼",
+      "group": "shu"
+    },
+    {
+      "name": "张嶷",
+      "group": "shu"
+    },
+    {
+      "name": "蒋琬",
+      "group": "shu"
+    },
+    {
+      "name": "费祎",
+      "group": "shu"
+    },
+    {
+      "name": "邓芝",
+      "group": "shu"
+    },
+    {
+      "name": "宗预",
+      "group": "shu"
+    },
+    {
+      "name": "向宠",
+      "group": "shu"
+    },
+    {
+      "name": "霍峻",
+      "group": "shu"
+    },
+    {
+      "name": "霍弋",
+      "group": "shu"
+    },
+    {
+      "name": "王连",
+      "group": "shu"
+    },
+    {
+      "name": "向朗",
+      "group": "shu"
+    },
+    {
+      "name": "费诗",
+      "group": "shu"
+    },
+    {
+      "name": "来敏",
+      "group": "shu"
+    },
+    {
+      "name": "谯周",
+      "group": "shu"
+    },
+    {
+      "name": "郤正",
+      "group": "shu"
+    },
+    {
+      "name": "李恢",
+      "group": "shu"
+    },
+    {
+      "name": "吕凯",
+      "group": "shu"
+    },
+    {
+      "name": "刘巴",
+      "group": "shu"
+    },
+    {
+      "name": "刘琰",
+      "group": "shu"
+    },
+    {
+      "name": "刘敏",
+      "group": "shu"
+    },
+    {
+      "name": "冯习",
+      "group": "shu"
+    },
+    {
+      "name": "张南",
+      "group": "shu"
+    },
+    {
+      "name": "傅彤",
+      "group": "shu"
+    },
+    {
+      "name": "陈式",
+      "group": "shu"
+    },
+    {
+      "name": "高翔",
+      "group": "shu"
+    },
+    {
+      "name": "句扶",
+      "group": "shu"
+    },
+    {
+      "name": "廖立",
+      "group": "shu"
+    },
+    {
+      "name": "彭羕",
+      "group": "shu"
+    },
+    {
+      "name": "孟达",
+      "group": "shu"
+    },
+    {
+      "name": "孟光",
+      "group": "shu"
+    },
+    {
+      "name": "周群",
+      "group": "shu"
+    },
+    {
+      "name": "杜琼",
+      "group": "shu"
+    },
+    {
+      "name": "许靖",
+      "group": "shu"
+    },
+    {
+      "name": "许慈",
+      "group": "shu"
+    },
+    {
+      "name": "尹默",
+      "group": "shu"
+    },
+    {
+      "name": "李譔",
+      "group": "shu"
+    },
+    {
+      "name": "杨洪",
+      "group": "shu"
+    },
+    {
+      "name": "马超",
+      "group": "shu"
+    },
+    {
+      "name": "马岱",
+      "group": "shu"
+    },
+    {
+      "name": "吴懿",
+      "group": "shu"
+    },
+    {
+      "name": "吴班",
+      "group": "shu"
+    },
+    {
+      "name": "吴兰",
+      "group": "shu"
+    },
+    {
+      "name": "黄权",
+      "group": "shu"
+    },
+    {
+      "name": "周仓",
+      "group": "shu"
+    },
+    {
+      "name": "徐庶",
+      "group": "shu"
+    },
+    {
+      "name": "糜竺",
+      "group": "shu"
+    },
+    {
+      "name": "糜芳",
+      "group": "shu"
+    },
+    {
+      "name": "黄月英",
+      "group": "shu"
+    },
+    {
+      "name": "孙坚",
+      "group": "wu"
+    },
+    {
+      "name": "孙策",
+      "group": "wu"
+    },
+    {
+      "name": "孙权",
+      "group": "wu"
+    },
+    {
+      "name": "孙翊",
+      "group": "wu"
+    },
+    {
+      "name": "孙匡",
+      "group": "wu"
+    },
+    {
+      "name": "孙朗",
+      "group": "wu"
+    },
+    {
+      "name": "孙静",
+      "group": "wu"
+    },
+    {
+      "name": "孙贲",
+      "group": "wu"
+    },
+    {
+      "name": "孙辅",
+      "group": "wu"
+    },
+    {
+      "name": "孙韶",
+      "group": "wu"
+    },
+    {
+      "name": "孙桓",
+      "group": "wu"
+    },
+    {
+      "name": "孙登",
+      "group": "wu"
+    },
+    {
+      "name": "孙和",
+      "group": "wu"
+    },
+    {
+      "name": "孙霸",
+      "group": "wu"
+    },
+    {
+      "name": "孙亮",
+      "group": "wu"
+    },
+    {
+      "name": "孙休",
+      "group": "wu"
+    },
+    {
+      "name": "孙皓",
+      "group": "wu"
+    },
+    {
+      "name": "孙鲁班",
+      "group": "wu"
+    },
+    {
+      "name": "孙鲁育",
+      "group": "wu"
+    },
+    {
+      "name": "吴夫人",
+      "group": "wu"
+    },
+    {
+      "name": "吴国太",
+      "group": "wu"
+    },
+    {
+      "name": "步夫人",
+      "group": "wu"
+    },
+    {
+      "name": "潘夫人",
+      "group": "wu"
+    },
+    {
+      "name": "徐夫人",
+      "group": "wu"
+    },
+    {
+      "name": "全夫人",
+      "group": "wu"
+    },
+    {
+      "name": "周瑜",
+      "group": "wu"
+    },
+    {
+      "name": "周泰",
+      "group": "wu"
+    },
+    {
+      "name": "周尚",
+      "group": "wu"
+    },
+    {
+      "name": "周循",
+      "group": "wu"
+    },
+    {
+      "name": "周胤",
+      "group": "wu"
+    },
+    {
+      "name": "鲁肃",
+      "group": "wu"
+    },
+    {
+      "name": "吕蒙",
+      "group": "wu"
+    },
+    {
+      "name": "吕范",
+      "group": "wu"
+    },
+    {
+      "name": "吕岱",
+      "group": "wu"
+    },
+    {
+      "name": "吕据",
+      "group": "wu"
+    },
+    {
+      "name": "张昭",
+      "group": "wu"
+    },
+    {
+      "name": "张纮",
+      "group": "wu"
+    },
+    {
+      "name": "顾雍",
+      "group": "wu"
+    },
+    {
+      "name": "诸葛瑾",
+      "group": "wu"
+    },
+    {
+      "name": "诸葛恪",
+      "group": "wu"
+    },
+    {
+      "name": "步骘",
+      "group": "wu"
+    },
+    {
+      "name": "张温",
+      "group": "wu"
+    },
+    {
+      "name": "陆逊",
+      "group": "wu"
+    },
+    {
+      "name": "陆抗",
+      "group": "wu"
+    },
+    {
+      "name": "陆绩",
+      "group": "wu"
+    },
+    {
+      "name": "陆凯",
+      "group": "wu"
+    },
+    {
+      "name": "陆胤",
+      "group": "wu"
+    },
+    {
+      "name": "陆景",
+      "group": "wu"
+    },
+    {
+      "name": "虞翻",
+      "group": "wu"
+    },
+    {
+      "name": "虞汜",
+      "group": "wu"
+    },
+    {
+      "name": "骆统",
+      "group": "wu"
+    },
+    {
+      "name": "吾粲",
+      "group": "wu"
+    },
+    {
+      "name": "是仪",
+      "group": "wu"
+    },
+    {
+      "name": "胡综",
+      "group": "wu"
+    },
+    {
+      "name": "徐详",
+      "group": "wu"
+    },
+    {
+      "name": "程普",
+      "group": "wu"
+    },
+    {
+      "name": "黄盖",
+      "group": "wu"
+    },
+    {
+      "name": "韩当",
+      "group": "wu"
+    },
+    {
+      "name": "蒋钦",
+      "group": "wu"
+    },
+    {
+      "name": "陈武",
+      "group": "wu"
+    },
+    {
+      "name": "董袭",
+      "group": "wu"
+    },
+    {
+      "name": "甘宁",
+      "group": "wu"
+    },
+    {
+      "name": "凌统",
+      "group": "wu"
+    },
+    {
+      "name": "徐盛",
+      "group": "wu"
+    },
+    {
+      "name": "潘璋",
+      "group": "wu"
+    },
+    {
+      "name": "丁奉",
+      "group": "wu"
+    },
+    {
+      "name": "朱治",
+      "group": "wu"
+    },
+    {
+      "name": "朱然",
+      "group": "wu"
+    },
+    {
+      "name": "朱桓",
+      "group": "wu"
+    },
+    {
+      "name": "朱异",
+      "group": "wu"
+    },
+    {
+      "name": "太史慈",
+      "group": "wu"
+    },
+    {
+      "name": "太史亨",
+      "group": "wu"
+    },
+    {
+      "name": "贺齐",
+      "group": "wu"
+    },
+    {
+      "name": "全琮",
+      "group": "wu"
+    },
+    {
+      "name": "周鲂",
+      "group": "wu"
+    },
+    {
+      "name": "潘濬",
+      "group": "wu"
+    },
+    {
+      "name": "张承",
+      "group": "wu"
+    },
+    {
+      "name": "朱据",
+      "group": "wu"
+    },
+    {
+      "name": "孙峻",
+      "group": "wu"
+    },
+    {
+      "name": "孙綝",
+      "group": "wu"
+    },
+    {
+      "name": "孙据",
+      "group": "wu"
+    },
+    {
+      "name": "留赞",
+      "group": "wu"
+    },
+    {
+      "name": "留平",
+      "group": "wu"
+    },
+    {
+      "name": "滕胤",
+      "group": "wu"
+    },
+    {
+      "name": "濮阳兴",
+      "group": "wu"
+    },
+    {
+      "name": "祖茂",
+      "group": "wu"
+    },
+    {
+      "name": "陶濬",
+      "group": "wu"
+    },
+    {
+      "name": "大乔",
+      "group": "wu"
+    },
+    {
+      "name": "小乔",
+      "group": "wu"
+    },
+    {
+      "name": "孟获",
+      "group": "south"
+    },
+    {
+      "name": "祝融夫人",
+      "group": "south"
+    },
+    {
+      "name": "孟优",
+      "group": "south"
+    },
+    {
+      "name": "孟节",
+      "group": "south"
+    },
+    {
+      "name": "带来洞主",
+      "group": "south"
+    },
+    {
+      "name": "木鹿大王",
+      "group": "south"
+    },
+    {
+      "name": "朵思大王",
+      "group": "south"
+    },
+    {
+      "name": "金环三结",
+      "group": "south"
+    },
+    {
+      "name": "董荼那",
+      "group": "south"
+    },
+    {
+      "name": "阿会喃",
+      "group": "south"
+    },
+    {
+      "name": "兀突骨",
+      "group": "south"
+    },
+    {
+      "name": "蹋顿",
+      "group": "south"
+    },
+    {
+      "name": "轲比能",
+      "group": "south"
+    },
+    {
+      "name": "越吉",
+      "group": "south"
+    },
+    {
+      "name": "彻里吉",
+      "group": "south"
+    },
+    {
+      "name": "雅丹",
+      "group": "south"
+    },
+    {
+      "name": "迷当",
+      "group": "south"
+    },
+    {
+      "name": "俄何烧戈",
+      "group": "south"
+    },
+    {
+      "name": "沙摩柯",
+      "group": "south"
+    },
+    {
+      "name": "雍闿",
+      "group": "south"
+    },
+    {
+      "name": "高定",
+      "group": "south"
+    },
+    {
+      "name": "朱褒",
+      "group": "south"
+    },
+    {
+      "name": "鄂焕",
+      "group": "south"
+    },
+    {
+      "name": "土安",
+      "group": "south"
+    },
+    {
+      "name": "奚泥",
+      "group": "south"
+    },
+    {
+      "name": "司马炎",
+      "group": "jin"
+    },
+    {
+      "name": "司马攸",
+      "group": "jin"
+    },
+    {
+      "name": "羊祜",
+      "group": "jin"
+    },
+    {
+      "name": "杜预",
+      "group": "jin"
+    },
+    {
+      "name": "王濬",
+      "group": "jin"
+    },
+    {
+      "name": "王浑",
+      "group": "jin"
+    },
+    {
+      "name": "王戎",
+      "group": "jin"
+    },
+    {
+      "name": "张华",
+      "group": "jin"
+    },
+    {
+      "name": "贾充",
+      "group": "jin"
+    },
+    {
+      "name": "何曾",
+      "group": "jin"
+    },
+    {
+      "name": "石苞",
+      "group": "jin"
+    },
+    {
+      "name": "王祥",
+      "group": "jin"
+    },
+    {
+      "name": "陈骞",
+      "group": "jin"
+    },
+    {
+      "name": "胡奋",
+      "group": "jin"
+    },
+    {
+      "name": "胡烈",
+      "group": "jin"
+    },
+    {
+      "name": "胡渊",
+      "group": "jin"
+    },
+    {
+      "name": "邓忠",
+      "group": "jin"
+    },
+    {
+      "name": "诸葛靓",
+      "group": "jin"
+    },
+    {
+      "name": "卫瓘",
+      "group": "jin"
+    },
+    {
+      "name": "卫恒",
+      "group": "jin"
+    },
+    {
+      "name": "向秀",
+      "group": "jin"
+    },
+    {
+      "name": "嵇康",
+      "group": "jin"
+    },
+    {
+      "name": "阮籍",
+      "group": "jin"
+    },
+    {
+      "name": "贾南风",
+      "group": "jin"
+    },
+    {
+      "name": "羊徽瑜",
+      "group": "jin"
+    },
+    {
+      "name": "荀顗",
+      "group": "jin"
+    },
+    {
+      "name": "荀勖",
+      "group": "jin"
+    },
+    {
+      "name": "王元姬",
+      "group": "jin"
+    },
+    {
+      "name": "陈寿",
+      "group": "jin"
+    },
+    {
+      "name": "华佗",
+      "group": "other"
+    },
+    {
+      "name": "张仲景",
+      "group": "other"
+    },
+    {
+      "name": "左慈",
+      "group": "other"
+    },
+    {
+      "name": "于吉",
+      "group": "other"
+    },
+    {
+      "name": "管辂",
+      "group": "other"
+    },
+    {
+      "name": "朱建平",
+      "group": "other"
+    },
+    {
+      "name": "南华老仙",
+      "group": "other"
+    },
+    {
+      "name": "紫虚上人",
+      "group": "other"
+    },
+    {
+      "name": "乔国老",
+      "group": "other"
+    },
+    {
+      "name": "司马徽",
+      "group": "other"
+    },
+    {
+      "name": "吴质",
+      "group": "other"
+    },
+    {
+      "name": "阮瑀",
+      "group": "other"
+    },
+    {
+      "name": "应玚",
+      "group": "other"
+    },
+    {
+      "name": "刘桢",
+      "group": "other"
+    },
+    {
+      "name": "徐干",
+      "group": "other"
+    },
+    {
+      "name": "路粹",
+      "group": "other"
+    },
+    {
+      "name": "邯郸淳",
+      "group": "other"
+    },
+    {
+      "name": "繁钦",
+      "group": "other"
+    },
+    {
+      "name": "仲长统",
+      "group": "other"
+    },
+    {
+      "name": "庞德公",
+      "group": "other"
+    },
+    {
+      "name": "黄承彦",
+      "group": "other"
+    },
+    {
+      "name": "董奉",
+      "group": "other"
+    }
+  ],
+  "edges": [
+    {
+      "a": "曹操",
+      "b": "荀彧",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "荀攸",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "郭嘉",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "程昱",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "董昭",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "刘晔",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "蒋济",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "刘放",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "陈群",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "陈矫",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "贾逵",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "杜畿",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "毛玠",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "崔琰",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "杨修",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "陈琳",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "华歆",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "贾诩",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "司马懿",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "司马朗",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹仁",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹洪",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹纯",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹休",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹真",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "夏侯惇",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "夏侯渊",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "夏侯尚",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "夏侯楙",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "张辽",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "许褚",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "典韦",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "李典",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "李通",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "臧霸",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "吕虔",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "庞德",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "徐晃",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "乐进",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "于禁",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "张郃",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "朱灵",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "满宠",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "田豫",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "郭淮",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "牵招",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "赵俨",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "梁习",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "夏侯恩",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "曹操",
+      "b": "夏侯杰",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "曹操",
+      "b": "曹丕",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹植",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹彰",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹昂",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹冲",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹宇",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹熊",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹腾",
+      "b": "曹嵩",
+      "label": "养父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹嵩",
+      "b": "曹操",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "曹安民",
+      "label": "叔侄",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "卞氏",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹丕",
+      "b": "曹睿",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹丕",
+      "b": "曹髦",
+      "label": "祖孙",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹丕",
+      "b": "甄宓",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹宇",
+      "b": "曹奂",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹睿",
+      "b": "曹芳",
+      "label": "养父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹真",
+      "b": "曹爽",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹仁",
+      "b": "曹纯",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "夏侯惇",
+      "b": "夏侯楙",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "夏侯渊",
+      "b": "夏侯霸",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "夏侯渊",
+      "b": "夏侯威",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "夏侯渊",
+      "b": "夏侯惠",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "夏侯渊",
+      "b": "夏侯和",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "夏侯尚",
+      "b": "夏侯玄",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "荀爽",
+      "b": "荀彧",
+      "label": "叔侄",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "荀彧",
+      "b": "荀谌",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "王朗",
+      "b": "王肃",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "陈群",
+      "b": "陈泰",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "钟繇",
+      "b": "钟会",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "文钦",
+      "b": "文鸯",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "曹丕",
+      "b": "王朗",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹丕",
+      "b": "钟繇",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹丕",
+      "b": "孙资",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹丕",
+      "b": "司马孚",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹睿",
+      "b": "郭淮",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹睿",
+      "b": "毌丘俭",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹睿",
+      "b": "王凌",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹睿",
+      "b": "诸葛诞",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马懿",
+      "b": "邓艾",
+      "label": "举用",
+      "type": "mentor",
+      "source": "史传"
+    },
+    {
+      "a": "司马懿",
+      "b": "魏平",
+      "label": "部将",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "司马昭",
+      "b": "钟会",
+      "label": "派遣伐蜀",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马昭",
+      "b": "邓艾",
+      "label": "派遣伐蜀",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马昭",
+      "b": "王基",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马昭",
+      "b": "牵弘",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "关羽",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "张飞",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "赵云",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "马超",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "黄忠",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "魏延",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "庞统",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "法正",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "徐庶",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "孙乾",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "简雍",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "伊籍",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "糜竺",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "糜芳",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "董和",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "刘巴",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "陈震",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "李严",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "廖立",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "彭羕",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "许靖",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "吴懿",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "吴班",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "吴兰",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "冯习",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "张南",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "傅彤",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "霍峻",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "黄权",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "孟达",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "诸葛亮",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "马良",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "马谡",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "秦宓",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "刘琰",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "王平",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "陈式",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "费诗",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "来敏",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "许慈",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "尹默",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "杨洪",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "刘禅",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "刘永",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "刘理",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "刘封",
+      "label": "养父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "甘夫人",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "糜夫人",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "吴皇后",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "孙尚香",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "刘谌",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "刘璿",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "蒋琬",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "费祎",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "姜维",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "董允",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "邓芝",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "宗预",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "张翼",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "张嶷",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "马忠",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "李恢",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "吕凯",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "谯周",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "郤正",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "杜琼",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "周群",
+      "label": "儒林校尉",
+      "type": "loyal",
+      "source": "《三国志》卷42·周群传"
+    },
+    {
+      "a": "刘禅",
+      "b": "孟光",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "李譔",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "王连",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "向朗",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "向宠",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "刘敏",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "霍弋",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘禅",
+      "b": "句扶",
+      "label": "臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "姜维",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "杨仪",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "王平",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "魏延",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "高翔",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "廖化",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "蒋琬",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "费祎",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "邓芝",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "张翼",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "张嶷",
+      "label": "共事 / 统属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "姜维",
+      "label": "器重培养",
+      "type": "mentor",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "诸葛瞻",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛瞻",
+      "b": "诸葛尚",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "诸葛均",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛瑾",
+      "b": "诸葛亮",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛玄",
+      "b": "诸葛亮",
+      "label": "叔侄",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "黄月英",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "黄承彦",
+      "b": "黄月英",
+      "label": "父女",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "关羽",
+      "b": "关平",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "关羽",
+      "b": "关兴",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "关兴",
+      "b": "关彝",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "关羽",
+      "b": "关索",
+      "label": "父子",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "关羽",
+      "b": "关银屏",
+      "label": "父女",
+      "type": "family",
+      "source": "后世称谓"
+    },
+    {
+      "a": "关羽",
+      "b": "周仓",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "张飞",
+      "b": "张苞",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "张飞",
+      "b": "张绍",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "赵云",
+      "b": "赵统",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "赵云",
+      "b": "赵广",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "黄忠",
+      "b": "黄叙",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "马良",
+      "b": "马谡",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "董和",
+      "b": "董允",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "霍峻",
+      "b": "霍弋",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "向朗",
+      "b": "向宠",
+      "label": "叔侄",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "吴懿",
+      "b": "吴皇后",
+      "label": "兄妹",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "糜竺",
+      "b": "糜芳",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "糜竺",
+      "b": "糜夫人",
+      "label": "兄妹",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "孙策",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "孙权",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "孙翊",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "孙匡",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "孙朗",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "孙尚香",
+      "label": "父女",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "孙静",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "吴夫人",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "吴国太",
+      "label": "夫妻",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "孙权",
+      "b": "孙登",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "孙和",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "孙霸",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "孙亮",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "孙休",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "孙鲁班",
+      "label": "父女",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "孙鲁育",
+      "label": "父女",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "步夫人",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "潘夫人",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "徐夫人",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙和",
+      "b": "孙皓",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙亮",
+      "b": "全夫人",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "大乔",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "周瑜",
+      "b": "小乔",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "大乔",
+      "b": "小乔",
+      "label": "姐妹",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "乔国老",
+      "b": "大乔",
+      "label": "父女",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "乔国老",
+      "b": "小乔",
+      "label": "父女",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "孙策",
+      "b": "周瑜",
+      "label": "友人 / 共事",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "孙权",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "孙尚香",
+      "label": "兄妹",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "程普",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "黄盖",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "韩当",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙坚",
+      "b": "祖茂",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "周瑜",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "太史慈",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "张昭",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "张纮",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "吕范",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "朱治",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "蒋钦",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "周泰",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "陈武",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "董袭",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "孙贲",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙策",
+      "b": "孙辅",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "周瑜",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "鲁肃",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "吕蒙",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "陆逊",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "甘宁",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "凌统",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "徐盛",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "潘璋",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "丁奉",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "朱然",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "朱桓",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "吕岱",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "贺齐",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "全琮",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "周鲂",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "潘濬",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "顾雍",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "诸葛瑾",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "步骘",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "虞翻",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "骆统",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "是仪",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "胡综",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "徐详",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "张温",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "吾粲",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "朱据",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "张承",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "陆绩",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "陆凯",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "孙韶",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙权",
+      "b": "孙桓",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙皓",
+      "b": "陆抗",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙皓",
+      "b": "陆胤",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙皓",
+      "b": "陶濬",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙皓",
+      "b": "濮阳兴",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙皓",
+      "b": "留平",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙亮",
+      "b": "诸葛恪",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙亮",
+      "b": "孙峻",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙亮",
+      "b": "孙綝",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙亮",
+      "b": "滕胤",
+      "label": "曾为臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "孙綝",
+      "b": "孙据",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "周尚",
+      "b": "周瑜",
+      "label": "叔侄",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "周瑜",
+      "b": "周循",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "周瑜",
+      "b": "周胤",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "吕范",
+      "b": "吕据",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛瑾",
+      "b": "诸葛恪",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "陆逊",
+      "b": "陆抗",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "陆抗",
+      "b": "陆景",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "陆凯",
+      "b": "陆胤",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "虞翻",
+      "b": "虞汜",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "朱桓",
+      "b": "朱异",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "朱治",
+      "b": "朱然",
+      "label": "养父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "太史慈",
+      "b": "太史亨",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "张昭",
+      "b": "张承",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "留赞",
+      "b": "留平",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孙鲁班",
+      "b": "全琮",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘宏",
+      "b": "刘辩",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘宏",
+      "b": "刘协",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘宏",
+      "b": "何太后",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "董太后",
+      "b": "刘宏",
+      "label": "母子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "何太后",
+      "b": "刘辩",
+      "label": "母子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "何进",
+      "b": "何太后",
+      "label": "兄妹",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "何进",
+      "b": "何苗",
+      "label": "异父兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘协",
+      "b": "伏寿",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "伏完",
+      "b": "伏寿",
+      "label": "父女",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘宏",
+      "b": "张让",
+      "label": "宦官",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘宏",
+      "b": "赵忠",
+      "label": "宦官",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘宏",
+      "b": "曹节",
+      "label": "宦官",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘宏",
+      "b": "段珪",
+      "label": "宦官",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘宏",
+      "b": "蹇硕",
+      "label": "宦官",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘宏",
+      "b": "侯览",
+      "label": "宦官",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘宏",
+      "b": "封谞",
+      "label": "宦官",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘宏",
+      "b": "夏恽",
+      "label": "宦官",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘宏",
+      "b": "郭胜",
+      "label": "宦官",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘宏",
+      "b": "卢植",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘宏",
+      "b": "皇甫嵩",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘宏",
+      "b": "朱儁",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘宏",
+      "b": "蔡邕",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘宏",
+      "b": "马日磾",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘宏",
+      "b": "杨彪",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘协",
+      "b": "王允",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘协",
+      "b": "董承",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘协",
+      "b": "伏完",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘协",
+      "b": "杨琦",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘协",
+      "b": "荀爽",
+      "label": "汉廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘志",
+      "b": "窦武",
+      "label": "朝臣",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘志",
+      "b": "陈蕃",
+      "label": "朝臣",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "窦武",
+      "b": "陈蕃",
+      "label": "合谋诛宦",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "蔡邕",
+      "b": "蔡琰",
+      "label": "父女",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孔融",
+      "b": "祢衡",
+      "label": "友人",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "郑玄",
+      "b": "刘备",
+      "label": "师生",
+      "type": "mentor",
+      "source": "演义"
+    },
+    {
+      "a": "卢植",
+      "b": "刘备",
+      "label": "师生",
+      "type": "mentor",
+      "source": "史传"
+    },
+    {
+      "a": "卢植",
+      "b": "公孙瓒",
+      "label": "师生",
+      "type": "mentor",
+      "source": "史传"
+    },
+    {
+      "a": "许劭",
+      "b": "曹操",
+      "label": "品评",
+      "type": "mentor",
+      "source": "史传"
+    },
+    {
+      "a": "桥玄",
+      "b": "曹操",
+      "label": "赏识",
+      "type": "mentor",
+      "source": "史传"
+    },
+    {
+      "a": "管宁",
+      "b": "王烈",
+      "label": "友人",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "何颙",
+      "b": "荀彧",
+      "label": "赏识",
+      "type": "mentor",
+      "source": "史传"
+    },
+    {
+      "a": "陈纪",
+      "b": "陈群",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "应劭",
+      "b": "曹操",
+      "label": "曾有交往",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "张角",
+      "b": "张宝",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "张角",
+      "b": "张梁",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "张角",
+      "b": "马元义",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "张角",
+      "b": "唐周",
+      "label": "弟子 / 告发",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "南华老仙",
+      "b": "张角",
+      "label": "授书",
+      "type": "mentor",
+      "source": "演义"
+    },
+    {
+      "a": "程远志",
+      "b": "邓茂",
+      "label": "正副将",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "皇甫嵩",
+      "b": "波才",
+      "label": "讨伐",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "皇甫嵩",
+      "b": "彭脱",
+      "label": "讨伐",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "张角",
+      "b": "张曼成",
+      "label": "黄巾首领",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "朱儁",
+      "b": "韩忠",
+      "label": "讨伐",
+      "type": "conflict",
+      "source": "演义"
+    },
+    {
+      "a": "朱儁",
+      "b": "孙仲",
+      "label": "讨伐",
+      "type": "conflict",
+      "source": "演义"
+    },
+    {
+      "a": "朱儁",
+      "b": "赵弘",
+      "label": "讨伐",
+      "type": "conflict",
+      "source": "演义"
+    },
+    {
+      "a": "张宝",
+      "b": "高升",
+      "label": "部将",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "管亥",
+      "b": "孔融",
+      "label": "围攻",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "龚都",
+      "label": "联手",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "刘辟",
+      "label": "联手",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "何仪",
+      "label": "讨伐",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "黄邵",
+      "label": "讨伐",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "许昌",
+      "b": "孙坚",
+      "label": "交战",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "张牛角",
+      "b": "张燕",
+      "label": "黑山军前后领袖",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "董卓",
+      "b": "董旻",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "董旻",
+      "b": "董璜",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "董卓",
+      "b": "李儒",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "董卓",
+      "b": "李傕",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "董卓",
+      "b": "郭汜",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "董卓",
+      "b": "樊稠",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "董卓",
+      "b": "张济",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "董卓",
+      "b": "华雄",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "董卓",
+      "b": "徐荣",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "张济",
+      "b": "张绣",
+      "label": "叔侄",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "张绣",
+      "b": "贾诩",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "丁原",
+      "b": "吕布",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "董卓",
+      "b": "吕布",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "董卓",
+      "label": "刺杀",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "陈宫",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "高顺",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "张辽",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "魏续",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "宋宪",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "侯成",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "郝萌",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "成廉",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "曹性",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "吕布",
+      "b": "严氏",
+      "label": "夫妻",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "吕布",
+      "b": "貂蝉",
+      "label": "姻缘",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "王允",
+      "b": "貂蝉",
+      "label": "义父女",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "袁绍",
+      "b": "袁谭",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "袁熙",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "袁尚",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "袁术",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "袁隗",
+      "b": "袁绍",
+      "label": "叔侄",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "颜良",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "文丑",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "田丰",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "沮授",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "许攸",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "审配",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "逢纪",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "高干",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁绍",
+      "b": "荀谌",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁术",
+      "b": "纪灵",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁术",
+      "b": "雷薄",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "袁术",
+      "b": "陈兰",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "公孙瓒",
+      "b": "公孙越",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "公孙度",
+      "b": "公孙康",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "公孙康",
+      "b": "公孙渊",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "公孙瓒",
+      "b": "刘虞",
+      "label": "争斗",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "公孙瓒",
+      "b": "赵云",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "张邈",
+      "b": "张超",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "陈珪",
+      "b": "陈登",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "陶谦",
+      "b": "刘备",
+      "label": "让徐州",
+      "type": "alliance",
+      "source": "演义"
+    },
+    {
+      "a": "张杨",
+      "b": "吕布",
+      "label": "相援",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "鲍信",
+      "b": "曹操",
+      "label": "联手",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "王匡",
+      "b": "董卓",
+      "label": "讨伐",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "乔瑁",
+      "b": "董卓",
+      "label": "讨伐",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "刘繇",
+      "b": "孙策",
+      "label": "交战",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "严白虎",
+      "b": "孙策",
+      "label": "交战",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "马腾",
+      "b": "马超",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "马腾",
+      "b": "马休",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "马腾",
+      "b": "马铁",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "马超",
+      "b": "马岱",
+      "label": "从兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "马超",
+      "b": "庞德",
+      "label": "曾为部将",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "马腾",
+      "b": "韩遂",
+      "label": "盟友 / 相争",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "韩遂",
+      "b": "马玩",
+      "label": "关中联军",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "韩遂",
+      "b": "成宜",
+      "label": "关中联军",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "韩遂",
+      "b": "梁兴",
+      "label": "关中联军",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "姜叙",
+      "b": "马超",
+      "label": "交战",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "刘表",
+      "b": "刘琦",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘表",
+      "b": "刘琮",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘表",
+      "b": "蔡夫人",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "蔡夫人",
+      "b": "蔡瑁",
+      "label": "姐弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘表",
+      "b": "黄祖",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘表",
+      "b": "蒯良",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘表",
+      "b": "蒯越",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘表",
+      "b": "文聘",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘表",
+      "b": "张允",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘表",
+      "b": "蔡瑁",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘焉",
+      "b": "刘璋",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘焉",
+      "b": "刘瑁",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘焉",
+      "b": "刘范",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘璋",
+      "b": "刘循",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "刘璋",
+      "b": "庞羲",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘璋",
+      "b": "刘璝",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘璋",
+      "b": "黄权",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘璋",
+      "b": "法正",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "刘璋",
+      "b": "吴懿",
+      "label": "曾为部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "张鲁",
+      "b": "张卫",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "张鲁",
+      "b": "杨松",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "张鲁",
+      "b": "阎圃",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "张鲁",
+      "b": "杨任",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "张鲁",
+      "b": "杨昂",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "张鲁",
+      "b": "杨柏",
+      "label": "部属",
+      "type": "loyal",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "刘度",
+      "b": "邢道荣",
+      "label": "部将",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "韩玄",
+      "b": "黄忠",
+      "label": "部将",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "刘备",
+      "b": "金旋",
+      "label": "取武陵",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "士燮",
+      "b": "士徽",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "孟获",
+      "b": "祝融夫人",
+      "label": "夫妻",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "孟获",
+      "b": "孟优",
+      "label": "兄弟",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "孟获",
+      "b": "孟节",
+      "label": "兄弟",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "祝融夫人",
+      "b": "带来洞主",
+      "label": "姐弟",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "孟获",
+      "b": "金环三结",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "孟获",
+      "b": "董荼那",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "孟获",
+      "b": "阿会喃",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "孟获",
+      "b": "木鹿大王",
+      "label": "求援",
+      "type": "alliance",
+      "source": "演义"
+    },
+    {
+      "a": "孟获",
+      "b": "朵思大王",
+      "label": "求援",
+      "type": "alliance",
+      "source": "演义"
+    },
+    {
+      "a": "孟获",
+      "b": "兀突骨",
+      "label": "求援",
+      "type": "alliance",
+      "source": "演义"
+    },
+    {
+      "a": "兀突骨",
+      "b": "土安",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "兀突骨",
+      "b": "奚泥",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "高定",
+      "b": "鄂焕",
+      "label": "部将",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "孟获",
+      "label": "南征",
+      "type": "conflict",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "雍闿",
+      "label": "南征",
+      "type": "conflict",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "高定",
+      "label": "南征",
+      "type": "conflict",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "朱褒",
+      "label": "南征",
+      "type": "conflict",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "彻里吉",
+      "b": "越吉",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "彻里吉",
+      "b": "雅丹",
+      "label": "部属",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "姜维",
+      "b": "迷当",
+      "label": "联络",
+      "type": "alliance",
+      "source": "演义"
+    },
+    {
+      "a": "郭淮",
+      "b": "俄何烧戈",
+      "label": "交战",
+      "type": "conflict",
+      "source": "演义"
+    },
+    {
+      "a": "刘备",
+      "b": "沙摩柯",
+      "label": "联军",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "蹋顿",
+      "label": "白狼山之战",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "曹睿",
+      "b": "轲比能",
+      "label": "对抗",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "司马懿",
+      "b": "司马师",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马懿",
+      "b": "司马昭",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马懿",
+      "b": "司马伷",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马懿",
+      "b": "司马孚",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马懿",
+      "b": "司马朗",
+      "label": "兄弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马孚",
+      "b": "司马望",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马昭",
+      "b": "司马炎",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马昭",
+      "b": "司马攸",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马昭",
+      "b": "王元姬",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "王肃",
+      "b": "王元姬",
+      "label": "父女",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马师",
+      "b": "羊徽瑜",
+      "label": "夫妻",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "羊祜",
+      "b": "羊徽瑜",
+      "label": "姐弟",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "羊祜",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "杜预",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "王濬",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "王浑",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "王戎",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "张华",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "贾充",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "何曾",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "石苞",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "王祥",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "陈骞",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "胡奋",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "胡烈",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "卫瓘",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "荀顗",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "荀勖",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "司马炎",
+      "b": "陈寿",
+      "label": "晋廷臣属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "胡烈",
+      "b": "胡渊",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "邓艾",
+      "b": "邓忠",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛诞",
+      "b": "诸葛靓",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "卫瓘",
+      "b": "卫恒",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "贾逵",
+      "b": "贾充",
+      "label": "父子",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "贾充",
+      "b": "贾南风",
+      "label": "父女",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "嵇康",
+      "b": "阮籍",
+      "label": "竹林友人",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "嵇康",
+      "b": "向秀",
+      "label": "竹林友人",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "羊祜",
+      "b": "陆抗",
+      "label": "对峙 / 互敬",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "华佗",
+      "label": "求医",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "华佗",
+      "b": "关羽",
+      "label": "刮骨疗毒",
+      "type": "loyal",
+      "source": "演义"
+    },
+    {
+      "a": "左慈",
+      "b": "曹操",
+      "label": "戏弄",
+      "type": "conflict",
+      "source": "演义"
+    },
+    {
+      "a": "孙策",
+      "b": "于吉",
+      "label": "冲突",
+      "type": "conflict",
+      "source": "史传 / 演义"
+    },
+    {
+      "a": "曹操",
+      "b": "朱建平",
+      "label": "相术品评",
+      "type": "mentor",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "管辂",
+      "label": "占卜",
+      "type": "mentor",
+      "source": "演义"
+    },
+    {
+      "a": "张仲景",
+      "b": "董奉",
+      "label": "建安名医并称",
+      "type": "alliance",
+      "source": "后世并称"
+    },
+    {
+      "a": "华佗",
+      "b": "张仲景",
+      "label": "建安名医并称",
+      "type": "alliance",
+      "source": "后世并称"
+    },
+    {
+      "a": "刘璋",
+      "b": "紫虚上人",
+      "label": "问卜",
+      "type": "mentor",
+      "source": "演义"
+    },
+    {
+      "a": "庞德公",
+      "b": "庞统",
+      "label": "叔侄",
+      "type": "family",
+      "source": "史传"
+    },
+    {
+      "a": "司马徽",
+      "b": "诸葛亮",
+      "label": "赏识举荐",
+      "type": "mentor",
+      "source": "演义"
+    },
+    {
+      "a": "曹丕",
+      "b": "吴质",
+      "label": "亲近",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "阮瑀",
+      "label": "文士 / 部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "应玚",
+      "label": "文士 / 部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "刘桢",
+      "label": "文士 / 部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "徐干",
+      "label": "文士 / 部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "路粹",
+      "label": "文士 / 部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "繁钦",
+      "label": "文士 / 部属",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "邯郸淳",
+      "b": "曹丕",
+      "label": "曾为属官",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "荀彧",
+      "b": "仲长统",
+      "label": "举荐",
+      "type": "mentor",
+      "source": "《后汉书》仲长统传注"
+    },
+    {
+      "a": "曹操",
+      "b": "袁绍",
+      "label": "官渡对抗",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "刘备",
+      "label": "争雄",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "曹操",
+      "b": "孙权",
+      "label": "赤壁对抗",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "孙权",
+      "label": "联盟后交战",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "刘备",
+      "b": "关羽",
+      "label": "桃园结义",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "刘备",
+      "b": "张飞",
+      "label": "桃园结义",
+      "type": "family",
+      "source": "演义"
+    },
+    {
+      "a": "曹操",
+      "b": "关羽",
+      "label": "曾礼遇",
+      "type": "loyal",
+      "source": "史传"
+    },
+    {
+      "a": "诸葛亮",
+      "b": "司马懿",
+      "label": "北伐对峙",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "陆逊",
+      "b": "刘备",
+      "label": "夷陵之战",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "吕蒙",
+      "b": "关羽",
+      "label": "袭取荆州",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "姜维",
+      "b": "邓艾",
+      "label": "交战",
+      "type": "conflict",
+      "source": "史传"
+    },
+    {
+      "a": "钟会",
+      "b": "姜维",
+      "label": "成都合谋",
+      "type": "alliance",
+      "source": "史传"
+    },
+    {
+      "a": "王濬",
+      "b": "孙皓",
+      "label": "灭吴受降",
+      "type": "conflict",
+      "source": "史传"
+    }
+  ],
+  "aliases": {
+    "刘志": "汉桓帝",
+    "刘宏": "汉灵帝",
+    "刘辩": "汉少帝",
+    "刘协": "汉献帝",
+    "司马徽": "水镜先生",
+    "孙尚香": "孙夫人；戏曲惯称",
+    "甄宓": "甄夫人；名字后世惯称",
+    "吴皇后": "刘备妻；吴懿妹",
+    "吴夫人": "孙坚妻；孙策、孙权之母",
+    "曹节": "汉末宦官；非曹操女",
+    "马忠": "蜀将德信；非吴将同名者",
+    "张南": "蜀将；非袁绍部将同名者",
+    "黄月英": "黄氏；后世惯称",
+    "关银屏": "关羽之女；后世惯称",
+    "乔国老": "二乔之父；演义称谓",
+    "桥玄": "汉末太尉；非二乔之父"
+  },
+  "fiction": [
+    "程远志",
+    "邓茂",
+    "高升",
+    "韩忠",
+    "周仓",
+    "貂蝉",
+    "夏侯恩",
+    "夏侯杰",
+    "关索",
+    "吴国太",
+    "祝融夫人",
+    "带来洞主",
+    "木鹿大王",
+    "朵思大王",
+    "金环三结",
+    "董荼那",
+    "阿会喃",
+    "兀突骨",
+    "越吉",
+    "彻里吉",
+    "雅丹",
+    "迷当",
+    "俄何烧戈",
+    "鄂焕",
+    "土安",
+    "奚泥",
+    "邢道荣",
+    "南华老仙",
+    "紫虚上人",
+    "乔国老"
+  ],
+  "folklore": [
+    "孙尚香",
+    "黄月英",
+    "关银屏",
+    "甄宓"
+  ],
+  "styles": {
+    "family": {
+      "color": "#e7c77e",
+      "label": "亲缘 / 婚姻",
+      "dash": ""
+    },
+    "loyal": {
+      "color": "#c5b18b",
+      "label": "君臣 / 共事",
+      "dash": ""
+    },
+    "conflict": {
+      "color": "#df7c6a",
+      "label": "交战 / 决裂",
+      "dash": "10 7"
+    },
+    "alliance": {
+      "color": "#78bcb4",
+      "label": "结盟 / 交游",
+      "dash": "10 6"
+    },
+    "mentor": {
+      "color": "#b7a0d1",
+      "label": "师承 / 赏识",
+      "dash": "3 7"
+    }
+  },
+  "notes": {
+    "刘志": "汉桓帝",
+    "刘宏": "汉灵帝",
+    "刘辩": "汉少帝",
+    "刘协": "汉献帝",
+    "曹操": "魏国奠基者",
+    "曹丕": "魏文帝",
+    "刘备": "汉昭烈帝",
+    "刘禅": "蜀汉后主",
+    "孙坚": "江东基业肇始",
+    "孙权": "吴大帝",
+    "孙皓": "吴末帝",
+    "司马炎": "晋武帝",
+    "张角": "黄巾领袖",
+    "董卓": "汉末权臣",
+    "袁绍": "河北雄主",
+    "袁术": "淮南称帝",
+    "刘焉": "益州牧",
+    "刘表": "荆州牧",
+    "刘璋": "益州牧",
+    "张鲁": "汉中割据",
+    "韩遂": "凉州军阀",
+    "陈寿": "《三国志》作者",
+    "姜叙": "天水起兵抗马超",
+    "关银屏": "关羽女·后世称名",
+    "孙尚香": "孙夫人·戏曲称名",
+    "黄月英": "黄氏·后世称名",
+    "甄宓": "甄氏·后世称名",
+    "桥玄": "太尉·汉末名臣"
+  },
+  "positions": {
+    "曹操": {
+      "x": 220,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹丕": {
+      "x": 566.3333333333333,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹植": {
+      "x": 912.6666666666666,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹彰": {
+      "x": 1259,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹仁": {
+      "x": 220,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹洪": {
+      "x": 566.3333333333333,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹纯": {
+      "x": 912.6666666666666,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹休": {
+      "x": 1259,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹真": {
+      "x": 220,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹爽": {
+      "x": 566.3333333333333,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹睿": {
+      "x": 912.6666666666666,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹芳": {
+      "x": 1259,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹髦": {
+      "x": 220,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹奂": {
+      "x": 566.3333333333333,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹昂": {
+      "x": 912.6666666666666,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹冲": {
+      "x": 1259,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹宇": {
+      "x": 220,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹熊": {
+      "x": 566.3333333333333,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹安民": {
+      "x": 912.6666666666666,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹嵩": {
+      "x": 1259,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "曹腾": {
+      "x": 220,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯惇": {
+      "x": 566.3333333333333,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯渊": {
+      "x": 912.6666666666666,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯尚": {
+      "x": 1259,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯霸": {
+      "x": 220,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯楙": {
+      "x": 566.3333333333333,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯玄": {
+      "x": 912.6666666666666,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯威": {
+      "x": 1259,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯惠": {
+      "x": 220,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯和": {
+      "x": 566.3333333333333,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯恩": {
+      "x": 912.6666666666666,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "夏侯杰": {
+      "x": 1259,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "荀彧": {
+      "x": 220,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "荀攸": {
+      "x": 566.3333333333333,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "荀谌": {
+      "x": 912.6666666666666,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "郭嘉": {
+      "x": 1259,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "程昱": {
+      "x": 220,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "董昭": {
+      "x": 566.3333333333333,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "刘晔": {
+      "x": 912.6666666666666,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "蒋济": {
+      "x": 1259,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "刘放": {
+      "x": 220,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "孙资": {
+      "x": 566.3333333333333,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "陈群": {
+      "x": 912.6666666666666,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "陈泰": {
+      "x": 1259,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "陈矫": {
+      "x": 220,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "王朗": {
+      "x": 566.3333333333333,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "王肃": {
+      "x": 912.6666666666666,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "钟繇": {
+      "x": 1259,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "钟会": {
+      "x": 220,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "王基": {
+      "x": 566.3333333333333,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "邓艾": {
+      "x": 912.6666666666666,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "王凌": {
+      "x": 1259,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "毌丘俭": {
+      "x": 220,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "诸葛诞": {
+      "x": 566.3333333333333,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "文钦": {
+      "x": 912.6666666666666,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "文鸯": {
+      "x": 1259,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "许褚": {
+      "x": 220,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "典韦": {
+      "x": 566.3333333333333,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "李典": {
+      "x": 912.6666666666666,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "李通": {
+      "x": 1259,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "臧霸": {
+      "x": 220,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "吕虔": {
+      "x": 566.3333333333333,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "徐晃": {
+      "x": 912.6666666666666,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "乐进": {
+      "x": 1259,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "于禁": {
+      "x": 220,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "张郃": {
+      "x": 566.3333333333333,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "朱灵": {
+      "x": 912.6666666666666,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "满宠": {
+      "x": 1259,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "田豫": {
+      "x": 220,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "郭淮": {
+      "x": 566.3333333333333,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "贾逵": {
+      "x": 912.6666666666666,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "牵招": {
+      "x": 1259,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "牵弘": {
+      "x": 220,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "赵俨": {
+      "x": 566.3333333333333,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "梁习": {
+      "x": 912.6666666666666,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "杜畿": {
+      "x": 1259,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "毛玠": {
+      "x": 220,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "崔琰": {
+      "x": 566.3333333333333,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "司马懿": {
+      "x": 912.6666666666666,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "司马师": {
+      "x": 1259,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "司马昭": {
+      "x": 220,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "司马孚": {
+      "x": 566.3333333333333,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "司马朗": {
+      "x": 912.6666666666666,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "司马望": {
+      "x": 1259,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "司马伷": {
+      "x": 220,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "华歆": {
+      "x": 566.3333333333333,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "陈琳": {
+      "x": 912.6666666666666,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "张辽": {
+      "x": 1259,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "贾诩": {
+      "x": 220,
+      "y": 5437,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "庞德": {
+      "x": 566.3333333333333,
+      "y": 5437,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "魏平": {
+      "x": 912.6666666666666,
+      "y": 5437,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "卞氏": {
+      "x": 1259,
+      "y": 5437,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "甄宓": {
+      "x": 220,
+      "y": 5557,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "杨修": {
+      "x": 566.3333333333333,
+      "y": 5557,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wei"
+    },
+    "刘备": {
+      "x": 1737.3333333333333,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "刘禅": {
+      "x": 2083.6666666666665,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "刘封": {
+      "x": 2430,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "刘永": {
+      "x": 2776.333333333333,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "刘理": {
+      "x": 1737.3333333333333,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "刘谌": {
+      "x": 2083.6666666666665,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "刘璿": {
+      "x": 2430,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "甘夫人": {
+      "x": 2776.333333333333,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "糜夫人": {
+      "x": 1737.3333333333333,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "吴皇后": {
+      "x": 2083.6666666666665,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "孙尚香": {
+      "x": 2430,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "关羽": {
+      "x": 2776.333333333333,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "关平": {
+      "x": 1737.3333333333333,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "关兴": {
+      "x": 2083.6666666666665,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "关索": {
+      "x": 2430,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "关彝": {
+      "x": 2776.333333333333,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "关银屏": {
+      "x": 1737.3333333333333,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "张飞": {
+      "x": 2083.6666666666665,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "张苞": {
+      "x": 2430,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "张绍": {
+      "x": 2776.333333333333,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "赵云": {
+      "x": 1737.3333333333333,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "赵统": {
+      "x": 2083.6666666666665,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "赵广": {
+      "x": 2430,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "马良": {
+      "x": 2776.333333333333,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "马谡": {
+      "x": 1737.3333333333333,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "马忠": {
+      "x": 2083.6666666666665,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "黄忠": {
+      "x": 2430,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "黄叙": {
+      "x": 2776.333333333333,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "魏延": {
+      "x": 1737.3333333333333,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "廖化": {
+      "x": 2083.6666666666665,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "姜维": {
+      "x": 2430,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "诸葛亮": {
+      "x": 2776.333333333333,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "诸葛瞻": {
+      "x": 1737.3333333333333,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "诸葛尚": {
+      "x": 2083.6666666666665,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "诸葛均": {
+      "x": 2430,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "诸葛玄": {
+      "x": 2776.333333333333,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "庞统": {
+      "x": 1737.3333333333333,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "法正": {
+      "x": 2083.6666666666665,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "孙乾": {
+      "x": 2430,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "简雍": {
+      "x": 2776.333333333333,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "伊籍": {
+      "x": 1737.3333333333333,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "秦宓": {
+      "x": 2083.6666666666665,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "董和": {
+      "x": 2430,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "董允": {
+      "x": 2776.333333333333,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "陈震": {
+      "x": 1737.3333333333333,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "李严": {
+      "x": 2083.6666666666665,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "杨仪": {
+      "x": 2430,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "王平": {
+      "x": 2776.333333333333,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "张翼": {
+      "x": 1737.3333333333333,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "张嶷": {
+      "x": 2083.6666666666665,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "蒋琬": {
+      "x": 2430,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "费祎": {
+      "x": 2776.333333333333,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "邓芝": {
+      "x": 1737.3333333333333,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "宗预": {
+      "x": 2083.6666666666665,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "向宠": {
+      "x": 2430,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "霍峻": {
+      "x": 2776.333333333333,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "霍弋": {
+      "x": 1737.3333333333333,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "王连": {
+      "x": 2083.6666666666665,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "向朗": {
+      "x": 2430,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "费诗": {
+      "x": 2776.333333333333,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "来敏": {
+      "x": 1737.3333333333333,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "谯周": {
+      "x": 2083.6666666666665,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "郤正": {
+      "x": 2430,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "李恢": {
+      "x": 2776.333333333333,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "吕凯": {
+      "x": 1737.3333333333333,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "刘巴": {
+      "x": 2083.6666666666665,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "刘琰": {
+      "x": 2430,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "刘敏": {
+      "x": 2776.333333333333,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "冯习": {
+      "x": 1737.3333333333333,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "张南": {
+      "x": 2083.6666666666665,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "傅彤": {
+      "x": 2430,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "陈式": {
+      "x": 2776.333333333333,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "高翔": {
+      "x": 1737.3333333333333,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "句扶": {
+      "x": 2083.6666666666665,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "廖立": {
+      "x": 2430,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "彭羕": {
+      "x": 2776.333333333333,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "孟达": {
+      "x": 1737.3333333333333,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "孟光": {
+      "x": 2083.6666666666665,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "周群": {
+      "x": 2430,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "杜琼": {
+      "x": 2776.333333333333,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "许靖": {
+      "x": 1737.3333333333333,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "许慈": {
+      "x": 2083.6666666666665,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "尹默": {
+      "x": 2430,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "李譔": {
+      "x": 2776.333333333333,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "杨洪": {
+      "x": 1737.3333333333333,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "马超": {
+      "x": 2083.6666666666665,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "马岱": {
+      "x": 2430,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "吴懿": {
+      "x": 2776.333333333333,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "吴班": {
+      "x": 1737.3333333333333,
+      "y": 5437,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "吴兰": {
+      "x": 2083.6666666666665,
+      "y": 5437,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "黄权": {
+      "x": 2430,
+      "y": 5437,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "周仓": {
+      "x": 2776.333333333333,
+      "y": 5437,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "徐庶": {
+      "x": 1737.3333333333333,
+      "y": 5557,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "糜竺": {
+      "x": 2083.6666666666665,
+      "y": 5557,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "糜芳": {
+      "x": 2430,
+      "y": 5557,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "黄月英": {
+      "x": 2776.333333333333,
+      "y": 5557,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "shu"
+    },
+    "孙坚": {
+      "x": 3254.6666666666665,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙策": {
+      "x": 3601,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙权": {
+      "x": 3947.333333333333,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙翊": {
+      "x": 4293.666666666666,
+      "y": 2797,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙匡": {
+      "x": 3254.6666666666665,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙朗": {
+      "x": 3601,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙静": {
+      "x": 3947.333333333333,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙贲": {
+      "x": 4293.666666666666,
+      "y": 2917,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙辅": {
+      "x": 3254.6666666666665,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙韶": {
+      "x": 3601,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙桓": {
+      "x": 3947.333333333333,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙登": {
+      "x": 4293.666666666666,
+      "y": 3037,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙和": {
+      "x": 3254.6666666666665,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙霸": {
+      "x": 3601,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙亮": {
+      "x": 3947.333333333333,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙休": {
+      "x": 4293.666666666666,
+      "y": 3157,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙皓": {
+      "x": 3254.6666666666665,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙鲁班": {
+      "x": 3601,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙鲁育": {
+      "x": 3947.333333333333,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "吴夫人": {
+      "x": 4293.666666666666,
+      "y": 3277,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "吴国太": {
+      "x": 3254.6666666666665,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "步夫人": {
+      "x": 3601,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "潘夫人": {
+      "x": 3947.333333333333,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "徐夫人": {
+      "x": 4293.666666666666,
+      "y": 3397,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "全夫人": {
+      "x": 3254.6666666666665,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "周瑜": {
+      "x": 3601,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "周泰": {
+      "x": 3947.333333333333,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "周尚": {
+      "x": 4293.666666666666,
+      "y": 3517,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "周循": {
+      "x": 3254.6666666666665,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "周胤": {
+      "x": 3601,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "鲁肃": {
+      "x": 3947.333333333333,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "吕蒙": {
+      "x": 4293.666666666666,
+      "y": 3637,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "吕范": {
+      "x": 3254.6666666666665,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "吕岱": {
+      "x": 3601,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "吕据": {
+      "x": 3947.333333333333,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "张昭": {
+      "x": 4293.666666666666,
+      "y": 3757,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "张纮": {
+      "x": 3254.6666666666665,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "顾雍": {
+      "x": 3601,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "诸葛瑾": {
+      "x": 3947.333333333333,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "诸葛恪": {
+      "x": 4293.666666666666,
+      "y": 3877,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "步骘": {
+      "x": 3254.6666666666665,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "张温": {
+      "x": 3601,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "陆逊": {
+      "x": 3947.333333333333,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "陆抗": {
+      "x": 4293.666666666666,
+      "y": 3997,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "陆绩": {
+      "x": 3254.6666666666665,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "陆凯": {
+      "x": 3601,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "陆胤": {
+      "x": 3947.333333333333,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "陆景": {
+      "x": 4293.666666666666,
+      "y": 4117,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "虞翻": {
+      "x": 3254.6666666666665,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "虞汜": {
+      "x": 3601,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "骆统": {
+      "x": 3947.333333333333,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "吾粲": {
+      "x": 4293.666666666666,
+      "y": 4237,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "是仪": {
+      "x": 3254.6666666666665,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "胡综": {
+      "x": 3601,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "徐详": {
+      "x": 3947.333333333333,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "程普": {
+      "x": 4293.666666666666,
+      "y": 4357,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "黄盖": {
+      "x": 3254.6666666666665,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "韩当": {
+      "x": 3601,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "蒋钦": {
+      "x": 3947.333333333333,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "陈武": {
+      "x": 4293.666666666666,
+      "y": 4477,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "董袭": {
+      "x": 3254.6666666666665,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "甘宁": {
+      "x": 3601,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "凌统": {
+      "x": 3947.333333333333,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "徐盛": {
+      "x": 4293.666666666666,
+      "y": 4597,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "潘璋": {
+      "x": 3254.6666666666665,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "丁奉": {
+      "x": 3601,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "朱治": {
+      "x": 3947.333333333333,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "朱然": {
+      "x": 4293.666666666666,
+      "y": 4717,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "朱桓": {
+      "x": 3254.6666666666665,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "朱异": {
+      "x": 3601,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "太史慈": {
+      "x": 3947.333333333333,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "太史亨": {
+      "x": 4293.666666666666,
+      "y": 4837,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "贺齐": {
+      "x": 3254.6666666666665,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "全琮": {
+      "x": 3601,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "周鲂": {
+      "x": 3947.333333333333,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "潘濬": {
+      "x": 4293.666666666666,
+      "y": 4957,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "张承": {
+      "x": 3254.6666666666665,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "朱据": {
+      "x": 3601,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙峻": {
+      "x": 3947.333333333333,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙綝": {
+      "x": 4293.666666666666,
+      "y": 5077,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "孙据": {
+      "x": 3254.6666666666665,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "留赞": {
+      "x": 3601,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "留平": {
+      "x": 3947.333333333333,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "滕胤": {
+      "x": 4293.666666666666,
+      "y": 5197,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "濮阳兴": {
+      "x": 3254.6666666666665,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "祖茂": {
+      "x": 3601,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "陶濬": {
+      "x": 3947.333333333333,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "大乔": {
+      "x": 4293.666666666666,
+      "y": 5317,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "小乔": {
+      "x": 3254.6666666666665,
+      "y": 5437,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "wu"
+    },
+    "刘志": {
+      "x": 220,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "刘宏": {
+      "x": 566.3333333333333,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "刘辩": {
+      "x": 912.6666666666666,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "刘协": {
+      "x": 1259,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "何进": {
+      "x": 220,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "何苗": {
+      "x": 566.3333333333333,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "何太后": {
+      "x": 912.6666666666666,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "董太后": {
+      "x": 1259,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "窦武": {
+      "x": 220,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "陈蕃": {
+      "x": 566.3333333333333,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "张让": {
+      "x": 912.6666666666666,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "赵忠": {
+      "x": 1259,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "曹节": {
+      "x": 220,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "段珪": {
+      "x": 566.3333333333333,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "蹇硕": {
+      "x": 912.6666666666666,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "侯览": {
+      "x": 1259,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "封谞": {
+      "x": 220,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "夏恽": {
+      "x": 566.3333333333333,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "郭胜": {
+      "x": 912.6666666666666,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "王允": {
+      "x": 1259,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "董承": {
+      "x": 220,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "伏完": {
+      "x": 566.3333333333333,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "伏寿": {
+      "x": 912.6666666666666,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "杨彪": {
+      "x": 1259,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "杨琦": {
+      "x": 220,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "卢植": {
+      "x": 566.3333333333333,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "皇甫嵩": {
+      "x": 912.6666666666666,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "朱儁": {
+      "x": 1259,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "蔡邕": {
+      "x": 220,
+      "y": 7020,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "蔡琰": {
+      "x": 566.3333333333333,
+      "y": 7020,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "孔融": {
+      "x": 912.6666666666666,
+      "y": 7020,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "祢衡": {
+      "x": 1259,
+      "y": 7020,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "郑玄": {
+      "x": 220,
+      "y": 7140,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "许劭": {
+      "x": 566.3333333333333,
+      "y": 7140,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "陈纪": {
+      "x": 912.6666666666666,
+      "y": 7140,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "应劭": {
+      "x": 1259,
+      "y": 7140,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "马日磾": {
+      "x": 220,
+      "y": 7260,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "荀爽": {
+      "x": 566.3333333333333,
+      "y": 7260,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "何颙": {
+      "x": 912.6666666666666,
+      "y": 7260,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "桥玄": {
+      "x": 1259,
+      "y": 7260,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "管宁": {
+      "x": 220,
+      "y": 7380,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "王烈": {
+      "x": 566.3333333333333,
+      "y": 7380,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "han"
+    },
+    "张角": {
+      "x": 220,
+      "y": 7842,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "张宝": {
+      "x": 566.3333333333333,
+      "y": 7842,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "张梁": {
+      "x": 912.6666666666666,
+      "y": 7842,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "马元义": {
+      "x": 1259,
+      "y": 7842,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "唐周": {
+      "x": 220,
+      "y": 7962,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "程远志": {
+      "x": 566.3333333333333,
+      "y": 7962,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "邓茂": {
+      "x": 912.6666666666666,
+      "y": 7962,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "高升": {
+      "x": 1259,
+      "y": 7962,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "波才": {
+      "x": 220,
+      "y": 8082,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "彭脱": {
+      "x": 566.3333333333333,
+      "y": 8082,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "韩忠": {
+      "x": 912.6666666666666,
+      "y": 8082,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "孙仲": {
+      "x": 1259,
+      "y": 8082,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "赵弘": {
+      "x": 220,
+      "y": 8202,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "张曼成": {
+      "x": 566.3333333333333,
+      "y": 8202,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "管亥": {
+      "x": 912.6666666666666,
+      "y": 8202,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "龚都": {
+      "x": 1259,
+      "y": 8202,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "刘辟": {
+      "x": 220,
+      "y": 8322,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "何仪": {
+      "x": 566.3333333333333,
+      "y": 8322,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "黄邵": {
+      "x": 912.6666666666666,
+      "y": 8322,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "许昌": {
+      "x": 1259,
+      "y": 8322,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "张燕": {
+      "x": 220,
+      "y": 8442,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "张牛角": {
+      "x": 566.3333333333333,
+      "y": 8442,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "yellow"
+    },
+    "华佗": {
+      "x": 220,
+      "y": 8904,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "张仲景": {
+      "x": 566.3333333333333,
+      "y": 8904,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "左慈": {
+      "x": 912.6666666666666,
+      "y": 8904,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "于吉": {
+      "x": 1259,
+      "y": 8904,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "管辂": {
+      "x": 220,
+      "y": 9024,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "朱建平": {
+      "x": 566.3333333333333,
+      "y": 9024,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "南华老仙": {
+      "x": 912.6666666666666,
+      "y": 9024,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "紫虚上人": {
+      "x": 1259,
+      "y": 9024,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "乔国老": {
+      "x": 220,
+      "y": 9144,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "司马徽": {
+      "x": 566.3333333333333,
+      "y": 9144,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "吴质": {
+      "x": 912.6666666666666,
+      "y": 9144,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "阮瑀": {
+      "x": 1259,
+      "y": 9144,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "应玚": {
+      "x": 220,
+      "y": 9264,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "刘桢": {
+      "x": 566.3333333333333,
+      "y": 9264,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "徐干": {
+      "x": 912.6666666666666,
+      "y": 9264,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "路粹": {
+      "x": 1259,
+      "y": 9264,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "邯郸淳": {
+      "x": 220,
+      "y": 9384,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "繁钦": {
+      "x": 566.3333333333333,
+      "y": 9384,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "仲长统": {
+      "x": 912.6666666666666,
+      "y": 9384,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "庞德公": {
+      "x": 1259,
+      "y": 9384,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "黄承彦": {
+      "x": 220,
+      "y": 9504,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "董奉": {
+      "x": 566.3333333333333,
+      "y": 9504,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "other"
+    },
+    "董卓": {
+      "x": 1737.3333333333333,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "董旻": {
+      "x": 2083.6666666666665,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "董璜": {
+      "x": 2430,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "李儒": {
+      "x": 2776.333333333333,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "李傕": {
+      "x": 1737.3333333333333,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "郭汜": {
+      "x": 2083.6666666666665,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "樊稠": {
+      "x": 2430,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "张济": {
+      "x": 2776.333333333333,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "张绣": {
+      "x": 1737.3333333333333,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "吕布": {
+      "x": 2083.6666666666665,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "陈宫": {
+      "x": 2430,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "高顺": {
+      "x": 2776.333333333333,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "貂蝉": {
+      "x": 1737.3333333333333,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "严氏": {
+      "x": 2083.6666666666665,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "魏续": {
+      "x": 2430,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "宋宪": {
+      "x": 2776.333333333333,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "侯成": {
+      "x": 1737.3333333333333,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "郝萌": {
+      "x": 2083.6666666666665,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "成廉": {
+      "x": 2430,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "曹性": {
+      "x": 2776.333333333333,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "袁绍": {
+      "x": 1737.3333333333333,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "袁术": {
+      "x": 2083.6666666666665,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "袁隗": {
+      "x": 2430,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "袁谭": {
+      "x": 2776.333333333333,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "袁熙": {
+      "x": 1737.3333333333333,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "袁尚": {
+      "x": 2083.6666666666665,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "颜良": {
+      "x": 2430,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "文丑": {
+      "x": 2776.333333333333,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "田丰": {
+      "x": 1737.3333333333333,
+      "y": 7020,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "沮授": {
+      "x": 2083.6666666666665,
+      "y": 7020,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "许攸": {
+      "x": 2430,
+      "y": 7020,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "审配": {
+      "x": 2776.333333333333,
+      "y": 7020,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "逢纪": {
+      "x": 1737.3333333333333,
+      "y": 7140,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "高干": {
+      "x": 2083.6666666666665,
+      "y": 7140,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "公孙瓒": {
+      "x": 2430,
+      "y": 7140,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "公孙越": {
+      "x": 2776.333333333333,
+      "y": 7140,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "公孙度": {
+      "x": 1737.3333333333333,
+      "y": 7260,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "公孙康": {
+      "x": 2083.6666666666665,
+      "y": 7260,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "公孙渊": {
+      "x": 2430,
+      "y": 7260,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "刘虞": {
+      "x": 2776.333333333333,
+      "y": 7260,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "张杨": {
+      "x": 1737.3333333333333,
+      "y": 7380,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "张邈": {
+      "x": 2083.6666666666665,
+      "y": 7380,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "张超": {
+      "x": 2430,
+      "y": 7380,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "王匡": {
+      "x": 2776.333333333333,
+      "y": 7380,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "鲍信": {
+      "x": 1737.3333333333333,
+      "y": 7500,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "陶谦": {
+      "x": 2083.6666666666665,
+      "y": 7500,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "陈珪": {
+      "x": 2430,
+      "y": 7500,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "陈登": {
+      "x": 2776.333333333333,
+      "y": 7500,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "刘繇": {
+      "x": 1737.3333333333333,
+      "y": 7620,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "严白虎": {
+      "x": 2083.6666666666665,
+      "y": 7620,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "纪灵": {
+      "x": 2430,
+      "y": 7620,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "雷薄": {
+      "x": 2776.333333333333,
+      "y": 7620,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "陈兰": {
+      "x": 1737.3333333333333,
+      "y": 7740,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "乔瑁": {
+      "x": 2083.6666666666665,
+      "y": 7740,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "丁原": {
+      "x": 2430,
+      "y": 7740,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "华雄": {
+      "x": 2776.333333333333,
+      "y": 7740,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "徐荣": {
+      "x": 1737.3333333333333,
+      "y": 7860,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "warlords"
+    },
+    "马腾": {
+      "x": 1737.3333333333333,
+      "y": 8322,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "马休": {
+      "x": 2083.6666666666665,
+      "y": 8322,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "马铁": {
+      "x": 2430,
+      "y": 8322,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "马玩": {
+      "x": 2776.333333333333,
+      "y": 8322,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "韩遂": {
+      "x": 1737.3333333333333,
+      "y": 8442,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "成宜": {
+      "x": 2083.6666666666665,
+      "y": 8442,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "梁兴": {
+      "x": 2430,
+      "y": 8442,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘表": {
+      "x": 2776.333333333333,
+      "y": 8442,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "蔡瑁": {
+      "x": 1737.3333333333333,
+      "y": 8562,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "蔡夫人": {
+      "x": 2083.6666666666665,
+      "y": 8562,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘琦": {
+      "x": 2430,
+      "y": 8562,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘琮": {
+      "x": 2776.333333333333,
+      "y": 8562,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "黄祖": {
+      "x": 1737.3333333333333,
+      "y": 8682,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "蒯良": {
+      "x": 2083.6666666666665,
+      "y": 8682,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "蒯越": {
+      "x": 2430,
+      "y": 8682,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "文聘": {
+      "x": 2776.333333333333,
+      "y": 8682,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "张允": {
+      "x": 1737.3333333333333,
+      "y": 8802,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘璋": {
+      "x": 2083.6666666666665,
+      "y": 8802,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘循": {
+      "x": 2430,
+      "y": 8802,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘瑁": {
+      "x": 2776.333333333333,
+      "y": 8802,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘范": {
+      "x": 1737.3333333333333,
+      "y": 8922,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "张鲁": {
+      "x": 2083.6666666666665,
+      "y": 8922,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "张卫": {
+      "x": 2430,
+      "y": 8922,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "杨松": {
+      "x": 2776.333333333333,
+      "y": 8922,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "阎圃": {
+      "x": 1737.3333333333333,
+      "y": 9042,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "杨任": {
+      "x": 2083.6666666666665,
+      "y": 9042,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "杨昂": {
+      "x": 2430,
+      "y": 9042,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "杨柏": {
+      "x": 2776.333333333333,
+      "y": 9042,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "庞羲": {
+      "x": 1737.3333333333333,
+      "y": 9162,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "金旋": {
+      "x": 2083.6666666666665,
+      "y": 9162,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘度": {
+      "x": 2430,
+      "y": 9162,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "邢道荣": {
+      "x": 2776.333333333333,
+      "y": 9162,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "韩玄": {
+      "x": 1737.3333333333333,
+      "y": 9282,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "士燮": {
+      "x": 2083.6666666666665,
+      "y": 9282,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "士徽": {
+      "x": 2430,
+      "y": 9282,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "姜叙": {
+      "x": 2776.333333333333,
+      "y": 9282,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘璝": {
+      "x": 1737.3333333333333,
+      "y": 9402,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "刘焉": {
+      "x": 2083.6666666666665,
+      "y": 9402,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "frontier"
+    },
+    "司马炎": {
+      "x": 3254.6666666666665,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "司马攸": {
+      "x": 3601,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "羊祜": {
+      "x": 3947.333333333333,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "杜预": {
+      "x": 4293.666666666666,
+      "y": 6180,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "王濬": {
+      "x": 3254.6666666666665,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "王浑": {
+      "x": 3601,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "王戎": {
+      "x": 3947.333333333333,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "张华": {
+      "x": 4293.666666666666,
+      "y": 6300,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "贾充": {
+      "x": 3254.6666666666665,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "何曾": {
+      "x": 3601,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "石苞": {
+      "x": 3947.333333333333,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "王祥": {
+      "x": 4293.666666666666,
+      "y": 6420,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "陈骞": {
+      "x": 3254.6666666666665,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "胡奋": {
+      "x": 3601,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "胡烈": {
+      "x": 3947.333333333333,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "胡渊": {
+      "x": 4293.666666666666,
+      "y": 6540,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "邓忠": {
+      "x": 3254.6666666666665,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "诸葛靓": {
+      "x": 3601,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "卫瓘": {
+      "x": 3947.333333333333,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "卫恒": {
+      "x": 4293.666666666666,
+      "y": 6660,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "向秀": {
+      "x": 3254.6666666666665,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "嵇康": {
+      "x": 3601,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "阮籍": {
+      "x": 3947.333333333333,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "贾南风": {
+      "x": 4293.666666666666,
+      "y": 6780,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "羊徽瑜": {
+      "x": 3254.6666666666665,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "荀顗": {
+      "x": 3601,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "荀勖": {
+      "x": 3947.333333333333,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "王元姬": {
+      "x": 4293.666666666666,
+      "y": 6900,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "陈寿": {
+      "x": 3254.6666666666665,
+      "y": 7020,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "jin"
+    },
+    "孟获": {
+      "x": 3254.6666666666665,
+      "y": 7482,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "祝融夫人": {
+      "x": 3601,
+      "y": 7482,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "孟优": {
+      "x": 3947.333333333333,
+      "y": 7482,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "孟节": {
+      "x": 4293.666666666666,
+      "y": 7482,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "带来洞主": {
+      "x": 3254.6666666666665,
+      "y": 7602,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "木鹿大王": {
+      "x": 3601,
+      "y": 7602,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "朵思大王": {
+      "x": 3947.333333333333,
+      "y": 7602,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "金环三结": {
+      "x": 4293.666666666666,
+      "y": 7602,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "董荼那": {
+      "x": 3254.6666666666665,
+      "y": 7722,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "阿会喃": {
+      "x": 3601,
+      "y": 7722,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "兀突骨": {
+      "x": 3947.333333333333,
+      "y": 7722,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "蹋顿": {
+      "x": 4293.666666666666,
+      "y": 7722,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "轲比能": {
+      "x": 3254.6666666666665,
+      "y": 7842,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "越吉": {
+      "x": 3601,
+      "y": 7842,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "彻里吉": {
+      "x": 3947.333333333333,
+      "y": 7842,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "雅丹": {
+      "x": 4293.666666666666,
+      "y": 7842,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "迷当": {
+      "x": 3254.6666666666665,
+      "y": 7962,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "俄何烧戈": {
+      "x": 3601,
+      "y": 7962,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "沙摩柯": {
+      "x": 3947.333333333333,
+      "y": 7962,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "雍闿": {
+      "x": 4293.666666666666,
+      "y": 7962,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "高定": {
+      "x": 3254.6666666666665,
+      "y": 8082,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "朱褒": {
+      "x": 3601,
+      "y": 8082,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "鄂焕": {
+      "x": 3947.333333333333,
+      "y": 8082,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "土安": {
+      "x": 4293.666666666666,
+      "y": 8082,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    },
+    "奚泥": {
+      "x": 3254.6666666666665,
+      "y": 8202,
+      "w": 306.3333333333333,
+      "h": 93,
+      "group": "south"
+    }
+  },
+  "width": 4800,
+  "height": 11472
+}
