@@ -1,7 +1,7 @@
 /* Shared deterministic combat simulation. No renderer or network required. */
 (function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.Serpent=factory();})(typeof window==='undefined'?globalThis:window,function(){
 'use strict';
-const VIEW_W=3200,VIEW_H=2000,W=3200,H=2000,TAU=Math.PI*2;
+const VIEW_W=1600,VIEW_H=1000,W=3200,H=2000,TAU=Math.PI*2;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const upgrades=[
@@ -85,7 +85,7 @@ class Game{
   for(const f of this.effects)f.life-=dt;this.effects=this.effects.filter(f=>f.life>0);
   if(this.time>=600&&this.state==='playing'){this.state='won';this.emit('end',{win:true});}else this.levelUp();
  }
- snapshot(){return {state:this.state,time:+this.time.toFixed(2),hp:+this.p.hp.toFixed(2),energy:+this.p.energy.toFixed(2),level:this.p.level,x:this.p.x,y:this.p.y,map:{width:W,height:H},camera:this.bounds(),viewAreaMultiplier:4,encounter:this.encounter(),visibleEnemies:this.visibleEnemies(),enemies:this.enemies.length,crystals:this.crystals.length,pools:this.pools.length,stats:{...this.stats},skills:this.skills.map(s=>({id:s.id,cd:s.cd,auto:s.auto})),build:{...this.build}};}
+ snapshot(){return {state:this.state,time:+this.time.toFixed(2),hp:+this.p.hp.toFixed(2),energy:+this.p.energy.toFixed(2),level:this.p.level,x:this.p.x,y:this.p.y,map:{width:W,height:H},camera:this.bounds(),encounter:this.encounter(),visibleEnemies:this.visibleEnemies(),enemies:this.enemies.length,crystals:this.crystals.length,pools:this.pools.length,stats:{...this.stats},skills:this.skills.map(s=>({id:s.id,cd:s.cd,auto:s.auto})),build:{...this.build}};}
 }
 return {Game,upgrades,W,H,VIEW_W,VIEW_H,clamp,dist};
 });
