@@ -1,0 +1,7 @@
+{
+  "epochs": 8,
+  "learningRate": 0.0002,
+  "loraRank": 8,
+  "batchSize": 1,
+  "gradAccum": 8
+}

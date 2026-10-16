@@ -1,0 +1,75 @@
+{
+  "status": "PASS",
+  "environment": "local-browser",
+  "browser": "155.0.8059.40",
+  "public_scenarios": [
+    {
+      "id": "P01-1",
+      "steps": 11,
+      "status": "PASS"
+    },
+    {
+      "id": "P01-2",
+      "steps": 20,
+      "status": "PASS"
+    },
+    {
+      "id": "P02-1",
+      "steps": 16,
+      "status": "PASS"
+    },
+    {
+      "id": "P02-2",
+      "steps": 9,
+      "status": "PASS"
+    },
+    {
+      "id": "P03-1",
+      "steps": 18,
+      "status": "PASS"
+    },
+    {
+      "id": "P03-2",
+      "steps": 11,
+      "status": "PASS"
+    },
+    {
+      "id": "P04-1",
+      "steps": 16,
+      "status": "PASS"
+    },
+    {
+      "id": "P04-2",
+      "steps": 18,
+      "status": "PASS"
+    },
+    {
+      "id": "P05-1",
+      "steps": 17,
+      "status": "PASS"
+    },
+    {
+      "id": "P05-2",
+      "steps": 21,
+      "status": "PASS"
+    }
+  ],
+  "public_operations": 157,
+  "swap_property_cases": 3586,
+  "extra_checks": [
+    "eight rows",
+    "HTML-like title displayed as text",
+    "same-name identity",
+    "reload identity",
+    "new ID after deletion/reload",
+    "390px responsive",
+    "1440px responsive",
+    "rule demo",
+    "bracket demo",
+    "local download links"
+  ],
+  "linked_files": 5,
+  "page_errors": [],
+  "external_requests": [],
+  "exam_project_tested": false
+}

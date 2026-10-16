@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "assertions": 9406,
+  "q1_rule_cases": 85,
+  "q1_model_tested": false,
+  "q2_public_function_cases": 2,
+  "q2_cleaner_fuzz_cases": 1000,
+  "bracket_exhaustive_sequences": 8188,
+  "training_rows": 100,
+  "training_labels": {
+    "YES": 50,
+    "NO": 50
+  },
+  "training_categories": {
+    "YES": 50,
+    "unclosed": 10,
+    "balanced_wrong_order": 20,
+    "odd": 10,
+    "extra_close_or_mixed": 10
+  },
+  "training_lengths": {
+    "2": 4,
+    "3": 2,
+    "4": 10,
+    "5": 2,
+    "6": 13,
+    "7": 2,
+    "8": 20,
+    "9": 2,
+    "10": 22,
+    "11": 2,
+    "12": 21
+  },
+  "submission_bytes": 1155,
+  "train_bytes": 4178,
+  "lora_trained": false,
+  "platform_tokenizer_checked": false
+}

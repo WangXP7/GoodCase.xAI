@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>作业安排 · LMCC 教学演示</title><link rel="stylesheet" href="../style.css"></head>
+<body><main class="demo-shell">
+<a href="../index.html#q3">← 返回三题学习站</a>
+<p class="eyebrow">第三题 · 可操作参考实现</p>
+<h1>先看得清，再排得好。</h1>
+<p>给作业选科目、组合筛选、移动可见项，然后刷新查看保存结果。</p>
+<p class="notice">此页面为独立教学实现，非考场原项目。考场只能通过 Agent 对话改造所给项目。本演示仅在当前浏览器保存数据。</p>
+<section class="panel">
+<label for="new-task">新作业（按 Enter 添加）</label>
+<input id="new-task" class="new-todo" placeholder="例如：数学练习" maxlength="80" autocomplete="off">
+<div class="toolbar">
+<label for="subject-filter">科目</label>
+<select id="subject-filter"><option value="all">全部科目</option><option value="unassigned">未分类</option><option value="chinese">语文</option><option value="math">数学</option><option value="english">英语</option></select>
+<nav class="filters" aria-label="完成状态"><a href="#/" class="selected">全部</a><a href="#/active">未完成</a><a href="#/completed">已完成</a></nav>
+</div>
+<ul class="todo-list"></ul><p id="empty">当前筛选下没有作业。</p>
+<div class="toolbar"><span class="todo-count">全清单还有 <strong>0</strong> 项未完成</span><button class="clear-completed">清理已完成</button></div>
+</section>
+<details class="panel"><summary>教师观察：全清单顺序与身份</summary><p>筛选不会改动全清单。移动只交换两条可见项所占的位置。</p><pre id="all-state"></pre></details>
+</main><script src="model.js"></script><script src="app.js"></script></body></html>

@@ -1,0 +1,3140 @@
+[
+  {
+    "id": "P01-1",
+    "source_page": 13,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"  数学练习  \"（开头 2 个、末尾 2 个半角空格），按 \"Enter\"",
+        "action": "add",
+        "value": "  数学练习  ",
+        "rows": [
+          {
+            "title": "数学练习",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "可见第 1 行（序号 0）的科目设为数学（math）",
+        "action": "subject",
+        "index": 0,
+        "value": "math",
+        "rows": [
+          {
+            "title": "数学练习",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"背单词\"，按 \"Enter\"",
+        "action": "add",
+        "value": "背单词",
+        "rows": [
+          {
+            "title": "数学练习",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "背单词",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "输入 \"数学练习\"，按 \"Enter\"",
+        "action": "add",
+        "value": "数学练习",
+        "rows": [
+          {
+            "title": "数学练习",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "背单词",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "数学练习",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "operation": "可见第 3 行（序号 2）的科目设为英语（english）",
+        "action": "subject",
+        "index": 2,
+        "value": "english",
+        "rows": [
+          {
+            "title": "数学练习",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "背单词",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "数学练习",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "输入 \"   \"（3 个半角空格），按 \"Enter\"",
+        "action": "add",
+        "value": "   ",
+        "unchanged": true
+      },
+      {
+        "step": 7,
+        "operation": "科目筛选：未分类（unassigned）",
+        "action": "subjectFilter",
+        "value": "unassigned",
+        "rows": [
+          {
+            "title": "背单词",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "科目筛选：英语（english）",
+        "action": "subjectFilter",
+        "value": "english",
+        "rows": [
+          {
+            "title": "数学练习",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "删除可见第 1 行（序号 0）",
+        "action": "remove",
+        "index": 0,
+        "rows": []
+      },
+      {
+        "step": 10,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "数学练习",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "背单词",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 11,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 2
+      }
+    ]
+  },
+  {
+    "id": "P01-2",
+    "source_page": 14,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"预习语文\"，按 \"Enter\"",
+        "action": "add",
+        "value": "预习语文",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "输入 \"数学订正\"，按 \"Enter\"",
+        "action": "add",
+        "value": "数学订正",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "数学订正",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"英语阅读\"，按 \"Enter\"",
+        "action": "add",
+        "value": "英语阅读",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "数学订正",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "可见第 1 行（序号 0）的科目设为数学（math）",
+        "action": "subject",
+        "index": 0,
+        "value": "math",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "数学订正",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "operation": "可见第 2 行（序号 1）的科目设为英语（english）",
+        "action": "subject",
+        "index": 1,
+        "value": "english",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "数学订正",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "可见第 3 行（序号 2）的科目设为数学（math）",
+        "action": "subject",
+        "index": 2,
+        "value": "math",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "数学订正",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "operation": "点击可见第 2 行（序号 1）的完成框",
+        "index": 1,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "数学订正",
+            "completed": true,
+            "subject": "english"
+          },
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "科目筛选：数学（math）",
+        "action": "subjectFilter",
+        "value": "math",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 2
+      },
+      {
+        "step": 10,
+        "operation": "完成筛选：已完成（completed）",
+        "action": "status",
+        "value": "completed",
+        "rows": []
+      },
+      {
+        "step": 11,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 2
+      },
+      {
+        "step": 12,
+        "operation": "完成筛选：未完成（active）",
+        "action": "status",
+        "value": "active",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 13,
+        "operation": "点击可见第 1 行（序号 0）的完成框",
+        "index": 0,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 14,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 1
+      },
+      {
+        "step": 15,
+        "operation": "完成筛选：已完成（completed）",
+        "action": "status",
+        "value": "completed",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": true,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 16,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 1
+      },
+      {
+        "step": 17,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "数学订正",
+            "completed": true,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 18,
+        "operation": "完成筛选：全部（all）",
+        "action": "status",
+        "value": "all",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "数学订正",
+            "completed": true,
+            "subject": "english"
+          },
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 19,
+        "operation": "点击可见第 2 行（序号 1）的完成框",
+        "index": 1,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "预习语文",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "数学订正",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "英语阅读",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 20,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 2
+      }
+    ]
+  },
+  {
+    "id": "P02-1",
+    "source_page": 15,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"语文朗读\"，按 \"Enter\"",
+        "action": "add",
+        "value": "语文朗读",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "输入 \"数学草稿\"，按 \"Enter\"",
+        "action": "add",
+        "value": "数学草稿",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "数学草稿",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"英语默写\"，按 \"Enter\"",
+        "action": "add",
+        "value": "英语默写",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "数学草稿",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语默写",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "输入 \"整理书包\"，按 \"Enter\"",
+        "action": "add",
+        "value": "整理书包",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "数学草稿",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语默写",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "整理书包",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "operation": "可见第 1 行（序号 0）的科目设为数学（math）",
+        "action": "subject",
+        "index": 0,
+        "value": "math",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "数学草稿",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语默写",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "整理书包",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "可见第 3 行（序号 2）的科目设为英语（english）",
+        "action": "subject",
+        "index": 2,
+        "value": "english",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "数学草稿",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语默写",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "整理书包",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "operation": "点击可见第 4 行（序号 3）的上移按钮",
+        "index": 3,
+        "action": "up",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "数学草稿",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "整理书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语默写",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "点击可见第 2 行（序号 1）的完成框",
+        "index": 1,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "数学草稿",
+            "completed": true,
+            "subject": "unassigned"
+          },
+          {
+            "title": "整理书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语默写",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "科目筛选：数学（math）",
+        "action": "subjectFilter",
+        "value": "math",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 10,
+        "operation": "完成筛选：未完成（active）",
+        "action": "status",
+        "value": "active",
+        "rows": [
+          {
+            "title": "语文朗读",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 11,
+        "operation": "删除可见第 1 行（序号 0）",
+        "action": "remove",
+        "index": 0,
+        "rows": []
+      },
+      {
+        "step": 12,
+        "operation": "点击“清理已完成”",
+        "action": "clear",
+        "rows": []
+      },
+      {
+        "step": 13,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "整理书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语默写",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 14,
+        "operation": "完成筛选：全部（all）",
+        "action": "status",
+        "value": "all",
+        "rows": [
+          {
+            "title": "整理书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语默写",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 15,
+        "operation": "刷新页面",
+        "action": "reload",
+        "rows": [
+          {
+            "title": "整理书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语默写",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 16,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 2
+      }
+    ]
+  },
+  {
+    "id": "P02-2",
+    "source_page": 16,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"朗读\"，按 \"Enter\"",
+        "action": "add",
+        "value": "朗读",
+        "rows": [
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "输入 \"朗读\"，按 \"Enter\"",
+        "action": "add",
+        "value": "朗读",
+        "rows": [
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"写字\"，按 \"Enter\"",
+        "action": "add",
+        "value": "写字",
+        "rows": [
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "写字",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "可见第 2 行（序号 1）的科目设为数学（math）",
+        "action": "subject",
+        "index": 1,
+        "value": "math",
+        "rows": [
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "写字",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "operation": "点击可见第 1 行（序号 0）的完成框",
+        "index": 0,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "朗读",
+            "completed": true,
+            "subject": "unassigned"
+          },
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "写字",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "可见第 1 行（序号 0）的科目设为英语（english）",
+        "action": "subject",
+        "index": 0,
+        "value": "english",
+        "rows": [
+          {
+            "title": "朗读",
+            "completed": true,
+            "subject": "english"
+          },
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "写字",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "operation": "可见第 2 行（序号 1）的科目设为未分类（unassigned）",
+        "action": "subject",
+        "index": 1,
+        "value": "unassigned",
+        "rows": [
+          {
+            "title": "朗读",
+            "completed": true,
+            "subject": "english"
+          },
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "写字",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "输入 \"订正错题\"，按 \"Enter\"",
+        "action": "add",
+        "value": "订正错题",
+        "rows": [
+          {
+            "title": "朗读",
+            "completed": true,
+            "subject": "english"
+          },
+          {
+            "title": "朗读",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "写字",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "订正错题",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 3
+      }
+    ]
+  },
+  {
+    "id": "P03-1",
+    "source_page": 17,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"算术\"，按 \"Enter\"",
+        "action": "add",
+        "value": "算术",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "输入 \"单词\"，按 \"Enter\"",
+        "action": "add",
+        "value": "单词",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "单词",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"几何\"，按 \"Enter\"",
+        "action": "add",
+        "value": "几何",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "单词",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "几何",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "输入 \"画画\"，按 \"Enter\"",
+        "action": "add",
+        "value": "画画",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "单词",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "几何",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "画画",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "operation": "可见第 1 行（序号 0）的科目设为数学（math）",
+        "action": "subject",
+        "index": 0,
+        "value": "math",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "单词",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "几何",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "画画",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "可见第 2 行（序号 1）的科目设为英语（english）",
+        "action": "subject",
+        "index": 1,
+        "value": "english",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "单词",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "几何",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "画画",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "operation": "可见第 3 行（序号 2）的科目设为数学（math）",
+        "action": "subject",
+        "index": 2,
+        "value": "math",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "单词",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "几何",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "画画",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "点击可见第 3 行（序号 2）的完成框",
+        "index": 2,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "单词",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "几何",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "画画",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "科目筛选：数学（math）",
+        "action": "subjectFilter",
+        "value": "math",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "几何",
+            "completed": true,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 10,
+        "operation": "完成筛选：未完成（active）",
+        "action": "status",
+        "value": "active",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 11,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 3
+      },
+      {
+        "step": 12,
+        "operation": "可见第 1 行（序号 0）的科目设为英语（english）",
+        "action": "subject",
+        "index": 0,
+        "value": "english",
+        "rows": []
+      },
+      {
+        "step": 13,
+        "operation": "检查所有移动按钮的边界状态",
+        "action": "bounds"
+      },
+      {
+        "step": 14,
+        "operation": "完成筛选：已完成（completed）",
+        "action": "status",
+        "value": "completed",
+        "rows": [
+          {
+            "title": "几何",
+            "completed": true,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 15,
+        "operation": "科目筛选：未分类（unassigned）",
+        "action": "subjectFilter",
+        "value": "unassigned",
+        "rows": []
+      },
+      {
+        "step": 16,
+        "operation": "科目筛选：英语（english）",
+        "action": "subjectFilter",
+        "value": "english",
+        "rows": []
+      },
+      {
+        "step": 17,
+        "operation": "完成筛选：全部（all）",
+        "action": "status",
+        "value": "all",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "单词",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 18,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "算术",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "单词",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "几何",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "画画",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "P03-2",
+    "source_page": 18,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"第一项\"，按 \"Enter\"",
+        "action": "add",
+        "value": "第一项",
+        "rows": [
+          {
+            "title": "第一项",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "输入 \"第二项\"，按 \"Enter\"",
+        "action": "add",
+        "value": "第二项",
+        "rows": [
+          {
+            "title": "第一项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第二项",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"第三项\"，按 \"Enter\"",
+        "action": "add",
+        "value": "第三项",
+        "rows": [
+          {
+            "title": "第一项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第二项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第三项",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "检查所有移动按钮的边界状态",
+        "action": "bounds"
+      },
+      {
+        "step": 5,
+        "operation": "点击可见第 2 行（序号 1）的上移按钮",
+        "index": 1,
+        "action": "up",
+        "rows": [
+          {
+            "title": "第二项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第一项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第三项",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "点击可见第 1 行（序号 0）的下移按钮",
+        "index": 0,
+        "action": "down",
+        "rows": [
+          {
+            "title": "第一项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第二项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第三项",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "operation": "点击可见第 3 行（序号 2）的上移按钮",
+        "index": 2,
+        "action": "up",
+        "rows": [
+          {
+            "title": "第一项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第三项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第二项",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "点击可见第 2 行（序号 1）的下移按钮",
+        "index": 1,
+        "action": "down",
+        "rows": [
+          {
+            "title": "第一项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第二项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第三项",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "删除可见第 2 行（序号 1）",
+        "action": "remove",
+        "index": 1,
+        "rows": [
+          {
+            "title": "第一项",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "第三项",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 10,
+        "operation": "删除可见第 1 行（序号 0）",
+        "action": "remove",
+        "index": 0,
+        "rows": [
+          {
+            "title": "第三项",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 11,
+        "operation": "检查所有移动按钮的边界状态",
+        "action": "bounds"
+      }
+    ]
+  },
+  {
+    "id": "P04-1",
+    "source_page": 19,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"计算A\"，按 \"Enter\"",
+        "action": "add",
+        "value": "计算A",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "输入 \"英语B\"，按 \"Enter\"",
+        "action": "add",
+        "value": "英语B",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语B",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"计算C\"，按 \"Enter\"",
+        "action": "add",
+        "value": "计算C",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "输入 \"未分D\"，按 \"Enter\"",
+        "action": "add",
+        "value": "未分D",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "未分D",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "operation": "输入 \"计算E\"，按 \"Enter\"",
+        "action": "add",
+        "value": "计算E",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "英语B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "未分D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "可见第 1 行（序号 0）的科目设为数学（math）",
+        "action": "subject",
+        "index": 0,
+        "value": "math",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "英语B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "未分D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "operation": "可见第 2 行（序号 1）的科目设为英语（english）",
+        "action": "subject",
+        "index": 1,
+        "value": "english",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "英语B",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "未分D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "可见第 3 行（序号 2）的科目设为数学（math）",
+        "action": "subject",
+        "index": 2,
+        "value": "math",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "英语B",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "未分D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "可见第 5 行（序号 4）的科目设为数学（math）",
+        "action": "subject",
+        "index": 4,
+        "value": "math",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "英语B",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "未分D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 10,
+        "operation": "科目筛选：数学（math）",
+        "action": "subjectFilter",
+        "value": "math",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 11,
+        "operation": "点击可见第 3 行（序号 2）的上移按钮",
+        "index": 2,
+        "action": "up",
+        "rows": [
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 12,
+        "operation": "点击可见第 2 行（序号 1）的上移按钮",
+        "index": 1,
+        "action": "up",
+        "rows": [
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 13,
+        "operation": "点击可见第 2 行（序号 1）的下移按钮",
+        "index": 1,
+        "action": "down",
+        "rows": [
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 14,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "计算E",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "英语B",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "计算C",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "未分D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计算A",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 15,
+        "operation": "科目筛选：未分类（unassigned）",
+        "action": "subjectFilter",
+        "value": "unassigned",
+        "rows": [
+          {
+            "title": "未分D",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 16,
+        "operation": "检查所有移动按钮的边界状态",
+        "action": "bounds"
+      }
+    ]
+  },
+  {
+    "id": "P04-2",
+    "source_page": 20,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"练习一\"，按 \"Enter\"",
+        "action": "add",
+        "value": "练习一",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "输入 \"收拾书桌\"，按 \"Enter\"",
+        "action": "add",
+        "value": "收拾书桌",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "收拾书桌",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"练习二\"，按 \"Enter\"",
+        "action": "add",
+        "value": "练习二",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "收拾书桌",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习二",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "输入 \"装书包\"，按 \"Enter\"",
+        "action": "add",
+        "value": "装书包",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "收拾书桌",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习二",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "装书包",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "operation": "输入 \"练习三\"，按 \"Enter\"",
+        "action": "add",
+        "value": "练习三",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "收拾书桌",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习二",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "装书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习三",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "可见第 1 行（序号 0）的科目设为数学（math）",
+        "action": "subject",
+        "index": 0,
+        "value": "math",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "收拾书桌",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习二",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "装书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习三",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "operation": "可见第 3 行（序号 2）的科目设为数学（math）",
+        "action": "subject",
+        "index": 2,
+        "value": "math",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "收拾书桌",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习二",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "装书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习三",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "可见第 5 行（序号 4）的科目设为数学（math）",
+        "action": "subject",
+        "index": 4,
+        "value": "math",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "收拾书桌",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习二",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "装书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习三",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "点击可见第 3 行（序号 2）的完成框",
+        "index": 2,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "收拾书桌",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习二",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "装书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习三",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 10,
+        "operation": "科目筛选：数学（math）",
+        "action": "subjectFilter",
+        "value": "math",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "练习二",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "练习三",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 11,
+        "operation": "完成筛选：未完成（active）",
+        "action": "status",
+        "value": "active",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "练习三",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 12,
+        "operation": "点击可见第 2 行（序号 1）的上移按钮",
+        "index": 1,
+        "action": "up",
+        "rows": [
+          {
+            "title": "练习三",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 13,
+        "operation": "点击可见第 1 行（序号 0）的完成框",
+        "index": 0,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 14,
+        "operation": "检查所有移动按钮的边界状态",
+        "action": "bounds"
+      },
+      {
+        "step": 15,
+        "operation": "完成筛选：全部（all）",
+        "action": "status",
+        "value": "all",
+        "rows": [
+          {
+            "title": "练习三",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "练习二",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 16,
+        "operation": "点击可见第 3 行（序号 2）的上移按钮",
+        "index": 2,
+        "action": "up",
+        "rows": [
+          {
+            "title": "练习三",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "练习二",
+            "completed": true,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 17,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "练习三",
+            "completed": true,
+            "subject": "math"
+          },
+          {
+            "title": "收拾书桌",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习一",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "装书包",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "练习二",
+            "completed": true,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 18,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 3
+      }
+    ]
+  },
+  {
+    "id": "P05-1",
+    "source_page": 21,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"代数\"，按 \"Enter\"",
+        "action": "add",
+        "value": "代数",
+        "rows": [
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "输入 \"听写\"，按 \"Enter\"",
+        "action": "add",
+        "value": "听写",
+        "rows": [
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "听写",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"课文\"，按 \"Enter\"",
+        "action": "add",
+        "value": "课文",
+        "rows": [
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "听写",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "可见第 1 行（序号 0）的科目设为数学（math）",
+        "action": "subject",
+        "index": 0,
+        "value": "math",
+        "rows": [
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "operation": "可见第 3 行（序号 2）的科目设为英语（english）",
+        "action": "subject",
+        "index": 2,
+        "value": "english",
+        "rows": [
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "点击可见第 2 行（序号 1）的完成框",
+        "index": 1,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": true,
+            "subject": "unassigned"
+          },
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "operation": "点击可见第 3 行（序号 2）的上移按钮",
+        "index": 2,
+        "action": "up",
+        "rows": [
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "听写",
+            "completed": true,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "点击可见第 1 行（序号 0）的下移按钮",
+        "index": 0,
+        "action": "down",
+        "rows": [
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": true,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": true,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 10,
+        "operation": "完成筛选：全部（all）",
+        "action": "status",
+        "value": "all",
+        "rows": [
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": true,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 11,
+        "operation": "刷新页面",
+        "action": "reload",
+        "rows": [
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": true,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 12,
+        "operation": "输入 \"新作业\"，按 \"Enter\"",
+        "action": "add",
+        "value": "新作业",
+        "rows": [
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": true,
+            "subject": "unassigned"
+          },
+          {
+            "title": "新作业",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 13,
+        "operation": "点击可见第 4 行（序号 3）的完成框",
+        "index": 3,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": true,
+            "subject": "unassigned"
+          },
+          {
+            "title": "新作业",
+            "completed": true,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 14,
+        "operation": "科目筛选：数学（math）",
+        "action": "subjectFilter",
+        "value": "math",
+        "rows": [
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 15,
+        "operation": "输入 \"听写\"，按 \"Enter\"",
+        "action": "add",
+        "value": "听写",
+        "rows": [
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 16,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "课文",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "代数",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "听写",
+            "completed": true,
+            "subject": "unassigned"
+          },
+          {
+            "title": "新作业",
+            "completed": true,
+            "subject": "unassigned"
+          },
+          {
+            "title": "听写",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 17,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 3
+      }
+    ]
+  },
+  {
+    "id": "P05-2",
+    "source_page": 22,
+    "steps": [
+      {
+        "step": 1,
+        "operation": "输入 \"计划A\"，按 \"Enter\"",
+        "action": "add",
+        "value": "计划A",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "operation": "输入 \"计划B\"，按 \"Enter\"",
+        "action": "add",
+        "value": "计划B",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划B",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "operation": "输入 \"计划C\"，按 \"Enter\"",
+        "action": "add",
+        "value": "计划C",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "operation": "输入 \"计划D\"，按 \"Enter\"",
+        "action": "add",
+        "value": "计划D",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "operation": "输入 \"计划E\"，按 \"Enter\"",
+        "action": "add",
+        "value": "计划E",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "operation": "可见第 1 行（序号 0）的科目设为数学（math）",
+        "action": "subject",
+        "index": 0,
+        "value": "math",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "operation": "可见第 3 行（序号 2）的科目设为数学（math）",
+        "action": "subject",
+        "index": 2,
+        "value": "math",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "unassigned"
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "operation": "可见第 5 行（序号 4）的科目设为英语（english）",
+        "action": "subject",
+        "index": 4,
+        "value": "english",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "operation": "科目筛选：数学（math）",
+        "action": "subjectFilter",
+        "value": "math",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 10,
+        "operation": "点击可见第 2 行（序号 1）的上移按钮",
+        "index": 1,
+        "action": "up",
+        "rows": [
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 11,
+        "operation": "可见第 1 行（序号 0）的科目设为英语（english）",
+        "action": "subject",
+        "index": 0,
+        "value": "english",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 12,
+        "operation": "检查所有移动按钮的边界状态",
+        "action": "bounds"
+      },
+      {
+        "step": 13,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "计划B",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 14,
+        "operation": "删除可见第 2 行（序号 1）",
+        "action": "remove",
+        "index": 1,
+        "rows": [
+          {
+            "title": "计划C",
+            "completed": false,
+            "subject": "english"
+          },
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 15,
+        "operation": "点击可见第 1 行（序号 0）的完成框",
+        "index": 0,
+        "action": "toggle",
+        "rows": [
+          {
+            "title": "计划C",
+            "completed": true,
+            "subject": "english"
+          },
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 16,
+        "operation": "科目筛选：数学（math）",
+        "action": "subjectFilter",
+        "value": "math",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 17,
+        "operation": "点击“清理已完成”",
+        "action": "clear",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          }
+        ]
+      },
+      {
+        "step": 18,
+        "operation": "科目筛选：全部科目（all）",
+        "action": "subjectFilter",
+        "value": "all",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 19,
+        "operation": "完成筛选：全部（all）",
+        "action": "status",
+        "value": "all",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 20,
+        "operation": "刷新页面",
+        "action": "reload",
+        "rows": [
+          {
+            "title": "计划A",
+            "completed": false,
+            "subject": "math"
+          },
+          {
+            "title": "计划D",
+            "completed": false,
+            "subject": "unassigned"
+          },
+          {
+            "title": "计划E",
+            "completed": false,
+            "subject": "english"
+          }
+        ]
+      },
+      {
+        "step": 21,
+        "operation": "检查全清单未完成数",
+        "action": "count",
+        "count": 3
+      }
+    ]
+  }
+]
