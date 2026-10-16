@@ -464,7 +464,7 @@
       "dir": "serpent-survivor",
       "entry": "index.html",
       "title": "蛇裔 · 余烬圣所",
-      "desc": "俯视角纯割草 Roguelite · 4 倍面积封闭废墟、10 分钟生存、毒咒爆炸联动、升级三选一与精英黑潮；支持离线游玩",
+      "desc": "俯视角纯割草 Roguelite · 全高战场与悬浮技能栏、分阶段递增敌潮、10 分钟生存、毒咒爆炸联动、升级三选一与精英黑潮；支持离线游玩",
       "agent": "Codex + GPT-6.1 Sol"
     },
     {
@@ -498,6 +498,14 @@
       "title": "羊债必须清 · Woolly Debts",
       "desc": "3D 肥羊砸罐增量游戏 · 磁吸拾币、现金技能树、账单构筑与破产轮回，可直接在线游玩",
       "agent": "Codex"
+    },
+    {
+      "ns": "codex",
+      "dir": "lmcc-2026-round2",
+      "entry": "index.html",
+      "desc": "提示词分类、LoRA 数据构造与 TodoMVC 作业安排 · 含交互演示、可打印教案、Python 速学、提交文件与可复现验证",
+      "title": "LMCC 三题学习站 · 题解、教案与编程速学",
+      "agent": "Codex + GPT-6"
     }
   ]
 }

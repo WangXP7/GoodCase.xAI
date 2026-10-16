@@ -20,7 +20,7 @@
 ## 结构
 
 ```
-index.html            ← 画廊首页(自动生成, 60 个案例入口)
+index.html            ← 画廊首页(自动生成, 61 个案例入口)
 gallery.json          ← 画廊条目清单：标题 / 描述 / Agent + 模型
 tools/build_gallery.py← 生成器：gallery.json + 目录结构 → 重写 index.html
 trae/  workbuddy/  zcode/  codex/
@@ -79,3 +79,10 @@ WinUI 3 原生 Windows 程序，包含四种模式、波浪核心、动态声纹
 [在线查看](codex/three-kingdoms-gilded/index.html) · Codex + GPT-5 / GPT-6
 
 514位人物、562条关系，国风鎏金人物长卷；支持搜索、关系详情、阵营跳转、缩放及高清图下载。
+
+
+## 画廊界面与分类统计
+
+首页提供主题、Agent、大模型、Agent + 大模型和打开方式五个维度，支持交叉筛选、搜索与排序。主题和模型是多标签统计，分项之和不必等于总案例数；页面提供完整核对表。
+
+从画廊进入案例会显示左下角返回主页入口；Markdown 使用统一阅读页。维护方式见 [画廊展示层说明](tools/gallery-ui.md)。

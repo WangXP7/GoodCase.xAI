@@ -69,6 +69,10 @@ HEAD = r"""<!DOCTYPE html>
   .card:hover .open { opacity:1; }
   footer { padding:24px 6vw 40px; color:#5c6577; font-size:12px; border-top:1px solid #1c2230; }
 </style>
+
+<link rel="stylesheet" href="gallery.css?v=20261016">
+<script src="gallery-data.js?v=20261016" defer></script>
+<script src="gallery.js?v=20261016" defer></script>
 </head>
 <body>
 <header>
