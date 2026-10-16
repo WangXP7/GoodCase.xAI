@@ -1,1 +1,1 @@
-{"name":"serpent-survivor","version":"1.3.0","private":true,"scripts":{"start":"node server.cjs","check":"node --check engine.js && node --check game.js && node --check server.cjs","test":"node tests/combat.cjs"}}
+{"name":"serpent-survivor","version":"1.4.0","private":true,"scripts":{"start":"node server.cjs","check":"node --check engine.js && node --check game.js && node --check server.cjs","test":"node tests/combat.cjs"}}

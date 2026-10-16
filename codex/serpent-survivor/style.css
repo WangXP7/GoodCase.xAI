@@ -20,3 +20,36 @@
  .modal{max-height:calc(100dvh - 40px);overflow:auto}
 }
 @media(min-width:951px) and (max-width:1250px){main{grid-template-columns:minmax(0,1fr) 210px;gap:14px;padding-left:14px;padding-right:14px}}
+
+/* The battlefield extends behind the floating desktop HUD. */
+@media(min-width:951px){
+ .top{position:fixed;inset:0 0 auto;height:60px;z-index:3;background:linear-gradient(#09120ee0,#09120e88,transparent);border:0;pointer-events:none;padding:0 16px}
+ .top a,.top button{pointer-events:auto}
+ main{height:100vh;height:100dvh;flex:none;padding:4px 8px;grid-template-columns:minmax(0,1fr) 220px;gap:8px}
+ .battle-shell{position:relative;display:block;height:100%;min-height:0}
+ .arena{position:absolute;inset:0;width:100%;height:100%;box-shadow:none}
+ .arena-head{position:absolute;top:67px;left:16px;right:16px;z-index:2;pointer-events:none;text-shadow:0 2px 5px #000}
+ .hud{top:139px;left:16px;right:16px}
+ .arena-head>div:first-child,.clock,.wave-info{background:#07120d99;padding:6px 10px;border-radius:3px}
+ .skillbar{position:absolute;left:12px;right:12px;bottom:28px;height:82px;z-index:2;padding:10px 12px;background:linear-gradient(90deg,#07120edb,#07120e99,#07120edb);border:1px solid #52613d55;pointer-events:none}
+ .skillbar button{pointer-events:auto}
+ .map-label{bottom:133px}
+ .level-strip{bottom:116px;height:20px}
+ aside{margin-top:64px;height:calc(100% - 64px);padding:18px 15px}
+ footer{position:fixed;bottom:2px;left:8px;width:calc(100% - 244px);height:22px;padding:3px 10px;z-index:2;pointer-events:none;background:#09120e99}
+}
+.help-modal{max-width:1000px;padding:0;max-height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;text-align:left}
+.help-header{padding:26px 30px 18px;border-bottom:1px solid #4d613c;flex:none}
+.help-header h2{font-size:24px;margin:9px 0;letter-spacing:3px}
+.help-header p{margin:0;max-width:none;font-size:11px}
+.help-content{overflow:auto;min-height:0;padding:18px 30px;scrollbar-width:thin;scrollbar-color:#687e50 #132016}
+.help-content h3{font-size:14px;color:#d3dcb6;letter-spacing:2px;margin:10px 0 16px}
+.help-skill-grid,.help-upgrade-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
+.help-entry{border:1px solid #425636;background:#1a291b99;padding:15px 17px}
+.help-entry h4{font-size:13px;color:#d4dfb7;margin:0 0 8px;display:flex;align-items:center;gap:9px}
+.help-entry h4>span{font:22px Georgia;color:#bdd58f}
+.help-entry p{font-size:11px;line-height:1.9;margin:0;max-width:none;color:#b1c0a0}
+.help-entry small{display:block;color:#829875;font-size:10px;margin-top:8px}
+.help-footer{padding:12px 30px 18px;border-top:1px solid #4d613c;text-align:right;flex:none}
+.help-footer .primary{margin:0;padding:10px 24px}
+@media(max-width:600px){.help-header{padding:20px 16px 12px}.help-header h2{font-size:20px}.help-content{padding:12px 16px}.help-skill-grid,.help-upgrade-grid{grid-template-columns:1fr;gap:8px}.help-entry{padding:12px}.help-footer{padding:12px 16px}}
