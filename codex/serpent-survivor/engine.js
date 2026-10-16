@@ -1,7 +1,7 @@
 /* Shared deterministic combat simulation. No renderer or network required. */
 (function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.Serpent=factory();})(typeof window==='undefined'?globalThis:window,function(){
 'use strict';
-const VIEW_W=1600,VIEW_H=1000,W=3200,H=2000,TAU=Math.PI*2;
+const VIEW_W=3200,VIEW_H=2000,W=3200,H=2000,TAU=Math.PI*2;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const upgrades=[
@@ -33,10 +33,12 @@ class Game{
   this.p={x:W/2,y:H/2,angle:-Math.PI/2,hp:120,maxHp:120,energy:30,level:1,xp:0,nextXp:22,speed:185,invuln:0,power:1,tailDamage:24,reach:146,arc:Math.PI*1.2,strikes:1,haste:1,bottles:1,poolRadius:100,duration:5,poisonDuration:2.5,poisonDamage:21,maxStacks:1,slow:.36,curseRadius:270,curseDuration:5,vulnerability:.25,cursePoison:.7,blastDamage:34,blastRadius:82,pushPoison:0,knock:260,legionDamage:190,energyCost:100,killEnergy:1.2,energyRegen:1.8,magnet:120,xpBonus:1,armor:1};
   this.skills=[{id:'tail',name:'尾击',key:'自动',icon:'◔',base:1.05,cd:.15,auto:true},{id:'poison',name:'毒瓶',key:'1',icon:'⚗',base:5.6,cd:1,auto:true},{id:'curse',name:'诅咒',key:'2',icon:'✧',base:8,cd:2.5,auto:true},{id:'legion',name:'蛇人召集',key:'␣',icon:'⋙',base:18,cd:0,auto:false}];
  }
- start(){this.state='playing';this.emit('banner',{text:'第一幕 · 孢子苏醒'});for(let i=0;i<12;i++)this.spawn();}
+ start(){this.state='playing';this.emit('banner',{text:'第一幕 · 孢子苏醒'});for(let i=0;i<36;i++){const angle=i/36*TAU,radius=420+this.random()*340;this.spawn('melee',{x:clamp(this.p.x+Math.cos(angle)*radius*1.25,76,W-76),y:clamp(this.p.y+Math.sin(angle)*radius*.8,76,H-76)});}}
  emit(type,data={}){this.events.push({type,...data});}
  effect(type,x,y,data={}){this.effects.push({type,x,y,life:data.life||.6,total:data.life||.6,...data});}
  bounds(){const width=Math.min(W,this.viewport.width),height=Math.min(H,this.viewport.height);return {x:clamp(this.p.x-width/2,0,W-width),y:clamp(this.p.y-height/2,0,H-height),width,height};}
+ encounter(){const stage=this.time>=540?4:this.time>=360?3:this.time>=180?2:1;return {stage,cap:[180,360,600,850][stage-1],batch:[2,3,4,6][stage-1],interval:Math.max(.13,.55-this.time*.00065)*(stage===4?.65:1)};}
+ visibleEnemies(){const b=this.bounds();return this.enemies.filter(e=>e.hp>0&&e.x+e.r>=b.x&&e.x-e.r<=b.x+b.width&&e.y+e.r>=b.y&&e.y-e.r<=b.y+b.height).length;}
  spawn(type,at){const t=this.time,r=this.random();type=type||(r<.12+Math.min(.18,t/2000)&&t>25?'ranged':'melee');let x,y;if(at){x=at.x;y=at.y;}else{const side=Math.floor(this.random()*4),pos=this.random(),b=this.bounds(),left=Math.max(76,b.x-35),right=Math.min(W-76,b.x+b.width+35),top=Math.max(76,b.y-35),bottom=Math.min(H-76,b.y+b.height+35);x=side===0?left:side===1?right:left+pos*(right-left);y=side===2?top:side===3?bottom:top+pos*(bottom-top);}
   const elite=type==='elite',hp=(26+t*.18)*(elite?9:type==='ranged'?1.25:1);const e={id:this.nextId++,x,y,hp,maxHp:hp,type,r:elite?34:19,speed:(37+Math.min(65,t*.11))*(elite?.76:type==='ranged'?.8:1),damage:(7+t*.018)*(elite?2.2:1),vx:0,vy:0,poison:0,stacks:0,stackClock:0,curse:0,comboCd:0,pushed:0,shootCd:2+this.random()*3,attack:null,flash:0,walk:this.random()*TAU};this.enemies.push(e);return e;
  }
@@ -58,7 +60,7 @@ class Game{
  update(dt,input={}){if(this.state!=='playing')return;dt=Math.min(dt,.05);this.time=Math.min(600,this.time+dt);const p=this.p;p.invuln=Math.max(0,p.invuln-dt);p.energy=Math.min(100,p.energy+p.energyRegen*dt);
   let dx=input.x||0,dy=input.y||0,l=Math.hypot(dx,dy);if(l>0){dx/=Math.max(1,l);dy/=Math.max(1,l);p.x=clamp(p.x+dx*p.speed*dt,90,W-90);p.y=clamp(p.y+dy*p.speed*dt,90,H-90);if(!this.nearest()||dist(this.nearest(),p)>p.reach)p.angle=Math.atan2(dy,dx);}
   for(const s of this.skills){s.cd=Math.max(0,s.cd-dt);if(s.auto&&s.cd<=0)this.cast(s.id);}
-  this.spawnClock-=dt;const interval=Math.max(.095,.7-this.time*.00105)*(this.time>=540?.55:1);if(this.spawnClock<=0){this.spawnClock+=interval;const count=1+Math.floor(this.time/180)+(this.time>=540?2:0);for(let i=0;i<count&&this.enemies.length<530;i++)this.spawn();}
+  this.spawnClock-=dt;const encounter=this.encounter();if(this.spawnClock<=0){this.spawnClock+=encounter.interval;for(let i=0;i<encounter.batch&&this.enemies.length<encounter.cap;i++)this.spawn();}
   if(this.time>=this.nextElite){for(let i=0;i<3+Math.floor(this.time/120);i++)this.spawn('elite');this.nextElite+=120;this.emit('banner',{text:'精英敌潮 · 菌巢暴动'});this.emit('sound',{kind:'warning'});}
   const phase=this.time>=540?3:this.time>=360?2:this.time>=180?1:0;if(phase!==this.phase){this.phase=phase;this.emit('banner',{text:['','第二幕 · 低语侵蚀','第三幕 · 菌潮汹涌','终幕 · 黑潮围城'][phase]});}
   for(const b of this.bottles){b.t+=dt;b.x=b.sx+(b.tx-b.sx)*Math.min(1,b.t/b.duration);b.y=b.sy+(b.ty-b.sy)*Math.min(1,b.t/b.duration);if(b.t>=b.duration){b.dead=true;this.pools.push({x:b.tx,y:b.ty,r:p.poolRadius,life:p.duration,total:p.duration,seed:this.random()*TAU});this.effect('splash',b.tx,b.ty,{r:p.poolRadius,life:.5});}}
@@ -75,7 +77,7 @@ class Game{
    e.x=clamp(e.x+(ax*speed+e.vx+sx)*dt,73,W-73);e.y=clamp(e.y+(ay*speed+e.vy+sy)*dt,73,H-73);e.vx*=Math.exp(-7*dt);e.vy*=Math.exp(-7*dt);
    if(dist(e,p)<e.r+20)this.hit(e.damage*(e.curse>0?.6:1));
   }
-  for(const w of this.waves){w.t+=dt;w.x=w.start+w.t*1050;for(const e of this.enemies)if(e.hp>0&&!w.hit.has(e.id)&&Math.abs(e.x-w.x)<115&&e.y+e.r>=w.top&&e.y-e.r<=w.bottom){w.hit.add(e.id);this.damage(e,p.legionDamage*p.power,'legion');e.vx=620;}w.dead=w.x>w.end;}this.waves=this.waves.filter(w=>!w.dead);
+  for(const w of this.waves){w.t+=dt;w.x=w.start+w.t*Math.max(1050,(w.end-w.start)/1.9);for(const e of this.enemies)if(e.hp>0&&!w.hit.has(e.id)&&Math.abs(e.x-w.x)<115&&e.y+e.r>=w.top&&e.y-e.r<=w.bottom){w.hit.add(e.id);this.damage(e,p.legionDamage*p.power,'legion');e.vx=620;}w.dead=w.x>w.end;}this.waves=this.waves.filter(w=>!w.dead);
   this.enemies=this.enemies.filter(e=>e.hp>0);
   // Merge old distant crystals to keep late-run rendering and collection bounded.
   if(this.crystals.length>600){const bins=new Map();for(const c of this.crystals){const k=Math.round(c.x/70)+','+Math.round(c.y/70);if(bins.has(k))bins.get(k).value+=c.value;else bins.set(k,c);}this.crystals=[...bins.values()];}
@@ -83,7 +85,7 @@ class Game{
   for(const f of this.effects)f.life-=dt;this.effects=this.effects.filter(f=>f.life>0);
   if(this.time>=600&&this.state==='playing'){this.state='won';this.emit('end',{win:true});}else this.levelUp();
  }
- snapshot(){return {state:this.state,time:+this.time.toFixed(2),hp:+this.p.hp.toFixed(2),energy:+this.p.energy.toFixed(2),level:this.p.level,x:this.p.x,y:this.p.y,map:{width:W,height:H},camera:this.bounds(),enemies:this.enemies.length,crystals:this.crystals.length,pools:this.pools.length,stats:{...this.stats},skills:this.skills.map(s=>({id:s.id,cd:s.cd,auto:s.auto})),build:{...this.build}};}
+ snapshot(){return {state:this.state,time:+this.time.toFixed(2),hp:+this.p.hp.toFixed(2),energy:+this.p.energy.toFixed(2),level:this.p.level,x:this.p.x,y:this.p.y,map:{width:W,height:H},camera:this.bounds(),viewAreaMultiplier:4,encounter:this.encounter(),visibleEnemies:this.visibleEnemies(),enemies:this.enemies.length,crystals:this.crystals.length,pools:this.pools.length,stats:{...this.stats},skills:this.skills.map(s=>({id:s.id,cd:s.cd,auto:s.auto})),build:{...this.build}};}
 }
 return {Game,upgrades,W,H,VIEW_W,VIEW_H,clamp,dist};
 });
