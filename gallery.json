@@ -22,7 +22,7 @@
       "ns": "trae",
       "dir": ".",
       "entry": "index.html",
-      "title": "AURORA-9",
+      "title": "极光九号 · 轨道发射 LC-12",
       "desc": "AURORA-9 · Orbital Insertion — Pad LC-12",
       "agent": "Trae",
       "sort": "aurora-9"
@@ -31,7 +31,7 @@
       "ns": "trae",
       "dir": "glsl-poster",
       "entry": "index.html",
-      "title": "glsl-poster",
+      "title": "轨道核心 · 霓虹海报",
       "desc": "ORBITAL CORE · 霓虹轨道海报 — WebGL2 + 原生 GLSL",
       "agent": "Trae"
     },
@@ -39,25 +39,25 @@
       "ns": "workbuddy",
       "dir": ".",
       "entry": "pelican-bicycle-3d-standalone.html",
-      "title": "pelican-bicycle-3d-standalone",
+      "title": "鹈鹕骑行 · 三维独立版",
       "desc": "鹈鹕骑自行车 3D · 正常版",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
       "dir": "buckshot-roulette",
       "entry": "index.html",
-      "title": "buckshot-roulette +2 页",
+      "title": "恶魔轮盘 · 初版",
       "desc": "恶魔轮盘——直面天命！ · BUCKSHOT ROULETTE",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
       "dir": "buckshot-roulette-v2",
       "entry": "index.html",
-      "title": "buckshot-roulette-v2 +2 页",
+      "title": "恶魔轮盘 · 第二版",
       "desc": "恶魔轮盘——直面天命！ · BUCKSHOT ROULETTE",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
@@ -71,9 +71,9 @@
       "ns": "workbuddy",
       "dir": "eaves",
       "entry": "index.html",
-      "title": "eaves +21 页",
+      "title": "檐下 · UNDER THE EAVES",
       "desc": "檐下 · UNDER THE EAVES",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
@@ -103,7 +103,7 @@
       "ns": "workbuddy",
       "dir": "lunar-rover",
       "entry": "index.html",
-      "title": "lunar-rover",
+      "title": "月面运输 · 低重力货运",
       "desc": "月面运输 · 实时 3D 月球车货运任务 — 低重力驾驶、碰撞甩货与三站配送（单文件 Three.js r160 · 全程序化生成）",
       "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
@@ -111,7 +111,7 @@
       "ns": "workbuddy",
       "dir": "minecraft-clone",
       "entry": "index.html",
-      "title": "minecraft-clone",
+      "title": "方块世界 · 自由探索",
       "desc": "Minecraft 克隆 · 零依赖单文件 WebGL2，全程序化生成的方块世界",
       "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
@@ -119,17 +119,17 @@
       "ns": "workbuddy",
       "dir": "pelican-bicycle",
       "entry": "index.html",
-      "title": "pelican-bicycle",
+      "title": "鹈鹕骑行 · 动态展示",
       "desc": "鹈鹕骑自行车 · Pelican on a Bicycle",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
       "dir": "pelican-bicycle-3d",
       "entry": "index.html",
-      "title": "pelican-bicycle-3d +1 页",
+      "title": "鹈鹕骑行 · 三维版",
       "desc": "鹈鹕骑自行车 3D · 正常版",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
@@ -143,9 +143,9 @@
       "ns": "workbuddy",
       "dir": "rocket-launch-sim",
       "entry": "src/index.html",
-      "title": "rocket-launch-sim +36 页",
+      "title": "火箭发射 · 模拟原型",
       "desc": "火箭发射模拟器 · Rocket Launch Simulator (MVP 原型)",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
@@ -167,31 +167,31 @@
       "ns": "workbuddy",
       "dir": "tideline",
       "entry": "dist/index.html",
-      "title": "tideline +35 页",
+      "title": "潮线 · TIDELINE",
       "desc": "潮线 TIDELINE · 测试版 v0.1.0",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
       "dir": "tidewater-fish-site",
       "entry": "index.html",
-      "title": "tidewater-fish-site +5 页",
+      "title": "潮水 · Tidewater 渔业场景",
       "desc": "Tidewater",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
       "dir": "token-dashboard",
       "entry": "README.md",
-      "title": "token-dashboard +1 页",
+      "title": "Token 用量 · 分析仪表盘",
       "desc": "token-dashboard",
-      "agent": "WorkBuddy"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
       "ns": "workbuddy",
       "dir": "train-bridge-collapse",
       "entry": "index.html",
-      "title": "train-bridge-collapse",
+      "title": "断裂桥梁 · 列车坠水",
       "desc": "断裂桥梁 · 列车脱轨坠水 — 零依赖单文件 Canvas 物理仿真（XPBD 渐进坍塌 · 入水沉没）",
       "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
@@ -215,7 +215,7 @@
       "ns": "zcode",
       "dir": ".",
       "entry": "aurora-ocean.html",
-      "title": "aurora-ocean",
+      "title": "极光海洋 · 原生着色器",
       "desc": "极光海洋 · WebGL2 原生 GLSL",
       "agent": "ZCode"
     },
@@ -231,7 +231,7 @@
       "ns": "zcode",
       "dir": "cat-pet-console",
       "entry": "index.html",
-      "title": "cat-pet-console +1 页",
+      "title": "猫咪掌机 · NEKO PAL",
       "desc": "NEKO PAL · 猫咪掌机",
       "agent": "ZCode"
     },
@@ -239,7 +239,7 @@
       "ns": "zcode",
       "dir": "neon-hex-physics",
       "entry": "index.html",
-      "title": "neon-hex-physics +1 页",
+      "title": "霓虹六边形 · 物理沙盒",
       "desc": "NEON HEX · 物理沙盒",
       "agent": "ZCode"
     },
@@ -247,7 +247,7 @@
       "ns": "zcode",
       "dir": "neon-tetris",
       "entry": "index.html",
-      "title": "neon-tetris +1 页",
+      "title": "霓虹俄罗斯方块",
       "desc": "NEON TETRIS — SRS · 7-BAG · T-SPIN",
       "agent": "ZCode"
     },
@@ -255,7 +255,7 @@
       "ns": "zcode",
       "dir": "rocket-launch-sim",
       "entry": "index.html",
-      "title": "rocket-launch-sim +1 页",
+      "title": "极光九号 · 轨道发射 LC-17",
       "desc": "AURORA-9 · Orbital Insertion · Pad LC-17",
       "agent": "ZCode"
     },
@@ -263,7 +263,7 @@
       "ns": "zcode",
       "dir": "shark-arcade",
       "entry": "index.html",
-      "title": "shark-arcade +1 页",
+      "title": "大鲨鱼 · 复古街机",
       "desc": "BIG SHARK · 复古街机鲨鱼",
       "agent": "ZCode"
     },
@@ -295,7 +295,7 @@
       "ns": "zcode",
       "dir": "YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F",
       "entry": "index.html",
-      "title": "YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F +2 页",
+      "title": "极光海洋 · 共创版",
       "desc": "极光海洋 · WebGL2 原生 GLSL",
       "agent": "ZCode"
     },
@@ -303,7 +303,7 @@
       "ns": "zcode",
       "dir": "YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F-perf",
       "entry": "index.html",
-      "title": "YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F-perf +1 页",
+      "title": "极光海洋 · 性能优化版",
       "desc": "极光海洋 · 性能优化版（4 版本可切换）",
       "agent": "ZCode"
     },
@@ -343,7 +343,7 @@
       "ns": "codex",
       "dir": "air-court",
       "entry": "index.html",
-      "title": "AIR COURT",
+      "title": "空间篮球 · AIR COURT",
       "desc": "Vision Pro 空间篮球 · Three.js 3D 投篮挑战（单文件离线版）",
       "agent": "Codex"
     },

@@ -713,9 +713,12 @@ html.rm .toast{transition:none;}
  *    → reducedMotion 下关闭心跳层。
  *
  * ── 总线结构 ────────────────────────────────────────────────────────
- *   SFX ──┐
- *   MUSIC ┼→ limiter(DynamicsCompressor) → master(静音开关) → destination
- *   UI  ──┘
+ *   SFX   ──┐
+ *   MUSIC ──┼→ limiter(DynamicsCompressor) → master(静音开关) → destination
+ *   UI    ──┤
+ *   HEART ──┘  ⭐ 心跳走**独立总线**，不受音乐开关管辖（硬红线②）
+ *  ⚠️ 心跳层曾挂在 busMusic 上，导致「关掉音乐」把 QTE 心跳一并压掉（审计 F1）；
+ *     现将其与音乐层彻底解耦 —— 「层增益为 1」必须真的等于「听得见」。
  * 音乐层是**四层可加性分层**（L1 脉冲 / L2 军鼓 / L3 引擎 / L4 围剿），
  * 由 ALARM 档位 tier(0–3) 与「是否携带」共同驱动（概念文档 §2 支柱一）。
  *
@@ -751,14 +754,14 @@ html.rm .toast{transition:none;}
   var COOLDOWN = {
     splash: 0.05, thrash: 0.03, hit: 0.06, lockWarn: 0.25, ui: 0.03,
     decoy: 0.10, deny: 0.15, tierUp: 0.12, tierDown: 0.12, rescued: 0.10,
-    sting: 0.20, collect: 0.04
+    sting: 0.20, collect: 0.04, motorboat: 0.06, yelp: 0.10
   };
 
   /* ==================================================================
    * 1 · 上下文与总线
    * ================================================================== */
   var ctx = null, master = null, limiter = null;
-  var busSfx = null, busMusic = null, busUi = null;
+  var busSfx = null, busMusic = null, busUi = null, busHeart = null;
   var noiseBuf = null;
   var muted = false;
 
@@ -792,6 +795,14 @@ html.rm .toast{transition:none;}
     busMusic.gain.value = MUS.musicOff ? 0.0001 : BUS.MUSIC;   // 尊重已设定的音乐开关
     busMusic.connect(limiter);
     busUi = ctx.createGain(); busUi.gain.value = BUS.UI; busUi.connect(limiter);
+
+    /* ⭐ 心跳专用总线（**增益 = BUS.MUSIC**，直连 limiter）。
+     * 硬红线②：QTE 心跳是「时间正在流逝」的冗余信息通道，**不得随音乐开关一起消失**。
+     * 此前心跳层挂在 busMusic 上，关掉音乐时被同一条斜坡压到 −90dB = 不可闻（审计 F1）。
+     * ⚠️ 增益刻意取 BUS.MUSIC（**不是 1.0**）：本次只解耦「开关」这一件事，
+     *    绝不顺带改动混音电平 —— music-on 时心跳响度与修复前逐比特一致（零回归）。
+     * 现在 setMusicEnabled / duck() 都碰不到这条总线。 */
+    busHeart = ctx.createGain(); busHeart.gain.value = BUS.MUSIC; busHeart.connect(limiter);
 
     /* 2.0s 白噪声缓冲：所有水花 / 军鼓 / 沙尘 / 抽气声共用同一份数据，
      * 靠随机读取偏移 + playbackRate 制造变体（省内存，零额外资产）。   */
@@ -930,13 +941,18 @@ html.rm .toast{transition:none;}
    * ================================================================== */
   function duck(to, hold) {
     if (!ready() || !busMusic) return;
+    /* 音乐已被玩家关闭 → 无音乐可闪避，直接返回。
+     * ⚠️ 此前本函数无条件把 busMusic 拉回满值 BUS.MUSIC，
+     *    会在 musicOff 时把音乐**偷偷重新打开**（审计 F2）。 */
+    if (MUS.musicOff) return;
     var t = ctx.currentTime, g = busMusic.gain;
+    var base = BUS.MUSIC;                      // 恢复基准 = 当前应有的音乐电平
     try {
       g.cancelScheduledValues(t);
       g.setValueAtTime(Math.max(0.0001, g.value), t);
-      g.linearRampToValueAtTime(BUS.MUSIC * to, t + 0.06);
-      g.setValueAtTime(BUS.MUSIC * to, t + 0.06 + hold);
-      g.linearRampToValueAtTime(BUS.MUSIC, t + 0.06 + hold + 0.45);
+      g.linearRampToValueAtTime(base * to, t + 0.06);
+      g.setValueAtTime(base * to, t + 0.06 + hold);
+      g.linearRampToValueAtTime(base, t + 0.06 + hold + 0.45);
     } catch (e) { /* 参数自动化失败不影响游戏 */ }
   }
 
@@ -998,11 +1014,14 @@ html.rm .toast{transition:none;}
   };
 
   function buildMusic() {
-    function layer() {
-      var g = ctx.createGain(); g.gain.value = 0; g.connect(busMusic); return g;
+    function layer(bus) {
+      var g = ctx.createGain(); g.gain.value = 0; g.connect(bus || busMusic); return g;
     }
     MUS.gPulse = layer(); MUS.gSnare = layer(); MUS.gHat = layer();
-    MUS.gSiege = layer(); MUS.gHeart = layer(); MUS.gEngine = layer();
+    MUS.gSiege = layer();
+    /* ⭐ 心跳层走 busHeart，**永不**接 busMusic —— 音乐开关不得吞掉冗余通道（F1）。 */
+    MUS.gHeart = layer(busHeart);
+    MUS.gEngine = layer();
 
     /* 引擎层：两个失谐锯齿（48 / 48.7Hz）→ 低通 → 旋翼颤音 → 层增益
      * 6.5Hz 的 AM 是"直升机旋翼"的听觉签名（GDD-02：T3b 恒定带系绳）。
@@ -1293,10 +1312,23 @@ html.rm .toast{transition:none;}
       duck(0.38, 0.20);
     },
 
-    /** 受击（浮标 / 渔网 / 摩托艇 / 垃圾）：锯齿下扫 + 闷噪声 */
+    /** 受击（浮标 / 渔网 / 漂浮垃圾）：锯齿下扫 + 闷噪声。
+     *  ⚠️ 摩托艇撞击**不**走这里 —— 它掉战利品（最多 −300 分），
+     *     必须与「撞到一块垃圾」听感不同，见下方 motorboat（审计 F3）。 */
     hit: function () {
       tone('sawtooth', 140, 70, 0.20, 0.24, { lp: 1200 });
       noise(0.16, 0.18, { lp: 700 });
+    },
+
+    /** ⭐ 摩托艇撞击（T2B）：**掉 1 个战利品**（最多 −300 分）+ 击退。
+     *  与 hit 的音区 / 音色双拉开：金属方波下扫 + 带通「破碎」噪声扫描。
+     *  玩家在冲浪高认知负荷下视线被遮，听觉是判断「我刚丢了什么」的主通道——
+     *  支柱二「一局一押」的赌注兑现（GDD-03 §5.2 / 审计 F3）。 */
+    motorboat: function () {
+      tone('square', 620, 180, 0.16, 0.22, { lp: 3000 });
+      tone('sawtooth', 300, 90, 0.18, 0.16, { delay: 0.03, lp: 1600 });
+      noise(0.24, 0.20, { bp: 1200, q: 0.9, bpSweep: [1600, 400], hold: 0.05 });
+      duck(0.26, 0.18);
     },
 
     /** T2+ 敌人登场预警（提前 0.8s）：两声方波警报 + 低频底 */
@@ -1319,7 +1351,8 @@ html.rm .toast{transition:none;}
       noise(0.14, 0.12, { lp: 3000, hp: 800 });
     },
 
-    /** 游客被叼：短促惊叫（喜剧，非惨叫）。GDD-03 §5.2。需 prey.js 接线 */
+    /** 游客被叼：短促惊叫（喜剧，非惨叫）。GDD-03 §5.2。
+     *  已在 game.js tryBite() 咬合命中后接线（审计 F4 修复）。 */
     yelp: function () {
       tone('square', 500, 900, 0.05, 0.10, { lp: 3000 });
       tone('square', 900, 400, 0.08, 0.09, { delay: 0.05, lp: 3000 });
@@ -3767,6 +3800,10 @@ html.rm .toast{transition:none;}
     G.stats.grabs++;
     addAlarm(C.ALARM.GRAB * def.danger);
     TL.Prey.consume(p);
+    /* 游客被叼的短促惊叫（喜剧，非惨叫）—— GDD-03 §5.2。
+     * 与 bite 的低频「咔」分层：bite 是**鲨鱼**的核心动词，yelp 是**猎物**的反应。
+     * 此前 audio.js 定义了 yelp 却零调用点（死代码，审计 F4）。 */
+    TL.Audio.play('yelp');
 
     /* 反馈四件套中，震屏与色闪有 0.5s 内部冷却（GDD-03 §5.3 安全裁决） */
     triggerFreeze(C.BITE.FREEZE);
@@ -3838,7 +3875,9 @@ html.rm .toast{transition:none;}
     }
     addAlarm(C.ALARM.JETSKI);
     s.iframeT = C.ENEMY.T2B.IFRAME;
-    TL.Audio.play('hit');
+    /* 摩托艇撞击掉 1 个战利品（最多 −300 分）→ 独立音色，
+     * 与「撞到漂浮垃圾」的 hit 区分（GDD-03 §5.2 / 审计 F3）。 */
+    TL.Audio.play('motorboat');
     triggerShake(4);
     // 击退 0.3s（用 Slow 复用实现，方向由玩家接管）
     s.slowT = Math.max(s.slowT, C.ENEMY.T2B.KNOCK);
