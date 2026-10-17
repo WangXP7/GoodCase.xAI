@@ -1,0 +1,312 @@
+{
+  "schemaVersion": 1,
+  "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
+  "snapshot": "2ced1675fe8e48b98ac080826dc948aa23e1d5cf",
+  "entries": {
+    "workbuddy/buckshot-roulette-v2/index.html": {
+      "committedAt": "2026-10-17T16:16:08Z",
+      "commit": "2ced1675fe8e48b98ac080826dc948aa23e1d5cf",
+      "scope": "workbuddy/buckshot-roulette-v2"
+    },
+    "workbuddy/buckshot-roulette/index.html": {
+      "committedAt": "2026-10-17T16:16:08Z",
+      "commit": "2ced1675fe8e48b98ac080826dc948aa23e1d5cf",
+      "scope": "workbuddy/buckshot-roulette"
+    },
+    "workbuddy/pelican-bicycle-3d-standalone.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "workbuddy/pelican-bicycle-3d-standalone.html"
+    },
+    "trae/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "trae/index.html"
+    },
+    "workbuddy/diorama-winter/index.html": {
+      "committedAt": "2026-10-15T17:58:15Z",
+      "commit": "f48ef1d04e77f6c6dce139a25635043855a5e742",
+      "scope": "workbuddy/diorama-winter"
+    },
+    "workbuddy/eaves/index.html": {
+      "committedAt": "2026-10-17T16:16:08Z",
+      "commit": "2ced1675fe8e48b98ac080826dc948aa23e1d5cf",
+      "scope": "workbuddy/eaves"
+    },
+    "workbuddy/minecraft-clone/index.html": {
+      "committedAt": "2026-10-15T10:15:36Z",
+      "commit": "47bbeca01e3fd867f4b65b37ad8b70c95b193e09",
+      "scope": "workbuddy/minecraft-clone"
+    },
+    "workbuddy/jarvis-dashboard/index.html": {
+      "committedAt": "2026-10-15T09:22:31Z",
+      "commit": "bed668c60eb171bc07a27c643574fae11eb2361b",
+      "scope": "workbuddy/jarvis-dashboard"
+    },
+    "workbuddy/lunar-rover/index.html": {
+      "committedAt": "2026-10-14T11:13:12Z",
+      "commit": "9a6813d817b861088f2dc5c2d8f815c7f58451b4",
+      "scope": "workbuddy/lunar-rover"
+    },
+    "workbuddy/hy4-mcp-shooter/index.html": {
+      "committedAt": "2026-10-14T11:07:48Z",
+      "commit": "ad69e98fb1bf3523432bebd1f1d19c1233cbddc1",
+      "scope": "workbuddy/hy4-mcp-shooter"
+    },
+    "workbuddy/emberfall-rpg/index.html": {
+      "committedAt": "2026-10-15T09:22:31Z",
+      "commit": "bed668c60eb171bc07a27c643574fae11eb2361b",
+      "scope": "workbuddy/emberfall-rpg"
+    },
+    "workbuddy/pelican-bicycle/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "workbuddy/pelican-bicycle"
+    },
+    "workbuddy/solar-system/index.html": {
+      "committedAt": "2026-10-15T09:22:31Z",
+      "commit": "bed668c60eb171bc07a27c643574fae11eb2361b",
+      "scope": "workbuddy/solar-system"
+    },
+    "workbuddy/rocket-launch-sim/src/index.html": {
+      "committedAt": "2026-10-17T16:16:08Z",
+      "commit": "2ced1675fe8e48b98ac080826dc948aa23e1d5cf",
+      "scope": "workbuddy/rocket-launch-sim"
+    },
+    "workbuddy/snake-survivors/index.html": {
+      "committedAt": "2026-10-15T11:17:57Z",
+      "commit": "3f3ab7459b5bb8744de95bbfa038d4dc47d11c3d",
+      "scope": "workbuddy/snake-survivors"
+    },
+    "workbuddy/penguin-survival/index.html": {
+      "committedAt": "2026-10-15T09:22:31Z",
+      "commit": "bed668c60eb171bc07a27c643574fae11eb2361b",
+      "scope": "workbuddy/penguin-survival"
+    },
+    "workbuddy/pelican-bicycle-3d/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "workbuddy/pelican-bicycle-3d"
+    },
+    "workbuddy/token-dashboard/README.md": {
+      "committedAt": "2026-10-17T16:16:08Z",
+      "commit": "2ced1675fe8e48b98ac080826dc948aa23e1d5cf",
+      "scope": "workbuddy/token-dashboard"
+    },
+    "workbuddy/song-courtyard/index.html": {
+      "committedAt": "2026-10-15T17:29:20Z",
+      "commit": "327c0e16938f5f786be6ac02f39bfacecd487bc5",
+      "scope": "workbuddy/song-courtyard"
+    },
+    "workbuddy/tideline/dist/index.html": {
+      "committedAt": "2026-10-17T16:16:08Z",
+      "commit": "2ced1675fe8e48b98ac080826dc948aa23e1d5cf",
+      "scope": "workbuddy/tideline"
+    },
+    "workbuddy/vintage-slr-camera/index.html": {
+      "committedAt": "2026-10-15T15:56:34Z",
+      "commit": "cb50a6b5c787947c2344fe463e60c065fc7b3198",
+      "scope": "workbuddy/vintage-slr-camera"
+    },
+    "workbuddy/train-bridge-collapse/index.html": {
+      "committedAt": "2026-10-14T11:01:17Z",
+      "commit": "7d9a1bcee6099329e16816372530dc1f8ed0729e",
+      "scope": "workbuddy/train-bridge-collapse"
+    },
+    "workbuddy/tidewater-fish-site/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "workbuddy/tidewater-fish-site"
+    },
+    "zcode/neon-hex-physics/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/neon-hex-physics"
+    },
+    "zcode/rocket-launch-sim/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/rocket-launch-sim"
+    },
+    "zcode/aurora-ocean.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/aurora-ocean.html"
+    },
+    "zcode/neon-tetris/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/neon-tetris"
+    },
+    "zcode/cat-pet-console/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/cat-pet-console"
+    },
+    "zcode/WebGL2-原生GLSL技术详解.md": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/WebGL2-原生GLSL技术详解.md"
+    },
+    "zcode/T3诺奖化学科普GPT5.6Sol-65min-Sonnet5.5-12min-GLM5.3F-55min/00-资料来源与事实核查.md": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/T3诺奖化学科普GPT5.6Sol-65min-Sonnet5.5-12min-GLM5.3F-55min"
+    },
+    "zcode/YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F-perf/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F-perf"
+    },
+    "zcode/T2最新政策SI京都愿景调查54m-12m-7m17s/调查报告-AI改名SI事实核查.md": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/T2最新政策SI京都愿景调查54m-12m-7m17s"
+    },
+    "zcode/T1密室3D游戏开发33m-74m-61m/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/T1密室3D游戏开发33m-74m-61m"
+    },
+    "zcode/YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/YiQiVibe-WBGL2-GLSL-ocean-ZG5.3F"
+    },
+    "zcode/shark-arcade/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/shark-arcade"
+    },
+    "zcode/路人甲TM1鹈鹕骑自行车3D版/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/路人甲TM1鹈鹕骑自行车3D版"
+    },
+    "codex/astra-cockpit-hud/index.html": {
+      "committedAt": "2026-10-14T08:12:24Z",
+      "commit": "9747fc251138386158ea31a39c83d29db13d0cba",
+      "scope": "codex/astra-cockpit-hud"
+    },
+    "codex/air-court/index.html": {
+      "committedAt": "2026-10-13T08:14:32Z",
+      "commit": "e4359b0dd8c3388c87c71e6e4cc28e36f21a98b5",
+      "scope": "codex/air-court"
+    },
+    "zcode/路人甲TM2星际水族箱/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/路人甲TM2星际水族箱"
+    },
+    "codex/2066-world-cup/index.html": {
+      "committedAt": "2026-10-13T11:50:24Z",
+      "commit": "44324bf9635a49a8a3ccd10887fde653b6219ea1",
+      "scope": "codex/2066-world-cup"
+    },
+    "zcode/路人甲TM3平面后室游戏/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "zcode/路人甲TM3平面后室游戏"
+    },
+    "codex/eve-idle/index.html": {
+      "committedAt": "2026-10-13T08:09:00Z",
+      "commit": "27638271341ebab6ff32a8b7539117d832fe9407",
+      "scope": "codex/eve-idle"
+    },
+    "codex/eggstreme-farming/index.html": {
+      "committedAt": "2026-10-13T08:15:51Z",
+      "commit": "170a19bfc4fe5ff02be5aec78550bc9b458c01be",
+      "scope": "codex/eggstreme-farming"
+    },
+    "codex/honghe-qingyun/index.html": {
+      "committedAt": "2026-10-15T08:17:08Z",
+      "commit": "2b0d9f574852bb139987ed7bf58c7494d3e6b071",
+      "scope": "codex/honghe-qingyun"
+    },
+    "codex/ink-trace/index.html": {
+      "committedAt": "2026-10-14T07:53:14Z",
+      "commit": "568a21b75c2810ca52775c79bac8fe78348e5544",
+      "scope": "codex/ink-trace"
+    },
+    "codex/attention-residuals/index.html": {
+      "committedAt": "2026-10-13T11:34:28Z",
+      "commit": "c10bfcd05d2dd04410900facbe191a00cf75186b",
+      "scope": "codex/attention-residuals"
+    },
+    "codex/hanmo-qingyun/index.html": {
+      "committedAt": "2026-10-15T08:17:08Z",
+      "commit": "2b0d9f574852bb139987ed7bf58c7494d3e6b071",
+      "scope": "codex/hanmo-qingyun"
+    },
+    "codex/jarvis/index.html": {
+      "committedAt": "2026-10-15T07:43:14Z",
+      "commit": "2ea6db6bcd4eb20e2e7ece977f0da43665cdcb9f",
+      "scope": "codex/jarvis"
+    },
+    "codex/mb-enclosure/index.html": {
+      "committedAt": "2026-10-15T08:17:08Z",
+      "commit": "2b0d9f574852bb139987ed7bf58c7494d3e6b071",
+      "scope": "codex/mb-enclosure"
+    },
+    "codex/night-street/index.html": {
+      "committedAt": "2026-10-15T08:55:38Z",
+      "commit": "6eab3385110439641546a006d2f4847ee4dfff0f",
+      "scope": "codex/night-street"
+    },
+    "codex/mimic/index.html": {
+      "committedAt": "2026-10-13T08:12:41Z",
+      "commit": "d95a211c938131fd47f24ec3a1f6f0002a5476c1",
+      "scope": "codex/mimic"
+    },
+    "codex/moment-instant-camera/index.html": {
+      "committedAt": "2026-10-15T07:36:01Z",
+      "commit": "04b80cdfd8a844f137ae189ce82000a6c602a59c",
+      "scope": "codex/moment-instant-camera"
+    },
+    "codex/niulai-dream-run/index.html": {
+      "committedAt": "2026-10-14T02:09:28Z",
+      "commit": "b2fe9faa775df3820f6851a243a1747e2d6ec699",
+      "scope": "codex/niulai-dream-run"
+    },
+    "codex/three-kingdoms-gilded/index.html": {
+      "committedAt": "2026-10-15T15:47:03Z",
+      "commit": "9aae79818e94197217d09c6a7774d1f359020e0a",
+      "scope": "codex/three-kingdoms-gilded"
+    },
+    "codex/serpent-survivor/index.html": {
+      "committedAt": "2026-10-16T10:58:20Z",
+      "commit": "3e6946fe0f217c794689d4ec19617fe3bd33d5cc",
+      "scope": "codex/serpent-survivor"
+    },
+    "codex/wallfacer-plan/index.html": {
+      "committedAt": "2026-10-15T08:17:08Z",
+      "commit": "2b0d9f574852bb139987ed7bf58c7494d3e6b071",
+      "scope": "codex/wallfacer-plan"
+    },
+    "codex/pixel-armored-soldier/index.html": {
+      "committedAt": "2026-10-14T02:14:35Z",
+      "commit": "25c8634113038e11d0dbdd913f5eb5404e48137f",
+      "scope": "codex/pixel-armored-soldier"
+    },
+    "codex/woolly-debts/index.html": {
+      "committedAt": "2026-10-14T07:47:45Z",
+      "commit": "fe4a1cf35c0bd151059baaa7a3b935c56bdb144b",
+      "scope": "codex/woolly-debts"
+    },
+    "codex/wanming-xianzhi/index.html": {
+      "committedAt": "2026-10-15T08:17:08Z",
+      "commit": "2b0d9f574852bb139987ed7bf58c7494d3e6b071",
+      "scope": "codex/wanming-xianzhi"
+    },
+    "codex/lmcc-2026-round2/index.html": {
+      "committedAt": "2026-10-16T12:54:30Z",
+      "commit": "eb0f693434ff260e15ffc51fab14278912118895",
+      "scope": "codex/lmcc-2026-round2"
+    },
+    "trae/glsl-poster/index.html": {
+      "committedAt": "2026-10-11T06:44:36Z",
+      "commit": "a89ae80628bb847ce6f17091c586e04e03e93066",
+      "scope": "trae/glsl-poster"
+    }
+  }
+}

@@ -72,7 +72,7 @@ HEAD = r"""<!DOCTYPE html>
 
 <link rel="stylesheet" href="gallery.css?v=20261016">
 <script src="gallery-data.js?v=20261016" defer></script>
-<script src="gallery.js?v=20261016" defer></script>
+<script src="gallery.js?v=20261018-time" defer></script>
 </head>
 <body>
 <header>
