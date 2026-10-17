@@ -35,7 +35,7 @@ node tools/build-single.js
 
 # 备用：受管二进制（⚠️ 目录含版本号，随环境变化；先确认存在再跑）
 #   本机实际路径为 .../versions/22.22.2-3/node.exe（文档旧值 -2 已失效）
-NODE="<本机 Node 22 运行时>"
+NODE="C:/Users/xp772/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
 "$NODE" tools/build-single.js
 ```
 

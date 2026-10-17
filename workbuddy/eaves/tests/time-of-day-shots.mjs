@@ -2,11 +2,11 @@
 // 用法: node tests/time-of-day-shots.mjs [BASE_URL] [输出目录]
 // 依赖 main.js 的 URL 参数 ?t=HHMM（或分钟数）覆盖初始游戏时刻
 
-import pw from 'playwright-core';
+import pw from 'file:///C:/Users/xp772/.workbuddy/binaries/node/workspace/node_modules/playwright-core/index.js';
 const { chromium } = pw;
 
 const BASE = process.argv[2] || 'https://under-the-eaves.app.workbuddy.host/';
-const OUTDIR = (process.argv[3] || 'verify').replace(/\/$/, '');
+const OUTDIR = (process.argv[3] || 'D:/68.AIGC/xWorkBuddy/GoodCase/.workbuddy/verify').replace(/\/$/, '');
 
 const SLOTS = [
   ['0630', 'morning'],
@@ -16,7 +16,7 @@ const SLOTS = [
 ];
 
 const browser = await chromium.launch({
-  executablePath: '<本机 Chromium, 建议用环境变量 CHROME_PATH 传入>',
+  executablePath: 'C:/Users/xp772/AppData/Local/ms-playwright/chromium-1234/chrome-win64/chrome.exe',
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });

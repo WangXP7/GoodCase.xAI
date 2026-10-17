@@ -62,7 +62,7 @@ R1 的判据存在**两个可复现层**，本门**两层都要满足**：
 ### A.3 复跑命令（固定种子）
 
 ```bash
-cd <案例工作目录>
+cd D:/68.AIGC/xWorkBuddy/GoodCase/tideline
 
 # —— 代码层（一键：自动复跑 bot 再判定；≈2–3 min）——
 node tests/r1-gate.js                      # → tests/_bot-out/r1-gate-baseline.json(+.gate.json)

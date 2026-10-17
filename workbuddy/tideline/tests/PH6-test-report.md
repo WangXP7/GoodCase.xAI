@@ -13,7 +13,7 @@
 ## 1. 如何运行（复现）
 
 ```bash
-cd <案例工作目录>
+cd D:/68.AIGC/xWorkBuddy/GoodCase/tideline
 # Node：受管运行时已在 PATH 中（v22.22.2）。不要硬编码版本目录名——升级后会失效。
 node tests/smoke-mvp.js           # 基线 · 区域边界/图集/核心循环/数值锚点/鲨鱼资产取证
 node tests/test-safety-fx.js      # 光敏安全（硬红线①）

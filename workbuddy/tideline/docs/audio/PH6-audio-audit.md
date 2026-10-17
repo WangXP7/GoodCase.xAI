@@ -36,7 +36,7 @@
 | 长时运行与边界输入 | `node tests/test-soak-stress.js` | **通过 23 / 失败 0** |
 | **音频审计探针（新建）** | `node tests/_audio-probe.js` | **通过 36 / 失败 2**（2 项均为真实缺陷，即 F1 / F2） |
 
-> 使用的 Node：`<本机 Node 22 运行时>`（v22.22.2）
+> 使用的 Node：`C:/Users/xp772/.workbuddy/binaries/node/versions/22.22.2-3/node.exe`（v22.22.2）
 > ⚠️ 派发单给的路径 `.../22.22.2-2/node.exe` **不存在**，实际可用版本为 `22.22.2-3`。
 
 ### 0.3 缺陷总览
@@ -85,8 +85,8 @@
 ### 1.3 复现命令
 
 ```bash
-cd <案例工作目录>
-NODE="<本机 Node 22 运行时>"
+cd D:/68.AIGC/xWorkBuddy/GoodCase/tideline
+NODE="C:/Users/xp772/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
 
 "$NODE" tests/smoke-mvp.js          # 48/48
 "$NODE" tests/test-safety-fx.js     # 12/12

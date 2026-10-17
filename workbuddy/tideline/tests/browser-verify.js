@@ -30,10 +30,10 @@ const SHOTS = process.env.TL_SHOTS
 
 /* playwright-core 装在受管 workspace 里，不进项目 node_modules */
 const PW_PATHS = [
-  '<本机用户目录>/.workbuddy/binaries/node/workspace/node_modules/playwright-core',
+  'C:/Users/xp772/.workbuddy/binaries/node/workspace/node_modules/playwright-core',
 ];
 const CHROME_CANDIDATES = [
-  '<本机 Chromium, 建议用环境变量 CHROME_PATH 传入>',
+  'C:/Users/xp772/AppData/Local/ms-playwright/chromium-1234/chrome-win64/chrome.exe',
 ];
 
 const MIME = {

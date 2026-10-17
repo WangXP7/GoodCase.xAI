@@ -25,7 +25,7 @@
 
 ## 二、交付物清单
 
-> **目录说明**：本项目根为 `<案例工作目录>/`。
+> **目录说明**：本项目根为 `D:/68.AIGC/xWorkBuddy/GoodCase/tideline/`。
 > 该 workspace 同时承载「火箭发射模拟器」（`rocket-launch-sim/`）与《檐下 UNDER THE EAVES》（占用根目录 `design/`），
 > 故《潮线 TIDELINE》迁入独立子目录以避免文件混淆。以下路径均相对 `tideline/`。
 

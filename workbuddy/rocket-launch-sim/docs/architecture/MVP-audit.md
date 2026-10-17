@@ -309,7 +309,7 @@
 
 ## 7. 验证证据（改代码前后，原始输出）
 
-> 全部命令按 `control-manifest.md` §8。Node：`<本机 Node 22 运行时>`。
+> 全部命令按 `control-manifest.md` §8。Node：`C:\Users\xp772\.workbuddy\binaries\node\versions\22.22.2-3\node.exe`。
 > 本环境 bash 的 PATH 异常（`dirname`/`head`/`tail` 缺失），改用 PowerShell + Node 直调，输出经 Node 落盘以避免编码损坏。
 
 ### 7.1 `node tests/prototype/open-loop-port-check.mjs` — **9/9 通过**

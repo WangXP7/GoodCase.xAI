@@ -2,7 +2,7 @@
 
 `dealer-face.png` 使用内置 image_gen 工具为本项目生成，带透明通道，原始图像未经像素修改。材质色调、比例与光照由游戏渲染器控制。
 
-原始生成文件：`~/.codex/generated_images/01a072d2-9987-7001-baf3-5b45a834cb1c/exec-19106925-2a78-4429-af50-738c2443182d.png`。
+原始生成文件：`C:/Users/xp772/.codex/generated_images/01a072d2-9987-7001-baf3-5b45a834cb1c/exec-19106925-2a78-4429-af50-738c2443182d.png`。
 
 最终提示词：
 

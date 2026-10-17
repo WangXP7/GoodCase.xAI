@@ -317,7 +317,7 @@
 
 ### 9.1 文档路径
 
-`<案例工作目录>/docs/architecture/PH1-3d-feasibility.md`
+`D:/68.AIGC/xWorkBuddy/GoodCase/docs/architecture/PH1-3d-feasibility.md`
 
 ### 9.2 可行性判定
 

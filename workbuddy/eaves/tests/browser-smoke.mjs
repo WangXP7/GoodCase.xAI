@@ -3,14 +3,14 @@
 // 验证: 引导是否走通、canvas 是否被正确 resize、有无未捕获错误、资源有无 4xx
 // 注意: ESM 不认 NODE_PATH，playwright-core 是 CJS，需用绝对 file:/// 引入并取 default
 
-import pw from 'playwright-core';
+import pw from 'file:///C:/Users/xp772/.workbuddy/binaries/node/workspace/node_modules/playwright-core/index.js';
 const { chromium } = pw;
 
 const URL_ = process.argv[2] || 'https://under-the-eaves.app.workbuddy.host/';
-const OUT = process.argv[3] || 'verify/eaves-smoke.png';
+const OUT = process.argv[3] || 'D:/68.AIGC/xWorkBuddy/GoodCase/.workbuddy/verify/eaves-smoke.png';
 
 const browser = await chromium.launch({
-  executablePath: '<本机 Chromium, 建议用环境变量 CHROME_PATH 传入>',
+  executablePath: 'C:/Users/xp772/AppData/Local/ms-playwright/chromium-1234/chrome-win64/chrome.exe',
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });

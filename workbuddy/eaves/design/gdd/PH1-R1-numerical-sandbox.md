@@ -230,7 +230,7 @@
 
 ## 7. 可复现脚本
 
-沙盘脚本位于 `%TEMP%/r1_sandbox.py`（临时路径，建议随本文档一并归档到 `design/gdd/tools/`）。
+沙盘脚本位于 `C:/Users/xp772/AppData/Local/Temp/r1_sandbox.py`（临时路径，建议随本文档一并归档到 `design/gdd/tools/`）。
 
 运行方式：
 

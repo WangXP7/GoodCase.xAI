@@ -1,12 +1,12 @@
 // 全图缩略视图 + 局部放大
-import pw from 'playwright-core';
+import pw from 'file:///C:/Users/xp772/.workbuddy/binaries/node/workspace/node_modules/playwright-core/index.js';
 const { chromium } = pw;
 import path from 'path';
 import { pathToFileURL } from 'url';
 
 const svg = process.argv[2] || 'qin-29-illustration.svg';
 const outBase = process.argv[3] || 'shot';
-const EXE = '<本机 Chromium, 建议用环境变量 CHROME_PATH 传入>';
+const EXE = 'C:/Users/xp772/AppData/Local/ms-playwright/chromium-1234/chrome-win64/chrome.exe';
 
 const browser = await chromium.launch({ executablePath: EXE });
 const errs = [];

@@ -94,9 +94,9 @@ def is_ts_ws(name):
     return len(p) == 6 and len(p[0]) == 4 and all(x.isdigit() for x in p)
 
 def short_ws(name):
-    """工作空间目录名是路径 slug（形如 d-<驱动器>-<父目录>-<案例目录>），
+    """工作空间目录名是路径 slug（如 d-68.AIGC-xWorkBuddy-GoodCase），
     取 WorkBuddy 之后的部分作为短名；找不到就原样返回。
-    注意 slug 中段形如 -XxxBuddy-（首字母小写前缀 x），所以匹配串不能带前导 '-'。"""
+    注意真实 slug 是 -xWorkBuddy-（中间有个 x），所以匹配串不能带前导 '-'。"""
     i = name.rfind('WorkBuddy-')
     if i >= 0:
         rest = name[i + 10:]

@@ -214,6 +214,6 @@ w('说明：本沙盘为一阶解析模型，参数均为假设值，未经 play
 w('=' * 78)
 
 txt = out.getvalue()
-with io.open(r'<案例工作目录>\design\gdd\_sandbox_out.txt', 'w', encoding='utf-8') as f:
+with io.open(r'D:\68.AIGC\xWorkBuddy\GoodCase\design\gdd\_sandbox_out.txt', 'w', encoding='utf-8') as f:
     f.write(txt)
 print('done')

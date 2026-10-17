@@ -94,7 +94,7 @@ bot 每帧**只读** `G.shark` / `G.alarm` / `G.qte` / 敌我列表来决策（�
 
 ### 1.6 复现命令
 ```bash
-cd <案例工作目录>
+cd D:/68.AIGC/xWorkBuddy/GoodCase/tideline
 node tests/bot-playtest.js --games=200 --cap=60 --qtetrials=60
 #   → 控制台打印全部表格；原始聚合写入 tests/_bot-out/summary.json
 node tests/bot-playtest.js --trace=aggressive --games=3   # 单画像 0.5s 时间线（调试）
@@ -579,7 +579,7 @@ d969c7f8465e14c06ab9c3f63315388e  game/entities.js
 | `tests/PH6-playtest-report-bot.md` | **追加** · 本节（§9；未覆盖 §0–§8） |
 
 ```bash
-cd <案例工作目录>
+cd D:/68.AIGC/xWorkBuddy/GoodCase/tideline
 node tests/qte-curve.js --trials=200             # → tests/_bot-out/qte-curve.json
 python design/gdd/tools/r1_sandbox_corrected.py  # → tests/_bot-out/r1-corrected-out.txt
 # 漂移影响复核（会覆盖 summary.json，务必先备份）：

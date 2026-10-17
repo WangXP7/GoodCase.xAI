@@ -253,13 +253,13 @@ try:
         'overall': bool(c1_pass and c3_pass),
         'rates': {str(k): max(rows_c[k][0]['rate'], rows_c[k][1]['rate']) for k in rows_c}
     }
-    with io.open(r'<案例工作目录>\tests\_bot-out\r1-model-gate.json', 'w', encoding='utf-8') as fj:
+    with io.open(r'D:\68.AIGC\xWorkBuddy\GoodCase\tideline\tests\_bot-out\r1-model-gate.json', 'w', encoding='utf-8') as fj:
         fj.write(json.dumps(cfgj, ensure_ascii=False, indent=2))
 except Exception as _e:
     pass
 
 txt = out.getvalue()
-with io.open(r'<案例工作目录>\tests\_bot-out\r1-corrected-out.txt', 'w', encoding='utf-8') as f:
+with io.open(r'D:\68.AIGC\xWorkBuddy\GoodCase\tideline\tests\_bot-out\r1-corrected-out.txt', 'w', encoding='utf-8') as f:
     f.write(txt)
 # 同时把纯文本打到 stdout（供重定向）
 try:

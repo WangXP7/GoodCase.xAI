@@ -23,10 +23,10 @@
 
 | 项 | 实测值 |
 |---|---|
-| Node 实际路径 | `<本机 Node 22 运行时>` |
+| Node 实际路径 | `C:/Users/xp772/.workbuddy/binaries/node/versions/22.22.2-3/node.exe` |
 | Node 版本 | v22.22.2 |
 | 浏览器 | Chromium 1234（`ms-playwright`） + SwiftShader 软件光栅 |
-| 工作目录 | `<案例工作目录>` |
+| 工作目录 | `D:/68.AIGC/xWorkBuddy/GoodCase/tideline` |
 
 > ⚠️ **环境漂移**：全部发布文档里的命令都硬编码了 `.../versions/22.22.2-2/node.exe`，
 > **该目录在本机已不存在**（实际为 `-3`）。照抄文档命令会直接失败。→ 见 §3 **D6**。
