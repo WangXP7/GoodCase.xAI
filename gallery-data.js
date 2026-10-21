@@ -12,6 +12,7 @@
   set('workbuddy/emberfall-rpg','余烬深渊 · 球形开放世界','游戏|动作冒险|3D|Three.js');
   set('workbuddy/hy4-mcp-shooter','裂隙突围 · MCP 射击场','游戏|动作冒险|3D|Three.js');
   set('workbuddy/jarvis-dashboard','贾维斯 · 赛博主控台','工具面板|视觉艺术');
+  set('workbuddy/koi-pond','锦鲤池 · 倒影与鱼群','视觉艺术|3D|Three.js|游戏','程序化锦鲤池塘：六组正弦波水面配平面反射倒影，七尾逐帧重建脊线的锦鲤群游摆尾，点击水面投食后聚拢抢食。全程序化几何与材质，零外部素材。');
   set('workbuddy/lunar-rover','月面运输 · 低重力货运','游戏|模拟仿真|航天|3D|Three.js');
   set('workbuddy/minecraft-clone','方块世界 · 自由探索','游戏|3D|WebGL / GLSL');
   set('workbuddy/pelican-bicycle','鹈鹕骑行 · 动态展示','视觉艺术');

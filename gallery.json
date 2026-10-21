@@ -101,6 +101,14 @@
     },
     {
       "ns": "workbuddy",
+      "dir": "koi-pond",
+      "entry": "index.html",
+      "title": "锦鲤池 · 倒影与鱼群",
+      "desc": "程序化锦鲤池塘 · 水面波纹与真实倒影 · 点击水面投食 · 总耗时约 110 分钟",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+    },
+    {
+      "ns": "workbuddy",
       "dir": "lunar-rover",
       "entry": "index.html",
       "title": "月面运输 · 低重力货运",
