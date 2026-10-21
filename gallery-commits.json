@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "a0b6af427a7424d38006c6b19a2d9f5e1bc9a59b",
+  "snapshot": "e25bfabd8404a6a8562965b1a947edf5e354ceb3",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -172,6 +172,11 @@
       "committedAt": "2026-10-15T10:15:36Z",
       "commit": "47bbeca01e3fd867f4b65b37ad8b70c95b193e09",
       "scope": "workbuddy/minecraft-clone"
+    },
+    "workbuddy/minimax-m31-flash-promo/index.html": {
+      "committedAt": "2026-10-21T07:22:22Z",
+      "commit": "e25bfabd8404a6a8562965b1a947edf5e354ceb3",
+      "scope": "workbuddy/minimax-m31-flash-promo"
     },
     "workbuddy/pelican-bicycle-3d-standalone.html": {
       "committedAt": "2026-10-11T06:44:36Z",
