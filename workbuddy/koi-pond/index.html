@@ -73,6 +73,7 @@
     position:fixed;inset:0;z-index:40;
     background:#0b0d0c;
     display:flex;align-items:center;justify-content:center;
+    pointer-events:none;   /* 纯视觉遮罩，淡出期间不能拦截首次点击 */
     transition:opacity 1.1s ease, visibility 1.1s;
   }
   #veil .t{
