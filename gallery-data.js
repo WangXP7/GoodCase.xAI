@@ -25,6 +25,7 @@
   set('workbuddy/snake-survivors','蛇人幸存者 · 黑暗废墟','游戏|动作冒险');
   set('workbuddy/solar-system','太阳系 · 八大行星','科普教育|航天|3D|Three.js');
   set('workbuddy/song-courtyard','宋代庭院 · 五路院落','建模|3D|Blender|国风历史');
+  set('workbuddy/temple-of-heaven','天坛祈年殿 · 三重檐琉璃大殿','视觉艺术|3D|国风历史');
   set('workbuddy/tideline','潮线 · TIDELINE','游戏|动作冒险|策略博弈','横版鲨鱼街机：冲向海岸、冲浪收集，再带着战利品返回深海。围绕“落袋为安或继续冒险”展开，包含冲刺、搁浅 QTE 与警报系统；测试版 v0.1.0。');
   set('workbuddy/tidewater-fish-site','潮水 · Tidewater 渔业场景','3D|视觉艺术');
   set('workbuddy/token-dashboard','Token 用量 · 分析仪表盘','工具面板|文档研究','WorkBuddy 用量分析工具：Token KPI、日活热力图、模型分布与工作区→会话→请求三级下钻。含 Python 生成脚本和示例图；此入口为说明文档，实际看板需在本机生成。');

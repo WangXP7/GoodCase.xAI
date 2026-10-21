@@ -236,6 +236,14 @@
       "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
     },
     {
+      "ns": "workbuddy",
+      "dir": "temple-of-heaven",
+      "entry": "index.html",
+      "title": "天坛祈年殿 · 三重檐琉璃大殿",
+      "desc": "按真实形制全程序化复原的天坛祈年殿：直径 32.72m、总高 38.2m，三层汉白玉圆台基与四出陛、28 根楠木柱（龙井柱鎏金蟠龙）、三重檐蓝琉璃瓦与重昂斗拱、龙凤和玺彩画与鎏金宝顶，昼夜光照切换 · 总耗时约 1 小时 5 分钟",
+      "agent": "WorkBuddy + Step-5-Preview"
+    },
+    {
       "ns": "zcode",
       "dir": ".",
       "entry": "aurora-ocean.html",
