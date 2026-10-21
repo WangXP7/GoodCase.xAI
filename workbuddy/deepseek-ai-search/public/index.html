@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="灵犀搜索 — 基于 DeepSeek Search + Fetch 的 AI 搜索引擎，回答实时检索、引用可溯源。">
+  <title>灵犀搜索 · AI 搜索引擎</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23f5b95c'/%3E%3Cstop offset='1' stop-color='%23e2703a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='3' y='3' width='26' height='26' rx='8' fill='%2318120b'/%3E%3Cpath d='M16 7l2.2 6.3L24.5 15l-6.3 1.7L16 23l-2.2-6.3L7.5 15l6.3-1.7z' fill='url(%23g)'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="bg-aurora" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f5b95c"/><stop offset="1" stop-color="#e2703a"/></linearGradient></defs><path d="M16 5l2.4 6.8L25 14l-6.6 2.2L16 23l-2.4-6.8L7 14l6.6-2.2z" fill="url(#lg)"/><circle cx="24" cy="23" r="2" fill="#f5b95c"/></svg>
+      </span>
+      <span class="brand-name">灵犀搜索</span>
+      <span class="brand-sub">AI 搜索引擎</span>
+    </div>
+    <div class="topbar-actions">
+      <span class="model-badge" title="检索：DeepSeek Search · 抓取：DeepSeek Fetch · 生成：deepseek-flash">deepseek-flash</span>
+      <button id="btn-new" class="ghost-btn" type="button">新对话</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- 首页：没有问题时的欢迎态 -->
+    <section id="home" class="home">
+      <h1 class="hero-title">问一个问题，<br><em>读懂整个互联网</em></h1>
+      <p class="hero-sub">实时检索全网网页 · 阅读原文 · 生成带引用的回答，每句话都可溯源</p>
+      <div id="chips" class="chips"></div>
+    </section>
+
+    <!-- 对话线程 -->
+    <section id="thread" class="thread" hidden></section>
+  </main>
+
+  <!-- 底部输入栏 -->
+  <footer id="askbar" class="askbar">
+    <form id="ask-form" class="askbox">
+      <textarea id="ask-input" rows="1" maxlength="2000" placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <button id="btn-send" class="send-btn" type="submit" title="发送" aria-label="发送"></button>
+    </form>
+    <p class="disclaimer">内容由 AI 基于实时检索生成，引用角标可点击跳转原文 · 请核实重要信息</p>
+  </footer>
+
+  <script src="/md.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

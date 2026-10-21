@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>3D 程序化城市生成器 · 中国版（南京）</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d12'/%3E%3Cpath d='M8 24h16M10 24V14l6-5 6 5v10M14 24v-5h4v5' stroke='%23e0a94f' stroke-width='2' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0b0d12; --panel:rgba(13,16,23,.78); --line:rgba(255,255,255,.09);
+    --txt:#e8e4d8; --txt-dim:#9a958a; --gold:#e0a94f; --gold-soft:rgba(224,169,79,.16);
+    --orange:#e07b39; --danger:#e05c5c;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;}
+  #app{position:fixed;inset:0}
+  canvas#scene{display:block;width:100%;height:100%;touch-action:none}
+
+  .glass{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    box-shadow:0 8px 32px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);}
+
+  /* ---------- 品牌区 ---------- */
+  #brand{position:fixed;top:18px;left:18px;z-index:10;padding:14px 18px 12px;pointer-events:none}
+  #brand .kicker{font-size:10px;letter-spacing:.32em;color:var(--gold);margin-bottom:6px}
+  #brand h1{font-family:"STZhongsong","SimSun",serif;font-size:21px;font-weight:600;letter-spacing:.06em;color:#f2ecdd}
+  #brand .sub{font-size:11px;color:var(--txt-dim);margin-top:4px;letter-spacing:.08em}
+
+  /* ---------- 城市页签 ---------- */
+  #cities{position:fixed;left:18px;top:96px;z-index:10;width:196px;padding:8px;display:flex;flex-direction:column;gap:4px}
+  .city-tab{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;
+    border:1px solid transparent;background:transparent;color:var(--txt-dim);text-align:left;width:100%;
+    transition:background .18s,color .18s,border-color .18s;font-family:inherit}
+  .city-tab:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+  .city-tab .idx{font-size:10px;width:16px;text-align:center;color:var(--txt-dim);font-variant-numeric:tabular-nums}
+  .city-tab .name{font-size:14px;font-weight:600;letter-spacing:.05em}
+  .city-tab .tag{font-size:10px;margin-left:auto;color:var(--txt-dim);white-space:nowrap}
+  .city-tab.active{background:var(--gold-soft);border-color:rgba(224,169,79,.45);color:#f5ead2}
+  .city-tab.active .idx{color:var(--gold)}
+  .city-tab.active .tag{color:var(--gold)}
+  .badge-new{font-size:9px;background:linear-gradient(135deg,var(--gold),var(--orange));color:#1a1408;
+    border-radius:4px;padding:1px 5px;margin-left:6px;font-weight:700;letter-spacing:.05em;vertical-align:2px}
+
+  /* ---------- 控制面板 ---------- */
+  #panel{position:fixed;left:18px;bottom:18px;z-index:10;width:196px;padding:12px}
+  .row{margin-bottom:11px}
+  .row:last-child{margin-bottom:0}
+  .row .lab{font-size:10px;letter-spacing:.22em;color:var(--txt-dim);margin-bottom:6px;display:flex;justify-content:space-between}
+  .seg{display:flex;gap:4px}
+  .seg button{flex:1;padding:5px 0;font-size:12px;border-radius:7px;border:1px solid var(--line);
+    background:rgba(255,255,255,.03);color:var(--txt-dim);cursor:pointer;transition:all .15s;font-family:inherit}
+  .seg button:hover{color:var(--txt)}
+  .seg button.on{background:var(--gold-soft);border-color:rgba(224,169,79,.5);color:#f5ead2}
+  .seedline{display:flex;gap:6px}
+  .seedline input{flex:1;min-width:0;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;
+    color:var(--txt);padding:6px 8px;font-size:12px;outline:none;font-family:inherit}
+  .seedline input:focus{border-color:rgba(224,169,79,.5)}
+  .seedline button{padding:0 10px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.04);
+    color:var(--gold);cursor:pointer;font-size:12px;font-family:inherit;white-space:nowrap}
+  .seedline button:hover{background:rgba(224,169,79,.12)}
+  input[type=range]{width:100%;accent-color:var(--gold);height:18px}
+  .toggle{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--txt-dim);
+    padding:4px 0;cursor:pointer;user-select:none}
+  .toggle .sw{width:32px;height:18px;border-radius:10px;background:rgba(255,255,255,.1);position:relative;transition:background .18s}
+  .toggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:#8f8a7d;transition:all .18s}
+  .toggle.on .sw{background:rgba(224,169,79,.4)}
+  .toggle.on .sw::after{left:16px;background:var(--gold)}
+
+  /* ---------- 状态区 ---------- */
+  #stats{position:fixed;top:18px;right:18px;z-index:10;padding:10px 14px;font-size:11px;color:var(--txt-dim);
+    display:flex;gap:14px;font-variant-numeric:tabular-nums}
+  #stats b{color:var(--txt);font-weight:600;margin-left:3px}
+  #hint{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10;font-size:11px;
+    color:rgba(154,149,138,.75);letter-spacing:.12em;pointer-events:none;white-space:nowrap}
+
+  /* ---------- 加载 / 错误 ---------- */
+  #loader{position:fixed;inset:0;z-index:50;background:rgba(7,9,13,.92);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;transition:opacity .5s}
+  #loader.hide{opacity:0;pointer-events:none}
+  #loader .lt{font-family:"STZhongsong","SimSun",serif;font-size:24px;letter-spacing:.2em;color:#f2ecdd}
+  #loader .ls{font-size:12px;color:var(--txt-dim);letter-spacing:.1em}
+  #loader .bar{width:220px;height:2px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden}
+  #loader .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--orange));
+    transition:width .25s}
+  #err{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:60;display:none;
+    background:rgba(60,18,18,.92);border:1px solid rgba(224,92,92,.5);color:#f0c9c9;border-radius:10px;
+    padding:10px 18px;font-size:13px;max-width:70vw}
+
+  @media (max-width:900px){
+    #brand{top:10px;left:10px;padding:10px 12px 8px}
+    #brand h1{font-size:16px}
+    #cities{left:10px;right:10px;top:auto;bottom:10px;width:auto;flex-direction:row;overflow-x:auto;
+      scrollbar-width:none;padding:6px;gap:4px}
+    #cities::-webkit-scrollbar{display:none}
+    .city-tab{flex-direction:column;gap:2px;min-width:64px;padding:7px 8px;align-items:center}
+    .city-tab .tag{display:none}
+    .city-tab .idx{display:none}
+    #panel{left:10px;bottom:96px;width:auto;right:10px;display:flex;gap:14px;align-items:flex-end;padding:10px 12px}
+    #panel .row{margin-bottom:0;flex:1;min-width:0}
+    #hint{display:none}
+    #stats{top:10px;right:10px;padding:7px 10px;font-size:10px;gap:9px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <header id="brand" class="glass">
+    <div class="kicker">PROCEDURAL CITY GENERATOR</div>
+    <h1>3D 程序化城市生成器 · 中国版</h1>
+    <div class="sub">金陵王气 · 六朝烟水 —— 重点新增：南京</div>
+  </header>
+
+  <nav id="cities" class="glass"></nav>
+
+  <section id="panel" class="glass">
+    <div class="row">
+      <div class="lab"><span>种子</span></div>
+      <div class="seedline">
+        <input id="seed" type="text" value="金陵" maxlength="12" spellcheck="false">
+        <button id="dice">随机</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="lab"><span>时段</span></div>
+      <div class="seg" id="times">
+        <button data-t="dawn">晨</button>
+        <button data-t="noon">午</button>
+        <button data-t="dusk" class="on">昏</button>
+        <button data-t="night">夜</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="lab"><span>密度</span><span id="densityVal">标准</span></div>
+      <input id="density" type="range" min="60" max="150" value="100">
+    </div>
+    <div class="row">
+      <div class="toggle on" id="tTraffic"><span>街景交通</span><span class="sw"></span></div>
+      <div class="toggle on" id="tFog"><span>烟雨迷雾</span><span class="sw"></span></div>
+      <div class="toggle" id="tOrbit"><span>自动巡游</span><span class="sw"></span></div>
+    </div>
+  </section>
+
+  <aside id="stats" class="glass">
+    <span>FPS<b id="sFps">--</b></span>
+    <span>楼宇<b id="sBld">--</b></span>
+    <span>地标<b id="sMark">--</b></span>
+    <span>植被<b id="sTree">--</b></span>
+  </aside>
+
+  <div id="hint">拖拽旋转 · 滚轮缩放 · 触屏双指操作</div>
+
+  <div id="loader">
+    <div class="lt">金陵街巷 · 生成中</div>
+    <div class="ls" id="loadStep">正在初始化…</div>
+    <div class="bar"><i id="loadBar"></i></div>
+  </div>
+  <div id="err"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/lib/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

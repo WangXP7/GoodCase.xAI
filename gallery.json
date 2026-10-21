@@ -244,6 +244,22 @@
       "agent": "WorkBuddy + Step-5-Preview"
     },
     {
+      "ns": "workbuddy",
+      "dir": "procedural-city-cn",
+      "entry": "index.html",
+      "title": "3D 程序化城市生成器 · 中国版",
+      "desc": "对标 OpenAI Showcase 的中国版程序化 3D 城市生成器 · 南京（27 处地标）/ 重庆 8D / 陆家嘴 / 古都西安 / 赛博深圳 / 江南水乡六城实时切换，种子 / 时段 / 密度 / 交通 / 雾实时响应，全程序化生成零外部素材 · 总耗时约 1 小时 30 分钟",
+      "agent": "WorkBuddy + Step-5-Preview"
+    },
+    {
+      "ns": "workbuddy",
+      "dir": "deepseek-ai-search",
+      "entry": "README.md",
+      "title": "灵犀搜索 · AI 搜索引擎",
+      "desc": "类秘塔 / Perplexity 的 AI 搜索全栈应用 · DeepSeek Search 全网检索 + Fetch 读正文 + deepseek-flash 流式作答，引用角标跳转原文、思维链可见、多轮追问，Node 零依赖（本地运行需 API Key）· 总耗时约 40 分钟",
+      "agent": "WorkBuddy + Step-5-Preview"
+    },
+    {
       "ns": "zcode",
       "dir": ".",
       "entry": "aurora-ocean.html",

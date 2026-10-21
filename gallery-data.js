@@ -7,6 +7,7 @@
   set('trae/glsl-poster','轨道核心 · 霓虹海报','视觉艺术|WebGL / GLSL');
   set('workbuddy/buckshot-roulette','恶魔轮盘 · 初版','游戏|策略博弈');
   set('workbuddy/buckshot-roulette-v2','恶魔轮盘 · 第二版','游戏|策略博弈');
+  set('workbuddy/deepseek-ai-search','灵犀搜索 · AI 搜索引擎','工具面板|文档研究');
   set('workbuddy/eaves','檐下 · UNDER THE EAVES','游戏|经营养成|3D','以微缩小屋和猫咪日常为主题的三维陪伴游戏。等距视角、暖色家居氛围与猫咪角色，配套完整的玩法、美术及技术设计资料。');
   set('workbuddy/diorama-winter','冬日微缩 · 折纸暖屋','建模|3D|Blender|视觉艺术');
   set('workbuddy/emberfall-rpg','余烬深渊 · 球形开放世界','游戏|动作冒险|3D|Three.js');
@@ -20,6 +21,7 @@
   set('workbuddy/pelican-bicycle','鹈鹕骑行 · 动态展示','视觉艺术');
   set('workbuddy/pelican-bicycle-3d','鹈鹕骑行 · 三维版','视觉艺术|3D');
   set('workbuddy/pelican-bicycle-3d-standalone.html','鹈鹕骑行 · 三维独立版','视觉艺术|3D');
+  set('workbuddy/procedural-city-cn','3D 程序化城市生成器 · 中国版','工具面板|3D|Three.js|视觉艺术');
   set('workbuddy/penguin-survival','企鹅生存 · 冰原漂流','游戏|动作冒险|3D|Three.js');
   set('workbuddy/rocket-launch-sim','火箭发射 · 模拟原型','模拟仿真|航天');
   set('workbuddy/snake-survivors','蛇人幸存者 · 黑暗废墟','游戏|动作冒险');
