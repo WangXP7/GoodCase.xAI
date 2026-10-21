@@ -125,6 +125,14 @@
     },
     {
       "ns": "workbuddy",
+      "dir": "minimax-m31-flash-promo",
+      "entry": "index.html",
+      "title": "瞬光 · MINIMAX M3.1-FLASH 宣传片",
+      "desc": "40 秒程序化产品宣传片 · 单文件 Canvas2D 按确定性时间轴逐帧绘制，点火—标识—能力—闭环—成形—落版六幕，配乐由 numpy 合成，零外部素材 · 制作耗时约 70 分钟",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+    },
+    {
+      "ns": "workbuddy",
       "dir": "pelican-bicycle",
       "entry": "index.html",
       "title": "鹈鹕骑行 · 动态展示",

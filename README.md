@@ -20,7 +20,7 @@
 ## 结构
 
 ```
-index.html            ← 画廊首页(自动生成, 62 个案例入口)
+index.html            ← 画廊首页(自动生成, 63 个案例入口)
 gallery.json          ← 画廊条目清单：标题 / 描述 / Agent + 模型
 tools/build_gallery.py← 生成器：gallery.json + 目录结构 → 重写 index.html
 trae/  workbuddy/  zcode/  codex/

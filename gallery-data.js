@@ -15,6 +15,7 @@
   set('workbuddy/koi-pond','锦鲤池 · 倒影与鱼群','视觉艺术|3D|Three.js|游戏');
   set('workbuddy/lunar-rover','月面运输 · 低重力货运','游戏|模拟仿真|航天|3D|Three.js');
   set('workbuddy/minecraft-clone','方块世界 · 自由探索','游戏|3D|WebGL / GLSL');
+  set('workbuddy/minimax-m31-flash-promo','瞬光 · M3.1 Flash 宣传片','视觉艺术','40 秒程序化产品宣传片：单文件 Canvas2D 按确定性时间轴逐帧绘制，六幕结构配程序化合成配乐，零外部素材。制作耗时约 70 分钟。');
   set('workbuddy/pelican-bicycle','鹈鹕骑行 · 动态展示','视觉艺术');
   set('workbuddy/pelican-bicycle-3d','鹈鹕骑行 · 三维版','视觉艺术|3D');
   set('workbuddy/pelican-bicycle-3d-standalone.html','鹈鹕骑行 · 三维独立版','视觉艺术|3D');
@@ -68,6 +69,7 @@
   const covers = {
     'workbuddy/diorama-winter':'shots/iter-13-final.png',
     'workbuddy/song-courtyard':'shots/iter-13-final.png',
+    'workbuddy/minimax-m31-flash-promo':'shots/02-identity.jpg',
     'workbuddy/tideline':'tests/_shots-public/04-title-final.png'
   };
   const unknown = '模型未记录';
