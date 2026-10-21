@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "68ed84cd1d04c9dc6281b34939c36cb87b78a44e",
+  "snapshot": "388e10d54fb7cc1dd4d5334b5174040d30fa5a8a",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -222,6 +222,11 @@
       "committedAt": "2026-10-15T17:29:20Z",
       "commit": "327c0e16938f5f786be6ac02f39bfacecd487bc5",
       "scope": "workbuddy/song-courtyard"
+    },
+    "workbuddy/temple-of-heaven/index.html": {
+      "committedAt": "2026-10-21T15:33:44Z",
+      "commit": "388e10d54fb7cc1dd4d5334b5174040d30fa5a8a",
+      "scope": "workbuddy/temple-of-heaven"
     },
     "workbuddy/tideline/dist/index.html": {
       "committedAt": "2026-10-17T16:16:08Z",
