@@ -91,6 +91,44 @@
   }
   #cursor.on{opacity:1;}
   #cursor.press{transform:scale(.62);opacity:.35;}
+
+  /* 性能监控：只统计本页，不是整机 */
+  #perf{
+    top:clamp(22px,4.2vh,46px);right:clamp(22px,3.4vw,52px);
+    width:138px;padding:9px 11px 8px;
+    background:rgba(8,12,11,.40);
+    border:1px solid rgba(242,233,220,.12);
+    border-radius:9px;
+    -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);
+    font-variant-numeric:tabular-nums;
+    transition:opacity .4s ease;
+  }
+  #perf .cap{
+    font-size:8.5px;letter-spacing:.26em;color:rgba(242,233,220,.34);
+    margin-bottom:6px;
+  }
+  #perf .row{display:flex;align-items:center;gap:6px;height:15px;}
+  #perf .k{font-size:9px;letter-spacing:.1em;color:rgba(242,233,220,.40);width:22px;}
+  #perf .v{font-size:10.5px;color:rgba(242,233,220,.92);margin-left:auto;
+           text-align:right;min-width:30px;}
+  #perf .v.warn{color:#e8b96a;}
+  #perf .v.bad{color:#dd7a5c;}
+  #perf .v.na{color:rgba(242,233,220,.28);}
+  #perf .bar{
+    width:38px;height:2px;border-radius:2px;
+    background:rgba(242,233,220,.12);overflow:hidden;flex:0 0 auto;
+  }
+  #perf .bar i{
+    display:block;height:100%;width:0%;border-radius:2px;
+    background:linear-gradient(90deg,#7fbf9b,#e8b96a);
+    transition:width .28s ease;
+  }
+  #perf .bar.cpu i{background:linear-gradient(90deg,#6f9fd8,#9fc4e8);}
+  #perf .bar.gpu i{background:linear-gradient(90deg,#a98bd8,#d3b6ef);}
+  @media (max-width:640px){
+    #perf{width:104px;padding:7px 9px 6px;}
+    #perf .row.cpu,#perf .row.gpu{display:none;}
+  }
 </style>
 </head>
 <body>
@@ -111,6 +149,22 @@
 <div id="feed" class="ui">
   <div class="n" id="feedCount">0</div>
   <div class="l">FEED</div>
+</div>
+
+<div id="perf" class="ui" aria-hidden="true">
+  <div class="cap">PERF · 本页</div>
+  <div class="row fps">
+    <span class="k">FPS</span><span class="v" id="pFps">—</span>
+    <span class="bar"><i id="bFps"></i></span>
+  </div>
+  <div class="row cpu">
+    <span class="k">CPU</span><span class="v" id="pCpu">—</span>
+    <span class="bar cpu"><i id="bCpu"></i></span>
+  </div>
+  <div class="row gpu">
+    <span class="k">GPU</span><span class="v" id="pGpu">—</span>
+    <span class="bar gpu"><i id="bGpu"></i></span>
+  </div>
 </div>
 
 <div id="cursor"></div>
@@ -2180,6 +2234,130 @@ const postMat = new THREE.ShaderMaterial({
 postMat.toneMapped = false;
 postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
 
+/* ------------------------------- 性能监控（仅本页） ------------------------------- */
+
+// GPU：EXT_disjoint_timer_query_webgl2 是 WebGL 里唯一能拿到“本页这一帧在 GPU 上跑了多久”的接口。
+// 部分浏览器/驱动因安全策略不开放，此时 GPU 一栏显示 “—”，不做无依据的估算。
+class GpuTimer {
+  constructor(renderer) {
+    const gl = renderer.getContext();
+    this.gl = gl;
+    this.ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    // 软件渲染（SwiftShader / llvmpipe）下计时结果会远大于帧间隔，没有参考价值，直接不测
+    this.software = false;
+    try {
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      const name = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '') : '';
+      this.software = /swiftshader|llvmpipe|software|softpipe|mesa offscreen/i.test(name);
+    } catch (e) { /* 拿不到就按硬件处理 */ }
+    this.enabled = !!this.ext && !this.software;
+    this.q = this.enabled ? [gl.createQuery(), gl.createQuery()] : null;
+    this.idx = 0;
+    this.active = null;
+    this.pending = -1;
+    this.ms = -1;
+  }
+  begin() {
+    if (!this.enabled || this.pending >= 0) return;
+    this.active = this.q[this.idx];
+    this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, this.active);
+  }
+  end() {
+    if (!this.active) return;
+    this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
+    this.pending = this.idx;
+    this.idx = (this.idx + 1) % 2;
+    this.active = null;
+  }
+  poll() {
+    if (!this.enabled || this.pending < 0) return this.ms;
+    const gl = this.gl;
+    const q = this.q[this.pending];
+    if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+      const disjoint = gl.getParameter(this.ext.GPU_DISJOINT_EXT);
+      if (!disjoint) this.ms = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;
+      this.pending = -1;
+    }
+    return this.ms;
+  }
+}
+
+const perf = (() => {
+  const $ = (id) => document.getElementById(id);
+  const el = { fps: $('pFps'), cpu: $('pCpu'), gpu: $('pGpu'), bFps: $('bFps'), bCpu: $('bCpu'), bGpu: $('bGpu') };
+  const gpuTimer = new GpuTimer(renderer);
+
+  let lastNow = 0, interval = 16.67, warm = 0;
+  let fps = 60, cpuMs = 0, gpuMs = -1;
+  let lastPaint = 0, shownGpu = false;
+
+  // 帧间隔用 30 帧中位数：偶发长帧（GC / 着色器编译）不会把读数带偏
+  const win = new Array(30).fill(16.67);
+  let wi = 0;
+  const pushInterval = (iv) => {
+    win[wi] = iv;
+    wi = (wi + 1) % 30;
+    const s = win.slice().sort((a, b) => a - b);
+    return s[15];
+  };
+
+  const setBar = (node, pct) => { node.style.width = Math.max(0, Math.min(100, pct)).toFixed(1) + '%'; };
+  const tone = (v, warn, bad) => v >= bad ? 'bad' : (v >= warn ? 'warn' : '');
+
+  return {
+    gpuBegin() { gpuTimer.begin(); },
+    gpuEnd() { gpuTimer.end(); },
+
+    // 自动化测试用：注入一个 GPU 帧耗时，验证显示分支（正常运行时无人调用）
+    _simGpu(ms) { gpuMs = ms; shownGpu = true; },
+
+    frameStart(now) {
+      if (lastNow) {
+        const iv = now - lastNow;
+        if (iv > 0 && iv < 500) {          // 切标签页回来的巨大间隔不计入
+          interval = pushInterval(iv);
+          fps = 1000 / interval;
+        }
+      }
+      lastNow = now;
+      const g = gpuTimer.poll();
+      if (g >= 0) { gpuMs = gpuMs < 0 ? g : gpuMs * 0.85 + g * 0.15; }
+      if (warm < 40) warm++;
+    },
+
+    frameEnd(busyMs) {
+      if (warm > 4) cpuMs = cpuMs * 0.9 + busyMs * 0.1;
+    },
+
+    paint(now) {
+      if (now - lastPaint < 260) return;
+      lastPaint = now;
+
+      const f = Math.round(fps);
+      el.fps.textContent = f;
+      el.fps.className = 'v ' + tone(100 - f, 50, 70);   // fps 越低越差
+      setBar(el.bFps, (f / 60) * 100);
+
+      const cpuPct = interval > 0 ? (cpuMs / interval) * 100 : 0;
+      el.cpu.textContent = Math.round(cpuPct) + '%';
+      el.cpu.className = 'v ' + tone(cpuPct, 65, 88);
+      setBar(el.bCpu, cpuPct);
+
+      if (gpuMs >= 0) {
+        shownGpu = true;
+        const gpuPct = interval > 0 ? (gpuMs / interval) * 100 : 0;
+        el.gpu.textContent = gpuPct > 100 ? '>100%' : Math.round(gpuPct) + '%';
+        el.gpu.className = 'v ' + tone(gpuPct, 65, 88);
+        setBar(el.bGpu, gpuPct);
+      } else if (warm > 40 && !shownGpu) {
+        el.gpu.textContent = '—';
+        el.gpu.className = 'v na';
+        setBar(el.bGpu, 0);
+      }
+    }
+  };
+})();
+
 /* ------------------------------- 主循环 ------------------------------- */
 
 const clock = new THREE.Clock();
@@ -2217,13 +2395,15 @@ function renderReflection() {
   sky.position.copy(camera.position);
 }
 
-function tick() {
+function tick(now) {
+  const t0 = performance.now();
+  perf.frameStart(now || t0);
+
   const dt = Math.min(clock.getDelta(), 0.05);
   elapsed += dt;
   uTime.value = elapsed;
 
   updateCamera(dt);
-  renderReflection();
 
   for (let i = 0; i < kois.length; i++) {
     kois[i].steer(dt, elapsed, kois, foods);
@@ -2236,11 +2416,18 @@ function tick() {
   // 天空球跟随相机（保持无限远）
   sky.position.copy(camera.position);
 
+  // GPU 计时覆盖本帧全部渲染：反射 → 主场景 → 后期
+  perf.gpuBegin();
+  renderReflection();
   renderer.setRenderTarget(sceneRT);
   renderer.clear();
   renderer.render(scene, camera);
   renderer.setRenderTarget(null);
   renderer.render(postScene, postCam);
+  perf.gpuEnd();
+
+  perf.frameEnd(performance.now() - t0);
+  perf.paint(t0);
 
   frameCount++;
   if (frameCount === 3) {
@@ -2273,7 +2460,7 @@ requestAnimationFrame(tick);
 
 // 调试 / 自动化测试入口
 window.KOI = {
-  scene, camera, renderer, kois, foods, stats, reflRT, reflCam, waterMat, reflectionCull,
+  scene, camera, renderer, kois, foods, stats, reflRT, reflCam, waterMat, reflectionCull, perf,
   dropFood, addRipple, terrainHeight, waveHeightJS,
   cam, screenToWater,
   get frame() { return frameCount; }
