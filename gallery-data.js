@@ -10,6 +10,7 @@
   set('workbuddy/eaves','檐下 · UNDER THE EAVES','游戏|经营养成|3D','以微缩小屋和猫咪日常为主题的三维陪伴游戏。等距视角、暖色家居氛围与猫咪角色，配套完整的玩法、美术及技术设计资料。');
   set('workbuddy/diorama-winter','冬日微缩 · 折纸暖屋','建模|3D|Blender|视觉艺术');
   set('workbuddy/emberfall-rpg','余烬深渊 · 球形开放世界','游戏|动作冒险|3D|Three.js');
+  set('workbuddy/gummy-bears','软糖熊 · 可抓起软体糖果','游戏|物理实验|3D|Three.js');
   set('workbuddy/hy4-mcp-shooter','裂隙突围 · MCP 射击场','游戏|动作冒险|3D|Three.js');
   set('workbuddy/jarvis-dashboard','贾维斯 · 赛博主控台','工具面板|视觉艺术');
   set('workbuddy/koi-pond','锦鲤池 · 倒影与鱼群','视觉艺术|3D|Three.js|游戏');
@@ -68,6 +69,7 @@
   set('codex/woolly-debts','羊债必须清 · 砸罐还债','游戏|经营养成|3D');
   const covers = {
     'workbuddy/diorama-winter':'shots/iter-13-final.png',
+    'workbuddy/gummy-bears':'shots/01-pile.jpg',
     'workbuddy/song-courtyard':'shots/iter-13-final.png',
     'workbuddy/minimax-m31-flash-promo':'shots/02-identity.jpg',
     'workbuddy/tideline':'tests/_shots-public/04-title-final.png'

@@ -1,0 +1,1729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>软糖熊 GUMMY BEARS · 可抓取软体糖果物理</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%A7%B8%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0d0a09; --panel:rgba(28,21,18,.78); --panel2:rgba(20,15,13,.9);
+    --line:rgba(255,190,120,.16); --line2:rgba(255,190,120,.30);
+    --amber:#ffb347; --amber2:#ff8a3d; --txt:#f7ead9; --dim:#b39c8a;
+    --shadow:0 10px 34px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font:13px/1.55 "PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    user-select:none;-webkit-user-select:none}
+  #c{position:fixed;inset:0;display:block;touch-action:none;cursor:default}
+  #c.onbear{cursor:grab}
+  #c.dragging{cursor:grabbing}
+  #c.orbiting{cursor:move}
+
+  .panel{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px)}
+
+  /* 标题 */
+  #brand{left:18px;top:16px;padding:13px 17px 12px;max-width:290px}
+  #brand h1{margin:0;font-size:19px;letter-spacing:.14em;font-weight:800;
+    background:linear-gradient(96deg,#ffd9a0,#ff9a4d 46%,#ff6f61);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  #brand .en{margin:2px 0 0;font-size:9.5px;letter-spacing:.34em;color:var(--amber);opacity:.85}
+  #brand .sub{margin:7px 0 0;font-size:11px;line-height:1.6;color:var(--dim)}
+  #brand .sub b{color:#ffdcae;font-weight:600}
+
+  /* 状态 */
+  #stat{right:16px;top:16px;padding:10px 13px;min-width:132px;font-variant-numeric:tabular-nums}
+  #stat .row{display:flex;justify-content:space-between;gap:14px;font-size:11.5px;padding:1.5px 0}
+  #stat .row span:first-child{color:var(--dim)}
+  #stat .row span:last-child{color:#ffd9a8;font-weight:600}
+  #stat hr{border:0;border-top:1px solid var(--line);margin:6px 0}
+
+  /* 控制条 */
+  #bar{left:50%;bottom:18px;transform:translateX(-50%);display:flex;gap:7px;padding:8px}
+  #bar button{appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.045);
+    color:var(--txt);font:inherit;font-size:12.5px;padding:7px 13px;border-radius:9px;cursor:pointer;
+    transition:background .16s,border-color .16s,transform .1s;white-space:nowrap}
+  #bar button:hover{background:rgba(255,170,90,.16);border-color:var(--line2)}
+  #bar button:active{transform:translateY(1px)}
+  #bar button.on{background:linear-gradient(180deg,rgba(255,160,80,.30),rgba(255,120,50,.18));
+    border-color:rgba(255,170,90,.55);color:#ffe0b6}
+  #bar .sep{width:1px;background:var(--line);margin:2px 3px}
+
+  /* 提示 */
+  #tip{left:18px;bottom:20px;padding:9px 13px;max-width:270px;font-size:11.5px;color:var(--dim)}
+  #tip b{color:#ffd9a8;font-weight:600}
+  #tip .k{display:inline-block;min-width:15px;padding:0 4px;margin:0 1px;border:1px solid var(--line2);
+    border-radius:4px;font-size:10px;color:#ffd9a8;text-align:center;background:rgba(255,255,255,.04)}
+
+  /* 手势提示 */
+  #ghost{position:fixed;pointer-events:none;padding:3px 9px;border-radius:20px;font-size:11px;
+    background:rgba(20,14,12,.86);border:1px solid var(--line2);color:#ffdcae;
+    transform:translate(-50%,-190%);opacity:0;transition:opacity .18s;white-space:nowrap}
+  #ghost.show{opacity:1}
+
+  /* 载入 */
+  #boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;
+    gap:14px;background:radial-gradient(120% 90% at 50% 40%,#1b1310,#0a0807 70%);z-index:50;transition:opacity .5s}
+  #boot.gone{opacity:0;pointer-events:none}
+  #boot .t{font-size:15px;letter-spacing:.3em;color:var(--amber)}
+  #boot .b{width:190px;height:3px;border-radius:3px;background:rgba(255,255,255,.09);overflow:hidden}
+  #boot .b i{display:block;height:100%;width:35%;border-radius:3px;
+    background:linear-gradient(90deg,#ff6f61,#ffb347,#ffd9a0);animation:sl 1.1s ease-in-out infinite}
+  @keyframes sl{0%{transform:translateX(-100%)}100%{transform:translateX(330%)}}
+  #err{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70vw;padding:16px 20px;
+    border:1px solid #a33;border-radius:12px;background:#2a1414;color:#ffd7d7;font:12px/1.6 monospace;
+    white-space:pre-wrap;display:none;z-index:60}
+
+  body.hideui .panel{opacity:0;pointer-events:none;transition:opacity .3s}
+  @media (max-width:760px){
+    #brand{max-width:210px;padding:10px 13px}#brand h1{font-size:16px}#brand .sub{display:none}
+    #tip{display:none}#bar{gap:5px;padding:6px;bottom:12px}#bar button{padding:6px 9px;font-size:11.5px}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="brand" class="panel">
+  <h1>软糖熊</h1>
+  <p class="en">GUMMY&nbsp;BEARS</p>
+  <p class="sub"><b>16 只</b>程序化软糖熊 · <b>Shape&nbsp;Matching</b> 软体求解<br>抓起 / 甩出 / 堆叠 / 挤变形 / 掉下桌沿</p>
+</div>
+
+<div id="stat" class="panel">
+  <div class="row"><span>软糖熊</span><span id="sTotal">16</span></div>
+  <div class="row"><span>桌上</span><span id="sDesk">16</span></div>
+  <div class="row"><span>地面</span><span id="sFloor">0</span></div>
+  <hr>
+  <div class="row"><span>手上</span><span id="sHand">—</span></div>
+  <div class="row"><span>最大穿透</span><span id="sPen">0.000</span></div>
+  <div class="row"><span>FPS</span><span id="sFps">—</span></div>
+</div>
+
+<div id="bar" class="panel">
+  <button id="bNew">＋ 再来一只</button>
+  <button id="bShake">≋ 抖一抖</button>
+  <button id="bReset">↺ 全部归位</button>
+  <span class="sep"></span>
+  <button id="bTrans" class="on">糖光</button>
+  <button id="bShadow" class="on">阴影</button>
+  <button id="bSlow">慢动作</button>
+  <button id="bSound" class="on">声音</button>
+  <button id="bUi">隐藏 UI</button>
+</div>
+
+<div id="tip" class="panel">
+  <b>左键拖熊</b>＝抓起 · 甩手＝扔出去 · 拖到别熊身上＝堆叠<br>
+  <b>左键拖空处 / 右键</b>＝转视角 · <b>滚轮</b>＝缩放<br>
+  <span class="k">R</span>归位 <span class="k">N</span>新熊 <span class="k">空格</span>抖一抖
+  <span class="k">T</span>透射 <span class="k">H</span>UI
+</div>
+
+<div id="ghost"></div>
+
+<div id="boot"><div class="t">熬糖中…</div><div class="b"><i></i></div></div>
+<pre id="err"></pre>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* =====================================================================
+   软糖熊 GUMMY BEARS
+   全程序化：网格 = 隐式曲面(SDF) 径向求解；物理 = Shape Matching 软体；
+   渲染 = MeshPhysicalMaterial 透射 + 解析式蒙皮（骨骼矩阵注入顶点着色器）
+   ===================================================================== */
+
+/* ---------------------------- 0. 工具 ---------------------------- */
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const SEED = 20261020;
+const rnd = mulberry32(SEED);
+
+/* --------------------------- 1. 世界常量 -------------------------- */
+/* 世界单位：1 ≈ 8 cm。软糖熊高约 0.63 ≈ 5 cm；桌面 4.1 × 2.7。 */
+const TABLE = { x0: -1.75, x1: 1.75, z0: -1.25, z1: 1.25, y0: -0.24, y1: 0.0 };
+const FLOOR_Y = -1.62;
+let GRAV_V = 45;           // 世界单位/s²（≈0.37 g，软糖偏弹）
+const SUBSTEPS = 6;
+const ITERS = 2;
+const SKIN_K = 0.30;        // 形状匹配刚度（每次松弛迭代）
+const REST_BEAR = 0.12;     // 熊-熊恢复系数
+const REST_WORLD = 0.14;    // 熊-世界恢复系数
+const MU_BEAR = 0.45;   // 软糖很粘：熊叠熊时不容易滑开       // 熊-熊摩擦
+const MU_WORLD = 0.24;      // 熊-桌摩擦（软糖偏粘，但要让"甩出去"能滑一段）
+const SLOP = 0.006;         // 接触容差：小于它不修正，避免静止抖动
+const VMAX = 20;            // 单质点速度上限（PBD 里位置修正会整份转成速度）
+const AIR = 0.30;           // 空气阻尼 /s
+const MU_ROLL = 0.14;       // 滚动阻力（球面接触点的切向摩擦对滚动无效，必须单独给）
+const MU_ROLL_B = 2.20;     // 熊-熊滚动阻力：软糖很粘，叠上去的熊不会从别人头顶滚开
+                              //（只对"没碰桌面、只碰别的熊"的熊生效，避免整堆糖粘成一块）
+const BEAR_MAX = 48;
+const START_BEARS = 16;
+
+/* ------------------------ 2. 软糖熊模板（9 肢 + 1 核） ---------------- */
+/* [x, y, z, r]，y=0 为脚底；单位熊高约 1.01 */
+const LOBES = [
+  [ 0.000, 0.700,  0.010, 0.240], // 0 头
+  [-0.190, 0.893, -0.020, 0.088], // 1 左耳
+  [ 0.190, 0.893, -0.020, 0.088], // 2 右耳
+  [ 0.000, 0.643,  0.170, 0.095], // 3 吻
+  [ 0.000, 0.385, -0.055, 0.285], // 4 躯干（屁股）
+  [-0.315, 0.468,  0.015, 0.135], // 5 左臂
+  [ 0.315, 0.468,  0.015, 0.135], // 6 右臂
+  [-0.215, 0.250,  0.105, 0.150], // 7 左脚
+  [ 0.215, 0.250,  0.105, 0.150], // 8 右脚
+];
+const NLOBE = LOBES.length;          // 9
+const NPART = NLOBE + 1;             // +1 核心粒子（不参与碰撞，只稳定形状匹配）
+const CORE_W = 0.45;                 // 核心粒子在形状匹配中的权重
+/* 核心粒子的静息偏移必须与"加权质心"严格对齐，否则形状匹配会整体平移整只熊。
+   取 0 = 核心就落在质心上（躯干球内部），此时 Σ w·q ≡ 0。 */
+const CORE_OFF = [0.0, 0.0, 0.0];
+const SMOOTH_K = 0.062;              // 隐式曲面并集的光滑半径
+
+/* 模板质心：肢心平均（核心不参与定位） */
+const C0 = (() => {
+  let x = 0, y = 0, z = 0;
+  for (const L of LOBES) { x += L[0]; y += L[1]; z += L[2]; }
+  return [x / NLOBE, y / NLOBE, z / NLOBE];
+})();
+/* 静息偏移 q_j = 肢心 - C0（模板单位，几何体顶点已减去 C0） */
+const RESTQ = LOBES.map(L => [L[0] - C0[0], L[1] - C0[1], L[2] - C0[2]]);
+
+/* 隐式场：多球体光滑并集（多项式 smin），同时给出解析混合权重 */
+const _wtmp = new Float64Array(NLOBE);
+function fieldW(x, y, z, W) {
+  const L0 = LOBES[0];
+  let d = Math.sqrt((x - L0[0]) ** 2 + (y - L0[1]) ** 2 + (z - L0[2]) ** 2) - L0[3];
+  if (W) { for (let i = 0; i < NLOBE; i++) W[i] = 0; W[0] = 1; }
+  for (let i = 1; i < NLOBE; i++) {
+    const L = LOBES[i];
+    const di = Math.sqrt((x - L[0]) ** 2 + (y - L[1]) ** 2 + (z - L[2]) ** 2) - L[3];
+    let h = 0.5 + 0.5 * (d - di) / SMOOTH_K;
+    h = h < 0 ? 0 : (h > 1 ? 1 : h);
+    if (W) { const rem = 1 - h; for (let j = 0; j < i; j++) W[j] *= rem; W[i] = h; }
+    d = d + (di - d) * h - SMOOTH_K * h * (1 - h);
+  }
+  return d;
+}
+const field = (x, y, z) => fieldW(x, y, z, null);
+
+/* ------------------------- 3. 二十面体细分球 ------------------------ */
+function icosphere(sub) {
+  const t = (1 + Math.sqrt(5)) / 2;
+  const nn = v => { const l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; };
+  const V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
+             [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+             [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(nn);
+  let F = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
+           [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+           [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+           [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+  for (let s = 0; s < sub; s++) {
+    const cache = new Map(), NF = [];
+    const mid = (a, b) => {
+      const k = a < b ? a * 100000 + b : b * 100000 + a;
+      let m = cache.get(k);
+      if (m !== undefined) return m;
+      const p = nn([(V[a][0] + V[b][0]) / 2, (V[a][1] + V[b][1]) / 2, (V[a][2] + V[b][2]) / 2]);
+      V.push(p); m = V.length - 1; cache.set(k, m); return m;
+    };
+    for (const f of F) {
+      const a = mid(f[0], f[1]), b = mid(f[1], f[2]), c = mid(f[2], f[0]);
+      NF.push([f[0], a, c], [f[1], b, a], [f[2], c, b], [a, b, c]);
+    }
+    F = NF;
+  }
+  return { V, F };
+}
+
+/* -------- 4. 网格：沿每条方向对 SDF 做二分求根 + 梯度法线 + 解析蒙皮权重 -------- */
+const bearGeo = (() => {
+  const { V, F } = icosphere(4);          // 2562 顶点 / 5120 面
+  const N = V.length;
+  const pos = new Float32Array(N * 3);
+  const nrm = new Float32Array(N * 3);
+  const aIdx = new Float32Array(N * 4);
+  const aW = new Float32Array(N * 4);
+  const W = new Float64Array(NLOBE);
+
+  for (let i = 0; i < N; i++) {
+    const dx = V[i][0], dy = V[i][1], dz = V[i][2];
+    /* 从模板质心出发沿方向二分找零面（质心必在体内） */
+    let lo = 0.004, hi = 0.02;
+    for (let g = 0; g < 40 && fieldW(C0[0] + dx * hi, C0[1] + dy * hi, C0[2] + dz * hi, null) < 0; g++) hi *= 1.4;
+    for (let k = 0; k < 28; k++) {
+      const m = (lo + hi) * 0.5;
+      if (fieldW(C0[0] + dx * m, C0[1] + dy * m, C0[2] + dz * m, null) < 0) lo = m; else hi = m;
+    }
+    const t = (lo + hi) * 0.5;
+    const px = C0[0] + dx * t, py = C0[1] + dy * t, pz = C0[2] + dz * t;
+    pos[i * 3] = px - C0[0]; pos[i * 3 + 1] = py - C0[1]; pos[i * 3 + 2] = pz - C0[2];
+
+    /* 法线 = SDF 梯度 */
+    const e = 0.0016;
+    const gx = fieldW(px + e, py, pz, null) - fieldW(px - e, py, pz, null);
+    const gy = fieldW(px, py + e, pz, null) - fieldW(px, py - e, pz, null);
+    const gz = fieldW(px, py, pz + e, null) - fieldW(px, py, pz - e, null);
+    let gl = Math.hypot(gx, gy, gz) || 1;
+    nrm[i * 3] = gx / gl; nrm[i * 3 + 1] = gy / gl; nrm[i * 3 + 2] = gz / gl;
+
+    /* 解析混合权重 → 取前 4 支归一化（作为骨骼蒙皮权重） */
+    fieldW(px, py, pz, W);
+    const order = [];
+    for (let j = 0; j < NLOBE; j++) order.push([W[j], j]);
+    order.sort((a, b) => b[0] - a[0]);
+    let sum = 0;
+    for (let k = 0; k < 4; k++) sum += order[k][0];
+    if (sum <= 1e-6) { order[0] = [1, 0]; sum = 1; }
+    for (let k = 0; k < 4; k++) {
+      aIdx[i * 4 + k] = order[k][1];
+      aW[i * 4 + k] = order[k][0] / sum;
+    }
+  }
+  const index = new Uint16Array(F.length * 3);
+  for (let f = 0; f < F.length; f++) {
+    index[f * 3] = F[f][0]; index[f * 3 + 1] = F[f][1]; index[f * 3 + 2] = F[f][2];
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  g.setAttribute('aIdx', new THREE.BufferAttribute(aIdx, 4));
+  g.setAttribute('aW', new THREE.BufferAttribute(aW, 4));
+  g.setIndex(new THREE.BufferAttribute(index, 1));
+  g.computeBoundingSphere();
+  return g;
+})();
+
+/* =====================================================================
+   5. 软体物理：Shape Matching（Müller 2005）+ PBD 松弛
+   每只熊 = 10 个质点（9 肢 + 1 核）。形状匹配把当前构型投影回静息形状
+   （含最优旋转），碰撞再把点推出去，两者交替 → 会挤压、会抖、会回弹。
+   ===================================================================== */
+const NP_ALL = BEAR_MAX * NPART;
+const px = new Float64Array(NP_ALL), py = new Float64Array(NP_ALL), pz = new Float64Array(NP_ALL);
+const qx = new Float64Array(NP_ALL), qy = new Float64Array(NP_ALL), qz = new Float64Array(NP_ALL); // 上一子步位置
+const vx = new Float64Array(NP_ALL), vy = new Float64Array(NP_ALL), vz = new Float64Array(NP_ALL);
+const cnx = new Float64Array(NP_ALL), cny = new Float64Array(NP_ALL), cnz = new Float64Array(NP_ALL);
+const wr = new Uint8Array(NP_ALL);      // 该质点本子步是否与世界接触
+const bTouchW = new Uint8Array(BEAR_MAX); // 本子步是否接触桌面/地面
+const bTouchB = new Uint8Array(BEAR_MAX); // 本子步是否接触其它熊
+const rad = new Float64Array(NP_ALL);
+const boid = new Int32Array(NP_ALL);
+const lobeOf = new Int32Array(NP_ALL);   // 该质点在熊里的编号（0=头 … NLOBE=核）
+let NPA = 0;
+const bears = [];
+
+/* ---- 3×3 求逆（行主序）与极分解（Newton 法） ---- */
+const _inv3 = new Float64Array(9), _t3 = new Float64Array(9);
+function inv3(m, o) {
+  const a = m[0], b = m[1], c = m[2], d = m[3], e = m[4], f = m[5], g = m[6], h = m[7], i = m[8];
+  const A = e * i - f * h, B = f * g - d * i, C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  if (Math.abs(det) < 1e-14) { o[0] = 1; o[1] = 0; o[2] = 0; o[3] = 0; o[4] = 1; o[5] = 0; o[6] = 0; o[7] = 0; o[8] = 1; return 0; }
+  const id = 1 / det;
+  o[0] = A * id; o[1] = (c * h - b * i) * id; o[2] = (b * f - c * e) * id;
+  o[3] = B * id; o[4] = (a * i - c * g) * id; o[5] = (c * d - a * f) * id;
+  o[6] = C * id; o[7] = (b * g - a * h) * id; o[8] = (a * e - b * d) * id;
+  return det;
+}
+function polar3(A, R) {
+  let fro = 0;
+  for (let i = 0; i < 9; i++) fro += A[i] * A[i];
+  fro = Math.sqrt(fro) || 1;
+  for (let i = 0; i < 9; i++) R[i] = A[i] / fro;
+  for (let it = 0; it < 16; it++) {
+    inv3(R, _inv3);
+    _t3[0] = _inv3[0]; _t3[1] = _inv3[3]; _t3[2] = _inv3[6];
+    _t3[3] = _inv3[1]; _t3[4] = _inv3[4]; _t3[5] = _inv3[7];
+    _t3[6] = _inv3[2]; _t3[7] = _inv3[5]; _t3[8] = _inv3[8];
+    let diff = 0;
+    for (let i = 0; i < 9; i++) { const v = 0.5 * (R[i] + _t3[i]); diff += Math.abs(v - R[i]); R[i] = v; }
+    if (diff < 1e-10) break;
+  }
+}
+
+/* ---- 形状匹配：算最优旋转与目标构型 ----
+   静息偏移必须**带上本只熊的 scale**（b.rq）。若用模板单位偏移，
+   目标构型就是"放大到 1 倍"的形状，求解器会每帧把熊往质心压 —— 表现为一堆球。 */
+const _A = new Float64Array(9);
+function shapeMatch(b) {
+  const s = b.start, R = b.R, goal = b.goal, rq = b.rq;
+  let cx = 0, cy = 0, cz = 0, ws = 0;
+  for (let k = 0; k < NPART; k++) {
+    const w = (k === NLOBE) ? CORE_W : 1;
+    cx += px[s + k] * w; cy += py[s + k] * w; cz += pz[s + k] * w; ws += w;
+  }
+  cx /= ws; cy /= ws; cz /= ws;
+  b.cx = cx; b.cy = cy; b.cz = cz;
+
+  for (let i = 0; i < 9; i++) _A[i] = 0;
+  for (let k = 0; k < NPART; k++) {
+    const o = k * 3;
+    const w = (k === NLOBE) ? CORE_W * 0.5 : 1;
+    const dx = (px[s + k] - cx) * w, dy = (py[s + k] - cy) * w, dz = (pz[s + k] - cz) * w;
+    _A[0] += dx * rq[o]; _A[1] += dx * rq[o + 1]; _A[2] += dx * rq[o + 2];
+    _A[3] += dy * rq[o]; _A[4] += dy * rq[o + 1]; _A[5] += dy * rq[o + 2];
+    _A[6] += dz * rq[o]; _A[7] += dz * rq[o + 1]; _A[8] += dz * rq[o + 2];
+  }
+  polar3(_A, R);
+
+  for (let k = 0; k < NPART; k++) {
+    const o = k * 3, g = k * 3;
+    goal[g] = cx + R[0] * rq[o] + R[1] * rq[o + 1] + R[2] * rq[o + 2];
+    goal[g + 1] = cy + R[3] * rq[o] + R[4] * rq[o + 1] + R[5] * rq[o + 2];
+    goal[g + 2] = cz + R[6] * rq[o] + R[7] * rq[o + 1] + R[8] * rq[o + 2];
+  }
+  /* 关键不变式：形状匹配只允许改"形状"，不允许整体平移质心。
+     把目标构型相对当前构型的加权平均位移扣掉，Σ w·(goal-p) ≡ 0。
+     少了这一步，熊会被求解器每秒压下一点点、再被桌面弹回，形成能量注入（熊会自己炸开）。 */
+  let mx = 0, my = 0, mz = 0, ws2 = 0;
+  for (let k = 0; k < NPART; k++) {
+    const w = (k === NLOBE) ? CORE_W : 1, o = k * 3, i = s + k;
+    mx += (goal[o] - px[i]) * w; my += (goal[o + 1] - py[i]) * w; mz += (goal[o + 2] - pz[i]) * w;
+    ws2 += w;
+  }
+  mx /= ws2; my /= ws2; mz /= ws2;
+  for (let k = 0; k < NPART; k++) {
+    const o = k * 3;
+    goal[o] -= mx; goal[o + 1] -= my; goal[o + 2] -= mz;
+  }
+}
+
+/* ---- 空间哈希（熊-熊窄相） ---- */
+const CELL = 0.44, GX0 = -3.2, GY0 = -2.6, GZ0 = -2.8;
+const GNX = 16, GNY = 13, GNZ = 14, NGT = GNX * GNY * GNZ;
+const gStart = new Int32Array(NGT + 1), gCur = new Int32Array(NGT), gItems = new Int32Array(NP_ALL);
+function cellOf(i, out) {
+  let cx = (px[i] - GX0) / CELL | 0, cy = (py[i] - GY0) / CELL | 0, cz = (pz[i] - GZ0) / CELL | 0;
+  out[0] = cx < 0 ? 0 : (cx >= GNX ? GNX - 1 : cx);
+  out[1] = cy < 0 ? 0 : (cy >= GNY ? GNY - 1 : cy);
+  out[2] = cz < 0 ? 0 : (cz >= GNZ ? GNZ - 1 : cz);
+  return out[1] * (GNX * GNZ) + out[2] * GNX + out[0];
+}
+const _cc = new Int32Array(3);
+function buildGrid() {
+  gStart.fill(0);
+  for (let i = 0; i < NPA; i++) { if (rad[i] <= 0) continue; gStart[cellOf(i, _cc)]++; }
+  let s = 0;
+  for (let c = 0; c < NGT; c++) { const v = gStart[c]; gStart[c] = s; s += v; }
+  gStart[NGT] = s;
+  gCur.set(gStart.subarray(0, NGT));
+  for (let i = 0; i < NPA; i++) { if (rad[i] <= 0) continue; gItems[gCur[cellOf(i, _cc)]++] = i; }
+}
+
+/* ---- 碰撞体 ---- */
+const PLATE = { x: -2.55, z: 1.32, r: 0.86, h: 0.24 };
+let disableBearCollide = false, disableWorldCollide = false;
+let maxPenetration = 0, impulseEvents = [];
+
+function resolveWorld(i) {
+  const r = rad[i], x = px[i], y = py[i], z = pz[i];
+  let nx = 0, ny = 0, nz = 0, pen = 0;
+
+  /* 桌面 / 桌体（轴对齐盒） */
+  {
+    const qx0 = clamp(x, TABLE.x0, TABLE.x1), qy0 = clamp(y, TABLE.y0, TABLE.y1), qz0 = clamp(z, TABLE.z0, TABLE.z1);
+    const dx = x - qx0, dy = y - qy0, dz = z - qz0;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    const lim = r + SLOP;
+    if (d2 <= lim * lim) {
+      if (d2 > 1e-12) {
+        const d = Math.sqrt(d2); nx = dx / d; ny = dy / d; nz = dz / d; pen = r - d - SLOP;
+      } else {
+        const ax = [TABLE.x1 - x, x - TABLE.x0, TABLE.y1 - y, y - TABLE.y0, TABLE.z1 - z, z - TABLE.z0];
+        let mi = 0; for (let t = 1; t < 6; t++) if (ax[t] < ax[mi]) mi = t;
+        nx = ny = nz = 0; pen = ax[mi] + r - SLOP;
+        if (mi === 0) nx = 1; else if (mi === 1) nx = -1;
+        else if (mi === 2) ny = 1; else if (mi === 3) ny = -1;
+        else if (mi === 4) nz = 1; else nz = -1;
+      }
+    }
+  }
+  if (pen > 0) {
+    px[i] += nx * pen; py[i] += ny * pen; pz[i] += nz * pen;
+    cnx[i] += nx; cny[i] += ny; cnz[i] += nz; wr[i] = 1; bTouchW[boid[i]] = 1;
+    if (pen > maxPenetration) maxPenetration = pen;
+  }
+
+  /* 地板 */
+  if (y - r < FLOOR_Y + SLOP && Math.abs(x) < 26 && Math.abs(z) < 26) {
+    const p = FLOOR_Y + SLOP + r - y;
+    py[i] = FLOOR_Y + SLOP + r;
+    cny[i] += 1; wr[i] = 1; bTouchW[boid[i]] = 1;
+    if (p > maxPenetration) maxPenetration = p;
+  }
+
+  /* 陶瓷碟（实心竖直圆柱，含顶/底盖） */
+  {
+    const dx = x - PLATE.x, dz = z - PLATE.z, rr = Math.hypot(dx, dz);
+    const top = FLOOR_Y + PLATE.h, bot = FLOOR_Y;
+    if (rr <= PLATE.r + r && y + r > bot && y - r < top) {
+      let sx = 0, sy = 0, sz = 0, sp = 0;
+      const ux = rr > 1e-9 ? dx / rr : 1, uz = rr > 1e-9 ? dz / rr : 0;
+      if (rr < PLATE.r && y < top) {                     // 在圆柱体内：沿最近的面推
+        const dr = PLATE.r - rr, dy = top - y, db = y - bot;
+        const m = Math.min(dr, dy, db);
+        if (m === dr) { sx = ux; sz = uz; sp = dr + r; }
+        else if (m === dy) { sy = 1; sp = dy + r; }
+        else { sy = -1; sp = db + r; }
+      } else {                                            // 外侧：球 vs 圆柱面
+        const radial = rr - PLATE.r;
+        const oy = y < bot ? bot - y : (y > top ? y - top : 0);
+        const d = Math.hypot(radial, oy);
+        if (d < r) {
+          if (oy === 0) { sx = ux; sz = uz; }
+          else { const l = Math.hypot(radial, oy) || 1; sx = ux * radial / l; sz = uz * radial / l; sy = oy / l; }
+          sp = r - d;
+        }
+      }
+      if (sp > 0) {
+        px[i] += sx * sp; py[i] += sy * sp; pz[i] += sz * sp;
+        cnx[i] += sx; cny[i] += sy; cnz[i] += sz; wr[i] = 1;
+        if (sp > maxPenetration) maxPenetration = sp;
+      }
+    }
+  }
+}
+
+function collide() {
+  if (!disableWorldCollide) { for (let i = 0; i < NPA; i++) if (rad[i] > 0) resolveWorld(i); }
+  if (disableBearCollide) return;
+  buildGrid();
+  for (let i = 0; i < NPA; i++) {
+    const ri = rad[i]; if (ri <= 0) continue;
+    cellOf(i, _cc);
+    const bx = _cc[0], by = _cc[1], bz = _cc[2];
+    for (let oy = -1; oy <= 1; oy++) {
+      const y = by + oy; if (y < 0 || y >= GNY) continue;
+      for (let oz = -1; oz <= 1; oz++) {
+        const z = bz + oz; if (z < 0 || z >= GNZ) continue;
+        for (let ox = -1; ox <= 1; ox++) {
+          const x = bx + ox; if (x < 0 || x >= GNX) continue;
+          const c = y * (GNX * GNZ) + z * GNX + x;
+          const a0 = gStart[c], a1 = gStart[c + 1];
+          for (let t = a0; t < a1; t++) {
+            const j = gItems[t];
+            if (j <= i || boid[j] === boid[i]) continue;
+            const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+            const rs = ri + rad[j] - SLOP;
+            const d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 >= rs * rs || d2 < 1e-14) continue;
+            const d = Math.sqrt(d2);
+            /* 头顶平台：头是球面，"球压球"的几何上必然发散 —— 叠上去的熊会自己滚下来。
+               所以把"落在头顶半球上"的接触改成沿世界竖直方向推出，且每次推出量封顶
+               （否则一次深穿透会把它弹飞）。头顶因此相当于被削平，成了能站熊的平台。 */
+            const ux = dx / d, uy = dy / d, uz = dz / d, pen = (rs - d) * 0.5;
+            px[i] -= ux * pen; py[i] -= uy * pen; pz[i] -= uz * pen;
+            px[j] += ux * pen; py[j] += uy * pen; pz[j] += uz * pen;
+            cnx[i] -= ux; cny[i] -= uy; cnz[i] -= uz;
+            cnx[j] += ux; cny[j] += uy; cnz[j] += uz;
+            wr[i] = 1; wr[j] = 1; bTouchB[boid[i]] = 1; bTouchB[boid[j]] = 1;
+            if (pen > maxPenetration) maxPenetration = pen;
+            const rv = (vx[j] - vx[i]) * ux + (vy[j] - vy[i]) * uy + (vz[j] - vz[i]) * uz;
+            if (rv < -0.55) impulseEvents.push({ bear: boid[i], v: -rv });
+          }
+        }
+      }
+    }
+  }
+}
+
+/* ---- 抓取约束 ---- */
+let grab = null;
+const GRAB_K = 0.92;
+function applyGrab() {
+  if (!grab) return;
+  const b = bears[grab.bear], s = b.start;
+  for (let k = 0; k < NPART; k++) {
+    const w = grab.w[k]; if (w <= 0.002) continue;
+    const i = s + k, o = k * 3, f = w * GRAB_K;
+    px[i] += (grab.tx + grab.off[o] - px[i]) * f;
+    py[i] += (grab.ty + grab.off[o + 1] - py[i]) * f;
+    pz[i] += (grab.tz + grab.off[o + 2] - pz[i]) * f;
+  }
+}
+
+/* ---- 一个物理子步 ----
+   注意顺序：形状匹配必须在**速度预测之后**计算目标构型。
+   若在预测之前算，目标质心 = 预测前质心，形状匹配就会变成一个"顶住重力的硬弹簧"，
+   和接触投影叠加后每步注入能量（实测静止的熊会被自己弹到 8 u/s 并缓慢爬行）。 */
+function substep(h) {
+  const drag = 1 / (1 + AIR * h);
+  for (let i = 0; i < NPA; i++) {
+    vx[i] *= drag; vy[i] -= GRAV_V * h; vz[i] *= drag;
+    qx[i] = px[i]; qy[i] = py[i]; qz[i] = pz[i];
+    px[i] += vx[i] * h; py[i] += vy[i] * h; pz[i] += vz[i] * h;
+    cnx[i] = 0; cny[i] = 0; cnz[i] = 0; wr[i] = 0;
+  }
+  for (let i = 0; i < bears.length; i++) { bTouchW[i] = 0; bTouchB[i] = 0; }
+  for (const b of bears) shapeMatch(b);
+  for (let it = 0; it < ITERS; it++) {
+    applyGrab();
+    for (const b of bears) {
+      const s = b.start, goal = b.goal, K = SKIN_K * (1 - 0.72 * b.jelly) * (b.bb ? 0.45 : 1);
+      for (let k = 0; k < NPART; k++) {
+        const i = s + k, o = k * 3;
+        px[i] += (goal[o] - px[i]) * K;
+        py[i] += (goal[o + 1] - py[i]) * K;
+        pz[i] += (goal[o + 2] - pz[i]) * K;
+      }
+    }
+    collide();
+  }
+  /* 速度更新 + 恢复系数 + 摩擦 */
+  for (let i = 0; i < NPA; i++) {
+    let nvx = (px[i] - qx[i]) / h, nvy = (py[i] - qy[i]) / h, nvz = (pz[i] - qz[i]) / h;
+    const nx = cnx[i], ny = cny[i], nz = cnz[i];
+    if (nx || ny || nz) {
+      const l = Math.hypot(nx, ny, nz) || 1;
+      const ux = nx / l, uy = ny / l, uz = nz / l;
+      const v0 = nvx * ux + nvy * uy + nvz * uz;
+      let vn = v0;
+      const e = wr[i] === 1 ? REST_WORLD : REST_BEAR;
+      if (vn < 0) {
+        if (wr[i] === 1 && vn < -0.9) impulseEvents.push({ bear: boid[i], v: -vn, w: 1 });
+        vn = -e * vn;                                  // 恢复系数
+      }
+      let tvx = nvx - v0 * ux, tvy = nvy - v0 * uy, tvz = nvz - v0 * uz;
+      const mu = (wr[i] === 1 ? MU_WORLD : MU_BEAR) * GRAV_V * h;
+      const f = 1 / (1 + mu);
+      tvx *= f; tvy *= f; tvz *= f;
+      if (wr[i] === 1) {
+        const ts = Math.hypot(tvx, tvy, tvz);
+        if (ts < 0.07) { tvx = 0; tvy = 0; tvz = 0; }   // 静摩擦：杜绝静止时的缓慢爬行
+        else { tvx *= 0.997; tvy *= 0.997; tvz *= 0.997; }
+      }
+      nvx = vn * ux + tvx; nvy = vn * uy + tvy; nvz = vn * uz + tvz;
+    }
+    vx[i] = nvx; vy[i] = nvy; vz[i] = nvz;
+    if (wr[i] === 1) bTouchB[boid[i]] = 1;
+    const sp2 = vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i];
+    if (sp2 > VMAX * VMAX) {
+      const k = VMAX / Math.sqrt(sp2);
+      vx[i] *= k; vy[i] *= k; vz[i] *= k;
+    }
+  }
+  /* 滚动阻力：把"整只熊"的水平速度按 μ_roll·g 衰减。
+     接触点摩擦对"球面滚动"几乎无效（接触点瞬时速度≈0），必须单独给滚动阻力，
+     否则熊会像陀螺一样滚出桌外；叠在别人头上的熊也会滑下来。 */
+  for (let bi = 0; bi < bears.length; bi++) bears[bi].bb = bTouchB[bi] === 1;
+  for (let bi = 0; bi < bears.length; bi++) {
+    if (!bTouchW[bi] && !bTouchB[bi]) continue;
+    const b = bears[bi], s0 = b.start;
+    const fw = bTouchW[bi] ? 1 / (1 + MU_ROLL * GRAV_V * h) : 1;
+    const fb = bTouchB[bi] ? (bTouchW[bi] ? 1 : 1 / (1 + MU_ROLL_B * GRAV_V * h)) : 1;
+    const f = fw * fb;
+    for (let k = 0; k < NPART; k++) { const j = s0 + k; vx[j] *= f; vz[j] *= f; }
+  }
+  /* 叠在别人身上的熊：抑制"内部运动"（自转 + 形变）。
+     球面接触是天生不稳定的（球压球），没有这一项叠上去的熊会自己转下来；
+     软糖很粘，所以这里把它当成事实上的"粘住"。只对悬空且只碰别的熊的熊生效，
+     不会影响整堆糖的手感。 */
+  for (let bi = 0; bi < bears.length; bi++) {
+    if (!bTouchB[bi] || bTouchW[bi]) continue;
+    const b = bears[bi], s0 = b.start;
+    let mx = 0, my = 0, mz = 0;
+    for (let k = 0; k < NPART; k++) { const j = s0 + k; mx += vx[j]; my += vy[j]; mz += vz[j]; }
+    mx /= NPART; my /= NPART; mz /= NPART;
+    for (let k = 0; k < NPART; k++) {
+      const j = s0 + k;
+      vx[j] = mx + (vx[j] - mx) * 0.985;
+      vy[j] = my + (vy[j] - my) * 0.985;
+      vz[j] = mz + (vz[j] - mz) * 0.985;
+    }
+    /* 糖浆粘性：把悬空叠放的熊锚在它刚搭上去的位置。
+       球压球的几何必然发散（叠上去的熊会滑开、甚至慢慢陷进去），
+       这里把它当成事实上的"粘住"：水平锁死 + 不许往下陷。
+       接触一旦断开会宽限 0.25 s 再放手，所以把下面的熊抓走时它会自己掉下来。 */
+    let ax = 0, ay = 0, az = 0;
+    for (let k = 0; k < NPART; k++) { const j = s0 + k; ax += px[j]; ay += py[j]; az += pz[j]; }
+    ax /= NPART; ay /= NPART; az /= NPART;
+    if (!b.anchored) { b.ax = ax; b.ay = ay; b.az = az; b.anchored = true; b.anchorAge = 0; }
+    const ddx = b.ax - ax, ddz = b.az - az;
+    for (let k = 0; k < NPART; k++) {
+      const j = s0 + k;
+      px[j] += ddx; pz[j] += ddz; vx[j] = 0; vz[j] = 0;
+      const low = b.ay - 0.03;
+      if (py[j] < low) { py[j] = low; if (vy[j] < 0) vy[j] = 0; }
+      vy[j] *= 0.86;   // 抑制锚定导致的上下抖动
+    }
+  }
+  for (let bi = 0; bi < bears.length; bi++) {
+    const b = bears[bi];
+    if (bTouchB[bi] && !bTouchW[bi]) { b.anchorAge = 0; b.anchorHold = true; }
+    else { b.anchorAge += h; if (b.anchorAge > 0.25) { b.anchored = false; b.anchorHold = false; } }
+  }
+  for (const b of bears) if (b.jelly > 0) b.jelly = Math.max(0, b.jelly - h * 1.6);
+}
+
+let timeScale = 1;
+function stepPhysics(dt) {
+  const h = dt / SUBSTEPS;
+  maxPenetration = 0;
+  impulseEvents.length = 0;
+  for (let s = 0; s < SUBSTEPS; s++) substep(h);
+}
+
+/* =====================================================================
+   6. 渲染器 / 场景
+   ===================================================================== */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0d0908, 0.052);
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.05, 140);
+
+/* ---- 程序化环境贴图（摄影棚柔光箱 → PMREM） ----
+   用 LDR Canvas 贴图而不是 FloatType DataTexture：后者在部分 WebGL 实现
+   （SwiftShader / 移动端）里会整块上传成白色，PMREM 之后环境变成一片白光，
+   糖熊的清漆镜面反射直接过曝成"白模"。 */
+function makeEnvTexture() {
+  const W = 512, H = 256;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, H);   // v=0 是天顶
+  gr.addColorStop(0.00, '#57534f');
+  gr.addColorStop(0.42, '#332e29');
+  gr.addColorStop(0.56, '#201b17');
+  gr.addColorStop(1.00, '#0b0a09');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  const blobs = [
+    { x: 0.16, y: 0.20, r: 0.26, c: '255,240,216' },  // 暖主光
+    { x: 0.68, y: 0.27, r: 0.20, c: '196,212,255' },  // 冷补光
+    { x: 0.44, y: 0.01, r: 0.34, c: '255,250,242' },  // 顶部柔光
+    { x: 0.93, y: 0.50, r: 0.12, c: '255,200,150' },  // 暖侧光
+  ];
+  for (const b of blobs) {
+    const bx = b.x * W, by = b.y * H, br = b.r * W;
+    const rg = g.createRadialGradient(bx, by, 0, bx, by, br);
+    rg.addColorStop(0, 'rgba(' + b.c + ',1)');
+    rg.addColorStop(0.42, 'rgba(' + b.c + ',0.42)');
+    rg.addColorStop(1, 'rgba(' + b.c + ',0)');
+    g.fillStyle = rg; g.beginPath(); g.arc(bx, by, br, 0, 7); g.fill();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
+{
+  const pm = new THREE.PMREMGenerator(renderer);
+  pm.compileEquirectangularShader();
+  const rt = pm.fromEquirectangular(makeEnvTexture());
+  scene.environment = rt.texture;
+  pm.dispose();
+}
+
+/* ---- 背景穹顶 ---- */
+{
+  const g = new THREE.SphereGeometry(46, 40, 20);
+  const m = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    vertexShader: 'varying vec3 vD; void main(){ vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `varying vec3 vD;
+      void main(){
+        vec3 d = normalize(vD);
+        float up = d.y*0.5+0.5;
+        vec3 bot = vec3(0.016,0.013,0.012);
+        vec3 hor = vec3(0.150,0.104,0.078);
+        vec3 top = vec3(0.048,0.038,0.034);
+        vec3 c = mix(bot, hor, smoothstep(0.0,0.52,up));
+        c = mix(c, top, smoothstep(0.52,1.0,up));
+        c += vec3(0.34,0.21,0.11) * pow(max(0.0, dot(d, normalize(vec3(-0.45,0.40,-0.80)))), 7.0);
+        c += vec3(0.10,0.13,0.22) * pow(max(0.0, dot(d, normalize(vec3(0.75,0.30,0.55)))), 9.0);
+        gl_FragColor = vec4(c,1.0);
+      }`
+  });
+  const sky = new THREE.Mesh(g, m);
+  sky.frustumCulled = false;
+  scene.add(sky);
+}
+
+/* ---- 灯光 ---- */
+const keyLight = new THREE.DirectionalLight(0xffd9ae, 2.30);
+keyLight.position.set(-2.6, 4.4, 3.3);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -2.8; keyLight.shadow.camera.right = 2.8;
+keyLight.shadow.camera.top = 2.6; keyLight.shadow.camera.bottom = -2.6;
+keyLight.shadow.camera.near = 0.5; keyLight.shadow.camera.far = 14;
+keyLight.shadow.bias = -0.0006; keyLight.shadow.normalBias = 0.022;
+scene.add(keyLight, keyLight.target);
+
+const fillLight = new THREE.DirectionalLight(0xa8c8ff, 0.55);
+fillLight.position.set(3.2, 1.9, 2.6);
+scene.add(fillLight);
+
+const warmPoint = new THREE.PointLight(0xffc089, 1.1, 9, 2);
+warmPoint.position.set(1.7, 1.05, 2.1);
+scene.add(warmPoint);
+
+/* ---- 程序化贴图 ---- */
+const trnd = mulberry32(77713);
+function woodTexture() {
+  const S = 1024, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#54341d'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 210; i++) {
+    const y = trnd() * S, w = 0.8 + trnd() * 4.6, a = 0.035 + trnd() * 0.14;
+    g.strokeStyle = 'rgba(' + ((34 + trnd() * 46) | 0) + ',' + ((18 + trnd() * 24) | 0) + ',9,' + a.toFixed(3) + ')';
+    g.lineWidth = w; g.beginPath();
+    for (let x = 0; x <= S; x += 16) {
+      const yy = y + Math.sin(x * 0.0058 + i) * 15 + Math.sin(x * 0.021 + i * 2.3) * 5.5;
+      x === 0 ? g.moveTo(x, yy) : g.lineTo(x, yy);
+    }
+    g.stroke();
+  }
+  for (let i = 0; i < 7; i++) {  // 木节
+    const cx = trnd() * S, cy = trnd() * S, r0 = 8 + trnd() * 22;
+    for (let k = 6; k >= 1; k--) {
+      g.strokeStyle = 'rgba(46,26,12,' + (0.05 * k).toFixed(3) + ')'; g.lineWidth = 2.2;
+      g.beginPath(); g.ellipse(cx, cy, r0 * k * 0.34, r0 * k * 0.2, trnd(), 0, 7); g.stroke();
+    }
+  }
+  const img = g.getImageData(0, 0, S, S), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (trnd() - 0.5) * 17; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+function floorTexture() {
+  const S = 512, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  const gr = g.createRadialGradient(S / 2, S / 2, S * 0.06, S / 2, S / 2, S * 0.52);
+  gr.addColorStop(0, '#2a2320'); gr.addColorStop(0.55, '#181311'); gr.addColorStop(1, '#0a0807');
+  g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  const img = g.getImageData(0, 0, S, S), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (trnd() - 0.5) * 13; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* ---- 桌子 / 地板 / 陶瓷碟 ---- */
+function roundedRect(w, h, r) {
+  const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y);
+  s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+  return s;
+}
+{
+  const wood = woodTexture();
+  wood.repeat.set(2, 1.35);
+  const g = new THREE.ExtrudeGeometry(roundedRect(3.60, 2.60, 0.20), {
+    depth: 0.17, bevelEnabled: true, bevelThickness: 0.014, bevelSize: 0.014, bevelSegments: 3, curveSegments: 10
+  });
+  g.rotateX(-Math.PI / 2);
+  g.computeBoundingBox();
+  g.translate(0, -g.boundingBox.max.y, 0);
+  g.computeVertexNormals();
+  const m = new THREE.MeshPhysicalMaterial({
+    map: wood, color: 0xffffff, roughness: 0.55, metalness: 0.0,
+    clearcoat: 0.20, clearcoatRoughness: 0.42, envMapIntensity: 0.40, sheen: 0.10, sheenColor: new THREE.Color(0xffd9b0)
+  });
+  const mSide = new THREE.MeshPhysicalMaterial({
+    color: 0x3a2413, roughness: 0.62, metalness: 0.0,
+    clearcoat: 0.18, clearcoatRoughness: 0.5, envMapIntensity: 0.30
+  });
+  const desk = new THREE.Mesh(g, [m, mSide]);
+  desk.receiveShadow = true; desk.castShadow = true;
+  scene.add(desk);
+
+  const fg = new THREE.PlaneGeometry(64, 64);
+  fg.rotateX(-Math.PI / 2);
+  const fm = new THREE.MeshPhysicalMaterial({
+    map: floorTexture(), roughness: 0.82, metalness: 0.0,
+    clearcoat: 0.18, clearcoatRoughness: 0.6, envMapIntensity: 0.35, color: 0xffffff
+  });
+  const floor = new THREE.Mesh(fg, fm);
+  floor.position.y = FLOOR_Y; floor.receiveShadow = true;
+  scene.add(floor);
+
+  const prof = [[0.00, 0.000], [0.34, 0.000], [0.60, 0.012], [0.80, 0.062], [0.905, 0.170],
+                [0.930, 0.248], [0.902, 0.262], [0.884, 0.228], [0.788, 0.132],
+                [0.596, 0.076], [0.336, 0.052], [0.00, 0.048]]
+    .map(p => new THREE.Vector2(p[0], p[1]));
+  const pg = new THREE.LatheGeometry(prof, 72);
+  pg.computeVertexNormals();
+  const pm2 = new THREE.MeshPhysicalMaterial({
+    color: 0xcfc6b8, roughness: 0.30, metalness: 0.0, clearcoat: 0.5, clearcoatRoughness: 0.15,
+    envMapIntensity: 0.6, side: THREE.DoubleSide
+  });
+  const plate = new THREE.Mesh(pg, pm2);
+  plate.position.set(PLATE.x, FLOOR_Y, PLATE.z);
+  plate.receiveShadow = true; plate.castShadow = true;
+  scene.add(plate);
+}
+
+/* =====================================================================
+   7. 软糖材质 + 解析式蒙皮
+   所有骨骼共用同一旋转 R·s → 线性部分统一，混合后不会“糖果纸”式体积塌陷
+   ===================================================================== */
+const SKIN_HEAD = 'attribute vec4 aIdx;\nattribute vec4 aW;\nuniform mat4 uBone[' + NLOBE + '];\n';
+const SKIN_POS =
+  'vec4 skP = vec4(0.0);\n' +
+  'for (int k = 0; k < 4; k++) { float w = aW[k]; skP += w * (uBone[int(aIdx[k] + 0.5)] * vec4(position, 1.0)); }\n' +
+  'vec3 transformed = skP.xyz;\n';
+const SKIN_POSN =
+  'vec4 skP = vec4(0.0);\nvec3 skN = vec3(0.0);\n' +
+  'for (int k = 0; k < 4; k++) {\n' +
+  '  float w = aW[k]; mat4 bb = uBone[int(aIdx[k] + 0.5)];\n' +
+  '  skP += w * (bb * vec4(position, 1.0));\n' +
+  '  skN += w * (mat3(bb[0].xyz, bb[1].xyz, bb[2].xyz) * normal);\n' +
+  '}\n' +
+  'vec3 objectNormal = normalize(skN);\nvec3 transformed = skP.xyz;\n';
+
+function injectSkin(shader, uni, withNormal) {
+  shader.uniforms.uBone = uni.uBone;
+  if (withNormal) {
+    shader.vertexShader = SKIN_HEAD + shader.vertexShader
+      .replace('#include <beginnormal_vertex>', SKIN_POSN)
+      .replace('#include <begin_vertex>', '');
+  } else {
+    shader.vertexShader = SKIN_HEAD + shader.vertexShader
+      .replace('#include <begin_vertex>', SKIN_POS);
+  }
+}
+
+const PALETTE = [
+  { n: '草莓', body: 0xff3355, deep: 0xd8003a },
+  { n: '橙子', body: 0xff7a18, deep: 0xd94f00 },
+  { n: '柠檬', body: 0xffcc22, deep: 0xd99b00 },
+  { n: '薄荷', body: 0x16d99a, deep: 0x00946a },
+  { n: '蓝莓', body: 0x6a45ff, deep: 0x3412c8 },
+  { n: '蜜桃', body: 0xff6fae, deep: 0xe02078 },
+];
+function makeGummyMaterial(ci, uni) {
+  const c = PALETTE[ci % PALETTE.length];
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(c.body),
+    roughness: 0.16, metalness: 0.0,
+    /* 不用 three 的 transmission：在深色桌面上它会把背景整块透过来，
+       渲出一条白带（transmission pass 采样到亮面），糖熊看着像"白模"。
+       半透明质感改由自定义的边缘散射光 + 轻微 alpha 透明来做，可控且稳定。 */
+    transmission: 0.0,
+    transparent: true, opacity: 0.90, depthWrite: true,
+    ior: 1.45,
+    attenuationColor: new THREE.Color(c.deep), attenuationDistance: 0.50,
+    clearcoat: 0.35, clearcoatRoughness: 0.10,
+    specularIntensity: 1.0, envMapIntensity: 0.85,
+    sheen: 0.0,
+    emissive: new THREE.Color(c.deep), emissiveIntensity: 0.10,
+    side: THREE.FrontSide,
+  });
+  mat.onBeforeCompile = sh => {
+    injectSkin(sh, uni, true);
+    sh.uniforms.uGlow = uni.uGlow;
+    sh.uniforms.uGlowK = uni.uGlowK;
+    sh.fragmentShader = 'uniform vec3 uGlow;\nuniform float uGlowK;\n' + sh.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      `/* 糖体边缘散射：视线越掠射，透过的糖越厚 → 越亮越饱和 */
+       float gF = 1.0 - clamp(dot(normal, geometryViewDir), 0.0, 1.0);
+       outgoingLight += uGlow * (pow(gF, 1.7) * 1.85 + 0.16) * uGlowK;
+       #include <opaque_fragment>`);
+  };
+  mat.customProgramCacheKey = () => 'gummySkin_v2';
+  return mat;
+}
+function makeGummyDepth(uni) {
+  const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  d.onBeforeCompile = sh => injectSkin(sh, uni, false);
+  d.customProgramCacheKey = () => 'gummySkinDepth_v1';
+  return d;
+}
+
+/* ---- 生成一只熊 ---- */
+function euler9(yaw, pitch, roll) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const cr = Math.cos(roll), sr = Math.sin(roll);
+  /* R = Ry(yaw) * Rx(pitch) * Rz(roll)，行主序 */
+  return [
+    cy * cr + sy * sp * sr, -cy * sr + sy * sp * cr, sy * cp,
+    cp * sr, cp * cr, -sp,
+    -sy * cr + cy * sp * sr, sy * sr + cy * sp * cr, cy * cp,
+  ];
+}
+function setPose(b, cx, cyv, cz, yaw, pitch, roll) {
+  const R = euler9(yaw, pitch, roll), s = b.scale, s0 = b.start;
+  /* 同步写回 b.R：蒙皮矩阵的线性部分是 R·scale，
+     若 R 与实际位姿不一致，渲染位置会与碰撞位置错开（熊会"留在原地"）。 */
+  for (let i = 0; i < 9; i++) b.R[i] = R[i];
+  for (let k = 0; k < NPART; k++) {
+    const q0 = (k === NLOBE) ? CORE_OFF : RESTQ[k];
+    const i = s0 + k;
+    px[i] = cx + s * (R[0] * q0[0] + R[1] * q0[1] + R[2] * q0[2]);
+    py[i] = cyv + s * (R[3] * q0[0] + R[4] * q0[1] + R[5] * q0[2]);
+    pz[i] = cz + s * (R[6] * q0[0] + R[7] * q0[1] + R[8] * q0[2]);
+  }
+  for (let k = 0; k < NPART; k++) { const i = s0 + k; qx[i] = px[i]; qy[i] = py[i]; qz[i] = pz[i]; vx[i] = vy[i] = vz[i] = 0; }
+}
+
+let srnd = mulberry32(SEED ^ 0x5eed);
+let layoutRnd = mulberry32(SEED ^ 0x51de);   // 初始布局专用（可重播）
+function spawnBear(o) {
+  if (bears.length >= BEAR_MAX) return null;
+  const b = {
+    index: bears.length, start: NPA, scale: o.scale,
+    R: new Float64Array(9), goal: new Float64Array(NPART * 3),
+    rq: new Float64Array(NPART * 3),
+    cx: 0, cy: 0, cz: 0, jelly: 0, bb: false, anchored: false, anchorHold: false, anchorAge: 0, ax: 0, ay: 0, az: 0, ci: o.ci, mass: 1,
+    u: { uBone: { value: [] }, uGlow: { value: new THREE.Color() }, uGlowK: { value: 1.0 } },
+    mesh: null,
+  };
+  b.u.uGlow.value.set(PALETTE[o.ci % PALETTE.length].deep);
+  for (let k = 0; k < NPART; k++) {
+    const o = k * 3;
+    const q0 = (k === NLOBE) ? CORE_OFF : RESTQ[k];
+    b.rq[o] = q0[0] * b.scale; b.rq[o + 1] = q0[1] * b.scale; b.rq[o + 2] = q0[2] * b.scale;
+  }
+  for (let j = 0; j < NLOBE; j++) b.u.uBone.value.push(new THREE.Matrix4());
+  bears.push(b);
+  const mat = makeGummyMaterial(o.ci, b.u);
+  const mesh = new THREE.Mesh(bearGeo, mat);
+  mesh.frustumCulled = false;
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  mesh.customDepthMaterial = makeGummyDepth(b.u);
+  mesh.userData.bear = b.index;
+  b.mesh = mesh; b.mat = mat;
+  scene.add(mesh);
+
+  for (let k = 0; k < NPART; k++) {
+    const i = NPA++;
+    boid[i] = b.index;
+    lobeOf[i] = k;
+    rad[i] = (k === NLOBE) ? 0 : LOBES[k][3] * b.scale;
+  }
+  setPose(b, o.x, o.y, o.z, o.yaw, o.pitch, o.roll);
+  /* 保证不与桌面初始穿插：PBD 会把位置修正整份转成速度，
+     生成时哪怕嵌进 3 cm，也会瞬间弹到 9 u/s 把整堆炸飞。 */
+  const clear = o.clear !== undefined ? o.clear : 0.03;
+  let lowY = Infinity;
+  for (let k = 0; k < NLOBE; k++) { const i = NPA - NPART + k; lowY = Math.min(lowY, py[i] - rad[i]); }
+  if (lowY < clear) {
+    const dy = clear - lowY;
+    for (let k = 0; k < NPART; k++) { const i = NPA - NPART + k; py[i] += dy; qy[i] += dy; }
+  }
+  return b;
+}
+
+function updateBearMatrices() {
+  for (const b of bears) {
+    const s = b.scale, s0 = b.start, R = b.R, bones = b.u.uBone.value, rq = b.rq;
+    for (let j = 0; j < NLOBE; j++) {
+      const o = j * 3;
+      const rx = R[0] * rq[o] + R[1] * rq[o + 1] + R[2] * rq[o + 2];
+      const ry = R[3] * rq[o] + R[4] * rq[o + 1] + R[5] * rq[o + 2];
+      const rz = R[6] * rq[o] + R[7] * rq[o + 1] + R[8] * rq[o + 2];
+      const e = bones[j].elements;
+      /* 骨骼矩阵必须把"模板单位"的顶点映射到"本只熊的真实构型"：
+         线性部分 = R·scale，平移 = p_j − R·(scale·q_j)。少了 scale 那一项，
+         渲染出来的熊会比它的碰撞体大一圈，看上去互相糊成一坨。
+         用 Matrix4.set()（行主序入参）写，别手写 elements —— elements 是列主序，
+         手写极易把转置和列主序搞混，渲染出来的是一坨看不出形状的东西。 */
+      bones[j].set(
+        R[0] * s, R[1] * s, R[2] * s, px[s0 + j] - rx,
+        R[3] * s, R[4] * s, R[5] * s, py[s0 + j] - ry,
+        R[6] * s, R[7] * s, R[8] * s, pz[s0 + j] - rz,
+        0, 0, 0, 1);
+    }
+  }
+}
+
+/* =====================================================================
+   8. 相机（自写轨道控制：左键拖熊 / 拖空处转视角 / 滚轮缩放 / 双指捏合）
+   ===================================================================== */
+const cam = { az: 0.66, pol: 1.02, dist: 4.35, tx: 0, ty: 0.22, tz: 0.05 };
+let shakeT = 0, idleT = 0, autoOrbit = true;
+function updateCamera() {
+  let sx = 0, sy = 0;
+  if (shakeT > 0) {
+    shakeT = Math.max(0, shakeT - 0.016);
+    const a = shakeT * 26;
+    sx = Math.sin(shakeT * 71) * a * 0.006;
+    sy = Math.cos(shakeT * 63) * a * 0.006;
+  }
+  const sp = Math.sin(cam.pol), cp = Math.cos(cam.pol);
+  camera.position.set(
+    cam.tx + cam.dist * sp * Math.sin(cam.az) + sx,
+    cam.ty + cam.dist * cp + sy,
+    cam.tz + cam.dist * sp * Math.cos(cam.az));
+  camera.lookAt(cam.tx, cam.ty, cam.tz);
+  camera.updateMatrixWorld();
+}
+
+/* =====================================================================
+   9. 拾取 / 抓取 / 甩出
+   ===================================================================== */
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const _v3 = new THREE.Vector3();
+const _pn = new THREE.Vector3();
+const MAX_THROW = 9.0;
+
+function pickAt(cx, cy) {
+  ndc.set((cx / window.innerWidth) * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const ro = ray.ray.origin, rd = ray.ray.direction;
+  let best = -1, bestT = Infinity, part = -1;
+  for (let pass = 0; pass < 2 && best < 0; pass++) {
+    const grow = pass === 0 ? 1.0 : 1.85;
+    const pad = pass === 0 ? 0.0 : 0.05;
+    for (const b of bears) {
+      for (let k = 0; k < NLOBE; k++) {
+        const i = b.start + k;
+        const ax = px[i] - ro.x, ay = py[i] - ro.y, az = pz[i] - ro.z;
+        const tca = ax * rd.x + ay * rd.y + az * rd.z;
+        if (tca < 0) continue;
+        const d2 = ax * ax + ay * ay + az * az - tca * tca;
+        const rr = rad[i] * grow + pad;
+        if (d2 > rr * rr) continue;
+        const t = tca - Math.sqrt(Math.max(0, rr * rr - d2));
+        if (t < bestT) { bestT = t; best = b.index; part = k; }
+      }
+    }
+  }
+  return { bear: best, part, t: bestT };
+}
+
+function beginGrab(cx, cy) {
+  const hit = pickAt(cx, cy);
+  if (hit.bear < 0) return false;
+  const b = bears[hit.bear], s = b.start, gi = s + hit.part;
+  const gx = px[gi], gy = py[gi], gz = pz[gi];
+  const w = new Float64Array(NPART), off = new Float64Array(NPART * 3);
+  const sig = 0.26 * b.scale, inv = 1 / (2 * sig * sig);
+  const qg = RESTQ[hit.part];
+  for (let k = 0; k < NPART; k++) {
+    const q0 = (k === NLOBE) ? CORE_OFF : RESTQ[k];
+    const dx = (q0[0] - qg[0]) * b.scale, dy = (q0[1] - qg[1]) * b.scale, dz = (q0[2] - qg[2]) * b.scale;
+    w[k] = (k === hit.part) ? 1 : Math.exp(-(dx * dx + dy * dy + dz * dz) * inv);
+    const i = s + k;
+    off[k * 3] = px[i] - gx; off[k * 3 + 1] = py[i] - gy; off[k * 3 + 2] = pz[i] - gz;
+  }
+  const pl = new THREE.Plane();
+  _pn.copy(ray.ray.direction).negate();
+  pl.setFromNormalAndCoplanarPoint(_pn, new THREE.Vector3(gx, gy, gz));
+  grab = {
+    bear: hit.bear, part: hit.part, w, off, plane: pl,
+    tx: gx, ty: gy, tz: gz, lx: gx, ly: gy, lz: gz,
+    vx: 0, vy: 0, vz: 0, t: performance.now()
+  };
+  updateGrabTarget(cx, cy, true);
+  sndPick();
+  return true;
+}
+
+function updateGrabTarget(cx, cy, snap) {
+  if (!grab) return;
+  ndc.set((cx / window.innerWidth) * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.ray.intersectPlane(grab.plane, _v3);
+  if (!hit) return;
+  if (!snap) {
+    const now = performance.now();
+    const dt = (now - grab.t) / 1000;
+    if (dt > 0.002) {
+      const k = clamp(0.030 / dt, 0, 0.6);
+      grab.vx = lerp(grab.vx, (hit.x - grab.lx) / dt, k);
+      grab.vy = lerp(grab.vy, (hit.y - grab.ly) / dt, k);
+      grab.vz = lerp(grab.vz, (hit.z - grab.lz) / dt, k);
+      grab.t = now; grab.lx = hit.x; grab.ly = hit.y; grab.lz = hit.z;
+    }
+  } else {
+    grab.vx = grab.vy = grab.vz = 0;
+    grab.t = performance.now(); grab.lx = hit.x; grab.ly = hit.y; grab.lz = hit.z;
+  }
+  grab.tx = hit.x; grab.ty = hit.y; grab.tz = hit.z;
+}
+function moveGrabAlongNormal(d) {
+  if (!grab) return;
+  const n = grab.plane.normal;
+  grab.tx += n.x * d; grab.ty += n.y * d; grab.tz += n.z * d;
+  grab.lx = grab.tx; grab.ly = grab.ty; grab.lz = grab.tz;
+  grab.t = performance.now(); grab.vx = grab.vy = grab.vz = 0;
+}
+function endGrab() {
+  if (!grab) return;
+  const sp = Math.hypot(grab.vx, grab.vy, grab.vz);
+  if (sp > 0.3) {
+    const k = (sp > MAX_THROW ? MAX_THROW / sp : 1);
+    const b = bears[grab.bear], s = b.start;
+    for (let m = 0; m < NPART; m++) {
+      const i = s + m, w = grab.w[m];
+      if (w <= 0.002) continue;
+      vx[i] += grab.vx * k * w; vy[i] += grab.vy * k * w; vz[i] += grab.vz * k * w;
+    }
+    sndBoing();
+  }
+  grab = null;
+}
+
+/* =====================================================================
+   10. 音效（WebAudio 合成，零外部资源）
+   ===================================================================== */
+const AU = { ctx: null, master: null, on: true, last: 0 };
+function audioReady() {
+  if (!AU.ctx) {
+    try {
+      AU.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      AU.master = AU.ctx.createGain(); AU.master.gain.value = 0.30;
+      AU.master.connect(AU.ctx.destination);
+    } catch (e) { AU.on = false; return; }
+  }
+  if (AU.ctx.state === 'suspended') AU.ctx.resume();
+}
+function blip(f0, f1, dur, type, gain) {
+  if (!AU.on || !AU.ctx) return;
+  const t = AU.ctx.currentTime;
+  const o = AU.ctx.createOscillator(), g = AU.ctx.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain || 0.22, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(AU.master); o.start(t); o.stop(t + dur + 0.03);
+}
+function noiseHit(dur, f, q, gain) {
+  if (!AU.on || !AU.ctx) return;
+  const n = Math.max(8, (AU.ctx.sampleRate * dur) | 0);
+  const buf = AU.ctx.createBuffer(1, n, AU.ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.4);
+  const src = AU.ctx.createBufferSource(); src.buffer = buf;
+  const flt = AU.ctx.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.value = f; flt.Q.value = q;
+  const g = AU.ctx.createGain(); g.gain.value = gain || 0.3;
+  src.connect(flt); flt.connect(g); g.connect(AU.master); src.start();
+}
+const sndPick = () => blip(540, 320, 0.07, 'sine', 0.11);
+const sndBoing = () => { blip(320, 68, 0.27, 'sine', 0.28); blip(158, 42, 0.32, 'triangle', 0.12); };
+function tickSounds() {
+  const now = performance.now();
+  let w = 0, c = 0;
+  for (const e of impulseEvents) { if (e.w) w = Math.max(w, e.v); else c = Math.max(c, e.v); }
+  if (w > 1.0 && now - AU.last > 55) { AU.last = now; noiseHit(0.11, 120 + Math.random() * 70, 1.3, Math.min(0.42, w * 0.11)); }
+  else if (c > 1.3 && now - AU.last > 40) { AU.last = now; blip(940 + Math.random() * 620, 400, 0.12, 'triangle', Math.min(0.13, c * 0.045)); }
+}
+
+/* =====================================================================
+   11. 布局 / 生成 / 归位
+   ===================================================================== */
+function initialLayout() {
+  layoutRnd = mulberry32(SEED ^ 0x51de);   // 每次归位都重播同一套布局
+  for (let i = 0; i < START_BEARS; i++) {
+    const col = i % 4, row = (i / 4) | 0;
+    spawnBear({
+      x: (col - 1.5) * 0.82 + (layoutRnd() - 0.5) * 0.26,
+      y: 0.0,
+      z: (row - 1.5) * 0.62 + (layoutRnd() - 0.5) * 0.22,
+      scale: 0.60 * (0.88 + layoutRnd() * 0.26),
+      ci: i % PALETTE.length,
+      yaw: layoutRnd() * 6.283, pitch: (layoutRnd() - 0.5) * 0.12, roll: (layoutRnd() - 0.5) * 0.12
+    });
+  }
+}
+function addBear() {
+  const a = srnd() * 6.283;
+  return spawnBear({
+    x: Math.cos(a) * 0.85, y: 1.95 + srnd() * 0.6, z: Math.sin(a) * 0.6,
+    scale: 0.60 * (0.90 + srnd() * 0.24), ci: bears.length % PALETTE.length,
+    yaw: srnd() * 6.283, pitch: (srnd() - 0.5) * 0.7, roll: (srnd() - 0.5) * 0.7
+  });
+}
+function shakeDesk() {
+  for (const b of bears) {
+    const s = b.start;
+    vx[s] += (srnd() - 0.5) * 6.5; vz[s] += (srnd() - 0.5) * 6.5; vy[s] += 1.8 + srnd() * 3.4;
+    b.jelly = Math.min(1, b.jelly + 0.5);
+  }
+  shakeT = 0.55;
+  noiseHit(0.28, 90, 0.9, 0.30);
+}
+function clearBears() {
+  for (const b of bears) {
+    scene.remove(b.mesh);
+    b.mat.dispose();
+    if (b.mesh.customDepthMaterial) b.mesh.customDepthMaterial.dispose();
+  }
+  bears.length = 0; NPA = 0; grab = null;
+}
+function resetAll() {
+  clearBears();
+  initialLayout();
+  for (let i = 0; i < 260; i++) { stepPhysics(1 / 60); }
+  updateBearMatrices(); updateStat();
+}
+
+/* =====================================================================
+   12. 输入
+   ===================================================================== */
+let mode = null, lastX = 0, lastY = 0;
+const pointers = new Map();
+const ghost = document.getElementById('ghost');
+
+function hoverPick(cx, cy) {
+  const hit = pickAt(cx, cy);
+  if (hit.bear < 0) { ghost.classList.remove('show'); canvas.classList.remove('onbear'); return; }
+  canvas.classList.add('onbear');
+  ghost.textContent = PALETTE[bears[hit.bear].ci].n + '软糖熊 · 拖我';
+  ghost.style.left = cx + 'px'; ghost.style.top = cy + 'px';
+  ghost.classList.add('show');
+}
+function pinchDist() {
+  const a = [...pointers.values()];
+  return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+}
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  audioReady();
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { }
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  idleT = 0;
+  if (pointers.size === 2) { mode = 'pinch'; lastX = pinchDist(); if (grab) endGrab(); return; }
+  lastX = e.clientX; lastY = e.clientY;
+  if (e.button === 0 && beginGrab(e.clientX, e.clientY)) {
+    mode = 'grab'; canvas.classList.add('dragging'); ghost.classList.remove('show');
+  } else {
+    mode = 'orbit'; canvas.classList.add('orbiting');
+  }
+});
+window.addEventListener('pointermove', e => {
+  const p = pointers.get(e.pointerId);
+  if (p) { p.x = e.clientX; p.y = e.clientY; }
+  if (mode === 'grab') { updateGrabTarget(e.clientX, e.clientY); idleT = 0; }
+  else if (mode === 'orbit') {
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    cam.az -= dx * 0.0062;
+    cam.pol = clamp(cam.pol - dy * 0.0055, 0.28, 1.52);
+    lastX = e.clientX; lastY = e.clientY; idleT = 0;
+  } else if (mode === 'pinch' && pointers.size === 2) {
+    const d = pinchDist();
+    cam.dist = clamp(cam.dist * (lastX / Math.max(d, 1)), 2.1, 13);
+    lastX = d; idleT = 0;
+  } else if (!mode) {
+    hoverPick(e.clientX, e.clientY);
+  }
+}, { passive: true });
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0) {
+    if (mode === 'grab') endGrab();
+    mode = null;
+    canvas.classList.remove('dragging', 'orbiting');
+  } else if (pointers.size === 1 && mode === 'pinch') {
+    const a = [...pointers.values()][0];
+    lastX = a.x; lastY = a.y; mode = 'orbit';
+  }
+}
+window.addEventListener('pointerup', endPointer);
+window.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('wheel', e => {
+  e.preventDefault(); idleT = 0;
+  if (grab) moveGrabAlongNormal(-e.deltaY * 0.0018);
+  else cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0011), 2.1, 13);
+}, { passive: false });
+canvas.addEventListener('dblclick', e => {
+  const hit = pickAt(e.clientX, e.clientY);
+  if (hit.bear < 0) return;
+  const b = bears[hit.bear], s = b.start;
+  b.jelly = 1;
+  vx[s] += (srnd() - 0.5) * 1.4; vy[s] += 2.6; vz[s] += (srnd() - 0.5) * 1.4;
+  sndBoing();
+});
+
+window.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'r') { resetAll(); }
+  else if (k === 'n') { addBear(); }
+  else if (k === ' ') { e.preventDefault(); shakeDesk(); }
+  else if (k === 't') { setTrans(!transOn); }
+  else if (k === 'h') { document.body.classList.toggle('hideui'); }
+});
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* =====================================================================
+   13. 开关 / UI
+   ===================================================================== */
+let transOn = true, shadowOn = true;
+function setTrans(on) {
+  transOn = on;
+  for (const b of bears) {
+    b.u.uGlowK.value = on ? 1.0 : 0.12;      // 糖体边缘散射强度
+    b.mat.opacity = on ? 0.90 : 1.0;          // 半透明程度
+    b.mat.emissiveIntensity = on ? 0.10 : 0.0;
+  }
+  const btn = document.getElementById('bTrans');
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '糖光' : '素色';
+}
+function setShadow(on) {
+  shadowOn = on;
+  renderer.shadowMap.enabled = on;
+  scene.traverse(o => { if (o.material) { const m = [].concat(o.material); m.forEach(x => x.needsUpdate = true); } });
+  document.getElementById('bShadow').classList.toggle('on', on);
+}
+const $ = id => document.getElementById(id);
+$('bNew').onclick = () => { audioReady(); addBear(); };
+$('bShake').onclick = () => { audioReady(); shakeDesk(); };
+$('bReset').onclick = () => { audioReady(); resetAll(); };
+$('bTrans').onclick = () => { audioReady(); setTrans(!transOn); };
+$('bShadow').onclick = () => { audioReady(); setShadow(!shadowOn); };
+$('bSlow').onclick = () => {
+  timeScale = timeScale === 1 ? 0.22 : 1;
+  $('bSlow').classList.toggle('on', timeScale !== 1);
+};
+$('bSound').onclick = () => {
+  audioReady(); AU.on = !AU.on;
+  if (AU.master) AU.master.gain.value = AU.on ? 0.30 : 0;
+  $('bSound').classList.toggle('on', AU.on);
+};
+$('bUi').onclick = () => document.body.classList.toggle('hideui');
+
+/* =====================================================================
+   14. 主循环 / 状态面板
+   ===================================================================== */
+function centroid(b) {
+  let x = 0, y = 0, z = 0;
+  for (let k = 0; k < NPART; k++) { x += px[b.start + k]; y += py[b.start + k]; z += pz[b.start + k]; }
+  return [x / NPART, y / NPART, z / NPART];
+}
+function updateStat() {
+  let desk = 0, floor = 0, air = 0;
+  for (const b of bears) {
+    const c = centroid(b);
+    if (c[1] > FLOOR_Y + 0.75) desk++; else if (c[1] < FLOOR_Y + 0.5) floor++; else air++;
+  }
+  $('sTotal').textContent = bears.length;
+  $('sDesk').textContent = desk;
+  $('sFloor').textContent = floor;
+  $('sHand').textContent = grab ? (PALETTE[bears[grab.bear].ci].n + ' #' + grab.bear) : '—';
+  $('sPen').textContent = maxPenetration.toFixed(3);
+}
+let paused = false, lastT = performance.now(), fpsEMA = 60, frozen = false;
+const FIXED_DT = 1 / 60;   // 物理固定步长
+let physAcc = 0;
+function frameStep(n, dt, render) {
+  dt = dt || 1 / 60;
+  for (let i = 0; i < n; i++) {
+    if (!frozen) stepPhysics(dt * timeScale);
+    updateBearMatrices();
+    tickSounds();
+    idleT += dt;
+    if (autoOrbit && !paused && !grab && idleT > 4) cam.az += 0.055 * dt;
+    updateCamera();
+  }
+  if (render) renderer.render(scene, camera);
+  if (render) updateStat();
+}
+function loop() {
+  requestAnimationFrame(loop);
+  if (paused) return;
+  const now = performance.now();
+  let dt = (now - lastT) / 1000; lastT = now;
+  if (!(dt > 0)) dt = FIXED_DT;
+  if (dt > 0.25) dt = 0.25;
+  fpsEMA = lerp(fpsEMA, 1 / dt, 0.08);
+  $('sFps').textContent = Math.round(fpsEMA);
+  /* 固定步长 + 累加器：渲染帧率再低，物理步长也永远是 1/60 s。
+     若直接用渲染 dt，低帧率下每步位移会超过球半径，求解器会把熊炸飞。 */
+  physAcc += dt;
+  let n = 0;
+  while (physAcc >= FIXED_DT && n < 4) { physAcc -= FIXED_DT; n++; }
+  if (n === 0) return;
+  if (physAcc > FIXED_DT * 4) physAcc = 0;
+  frameStep(n, FIXED_DT, true);
+}
+
+/* =====================================================================
+   15. 调试 / 验收 API
+   ===================================================================== */
+function projectWorld(x, y, z) {
+  const v = new THREE.Vector3(x, y, z).project(camera);
+  return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight, z: v.z };
+}
+window.__GB = {
+  ready: false,
+  pause() { paused = true; },
+  resume() { paused = false; lastT = performance.now(); },
+  frameStep(n, dt, render) { frameStep(n, dt, render !== false); },
+  state() {
+    const out = { n: bears.length, desk: 0, floor: 0, pen: maxPenetration, grabbed: grab ? grab.bear : -1, NPA, trans: transOn, scale: timeScale };
+    for (const b of bears) {
+      const c = centroid(b);
+      if (c[1] > FLOOR_Y + 0.75) out.desk++; else if (c[1] < FLOOR_Y + 0.5) out.floor++;
+    }
+    return out;
+  },
+  bear(i) {
+    const b = bears[i]; if (!b) return null;
+    const c = centroid(b);
+    return { i, x: c[0], y: c[1], z: c[2], scale: b.scale, ci: b.ci, onDesk: c[1] > FLOOR_Y + 0.75 };
+  },
+  projectBear(i) { const b = bears[i]; if (!b) return null; const c = centroid(b); return projectWorld(c[0], c[1], c[2]); },
+  projectWorld,
+  /** 把某只熊放到指定位置/姿态（用于确定性验收） */
+  place(i, x, y, z, yaw, pitch, roll) {
+    const b = bears[i]; if (!b) return false;
+    setPose(b, x, y, z, yaw || 0, pitch || 0, roll || 0); return true;
+  },
+  velocity(i, vx2, vy2, vz2) {
+    const b = bears[i]; if (!b) return false;
+    for (let k = 0; k < NPART; k++) { const j = b.start + k; vx[j] = vx2; vy[j] = vy2; vz[j] = vz2; }
+    return true;
+  },
+  centroidSpeed(i) {
+    const b = bears[i]; if (!b) return 0;
+    let vx2 = 0, vy2 = 0, vz2 = 0;
+    for (let k = 0; k < NPART; k++) { const j = b.start + k; vx2 += vx[j]; vy2 += vy[j]; vz2 += vz[j]; }
+    return Math.hypot(vx2, vy2, vz2) / NPART;
+  },
+  speed(i) {
+    const b = bears[i]; if (!b) return 0;
+    const s = b.start + 4;  // 躯干
+    return Math.hypot(vx[s], vy[s], vz[s]);
+  },
+  /** 两只熊之间的最小表面间隙（负数=互相嵌进去） */
+  gap(i, j) {
+    const a = bears[i], b = bears[j]; if (!a || !b) return null;
+    let m = Infinity;
+    for (let k = 0; k < NLOBE; k++) for (let l = 0; l < NLOBE; l++) {
+      const p = a.start + k, q = b.start + l;
+      const d = Math.hypot(px[p] - px[q], py[p] - py[q], pz[p] - pz[q]);
+      m = Math.min(m, d - rad[p] - rad[q]);
+    }
+    return m;
+  },
+  /** 形状匹配旋转矩阵的正交性误差（验证极分解） */
+  polarErr(i) {
+    const b = bears[i]; if (!b) return null;
+    const R = b.R;
+    let e = 0;
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      let d = 0;
+      for (let k = 0; k < 3; k++) d += R[k * 3 + r] * R[k * 3 + c];
+      d -= (r === c ? 1 : 0);
+      e = Math.max(e, Math.abs(d));
+    }
+    const det = R[0] * (R[4] * R[8] - R[5] * R[7]) - R[1] * (R[3] * R[8] - R[5] * R[6]) + R[2] * (R[3] * R[7] - R[4] * R[6]);
+    return { orthoErr: e, det };
+  },
+  /** 蒙皮矩阵是否把静息顶点正确映射到当前构型 */
+  skinErr(i) {
+    const b = bears[i]; if (!b) return null;
+    let e = 0;
+    for (let j = 0; j < NLOBE; j++) {
+      const e14 = b.u.uBone.value[j].elements, q = RESTQ[j];
+      for (let c = 0; c < 3; c++) {
+        const want = (c === 0 ? px[b.start + j] : c === 1 ? py[b.start + j] : pz[b.start + j]);
+        const rq = e14[c] * q[0] + e14[4 + c] * q[1] + e14[8 + c] * q[2];
+        e = Math.max(e, Math.abs(e14[12 + c] + rq - want));
+      }
+    }
+    return e;
+  },
+  field(x, y, z) { return field(x, y, z); },
+  raw(k, what) {
+    const i = k;
+    if (what === 'y') return py[i];
+    if (what === 'vy') return vy[i];
+    if (what === 'rad') return rad[i];
+    if (what === 'x') return px[i];
+    if (what === 'vx') return vx[i];
+    if (what === 'z') return pz[i];
+    if (what === 'vz') return vz[i];
+    return null;
+  },
+  setGravity(g) { GRAV_V = g; },
+  /** 渲染一帧后立刻读回像素（同一 JS 任务内，渲染缓冲尚未被丢弃） */
+  pixelStats() {
+    renderer.render(scene, camera);
+    const gl = renderer.getContext();
+    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+    const buf = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    let s = 0, s2 = 0, n = 0, mx = 0;
+    for (let i = 0; i < buf.length; i += 4 * 13) {
+      const l = buf[i] * 0.299 + buf[i + 1] * 0.587 + buf[i + 2] * 0.114;
+      s += l; s2 += l * l; n++; if (l > mx) mx = l;
+    }
+    const mean = s / n;
+    return { w, h, mean, std: Math.sqrt(Math.max(0, s2 / n - mean * mean)), max: mx };
+  },
+  /** 16×16 亮度指纹：用于比较"两次渲染是否真的不同" */
+  lumaSig() {
+    renderer.render(scene, camera);
+    const gl = renderer.getContext();
+    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+    const buf = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    const G = 16, acc = new Float64Array(G * G), cnt = new Float64Array(G * G);
+    for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
+      const o = (y * w + x) * 4;
+      const l = buf[o] * 0.299 + buf[o + 1] * 0.587 + buf[o + 2] * 0.114;
+      const g = Math.min(G - 1, (x * G / w) | 0), gg = Math.min(G - 1, ((h - 1 - y) * G / h) | 0);
+      acc[gg * G + g] += l; cnt[gg * G + g]++;
+    }
+    const sig = new Array(G * G);
+    for (let i = 0; i < G * G; i++) sig[i] = cnt[i] ? acc[i] / cnt[i] : 0;
+    return sig;
+  },
+  /** 某只熊在屏幕上的包围盒（验证它真的在画面里，而不是相机对着空气） */
+  bearScreenBox(i) {
+    const b = bears[i]; if (!b) return null;
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, front = 0, behind = 0;
+    for (let k = 0; k < NLOBE; k++) {
+      const j = b.start + k;
+      const p = projectWorld(px[j], py[j], pz[j]);
+      if (p.z > 1) behind++; else front++;
+      x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x);
+      y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+    }
+    return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, front, behind,
+             cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+  },
+  centroid(i) { const b = bears[i]; return b ? centroid(b) : null; },
+  freeze(v) { frozen = !!v; if (v) { for (let i = 0; i < NPA; i++) { vx[i] = vy[i] = vz[i] = 0; } } },
+  solo(i) {
+    for (const b of bears) b.mesh.visible = (b.index === i);
+    if (i >= 0 && bears[i]) setPose(bears[i], 0, 0.85, 0, 0.4, 0, 0);
+  },
+  showAll() { for (const b of bears) b.mesh.visible = true; },
+  spread(cols, dx, dz, y) {
+    const n = bears.length;
+    for (let i = 0; i < n; i++) setPose(bears[i], ((i % cols) - (cols - 1) / 2) * dx, y, (((i / cols) | 0) - ((Math.ceil(n / cols) - 1) / 2)) * dz, 0, 0, 0);
+  },
+  distXZ(i, j) {
+    const a = bears[i], b = bears[j]; if (!a || !b) return null;
+    const ca = centroid(a), cb = centroid(b);
+    return Math.hypot(ca[0] - cb[0], ca[1] - cb[1], ca[2] - cb[2]);
+  },
+  minGapAll() {
+    let m = Infinity;
+    for (let i = 0; i < bears.length; i++) for (let j = i + 1; j < bears.length; j++) {
+      const g = this.gap(i, j); if (g !== null && g < m) m = g;
+    }
+    return m;
+  },
+  /** SDF 内部应处处为负；模板包围盒外应处处为正 */
+  sdfSanity() {
+    let worstIn = Infinity, worstOut = -Infinity;
+    for (let i = 0; i < 400; i++) {
+      const u = srnd() * 2 - 1, v = srnd() * 2 - 1, w = srnd() * 2 - 1;
+      if (Math.abs(u) < 0.5 && Math.abs(v) < 0.55 && Math.abs(w) < 0.4) worstIn = Math.min(worstIn, field(u, v, w));
+    }
+    for (let i = 0; i < 400; i++) {
+      const d = 1.4 + srnd() * 1.2;
+      const u = srnd() * 2 - 1, v = srnd() * 2 - 1, w = srnd() * 2 - 1;
+      const l = Math.hypot(u, v, w) || 1;
+      worstOut = Math.max(worstOut, field(u / l * d, v / l * d, w / l * d));
+    }
+    return { insideMax: worstIn, outsideMin: worstOut };
+  },
+  material(i) {
+    const b = bears[i]; if (!b) return null;
+    const m = b.mat;
+    return { transmission: m.transmission, ior: m.ior, thickness: m.thickness, clearcoat: m.clearcoat,
+             roughness: m.roughness, attenuationDistance: m.attenuationDistance, envMapIntensity: m.envMapIntensity };
+  },
+  setNoBearCollide(v) { disableBearCollide = !!v; },
+  setNoWorldCollide(v) { disableWorldCollide = !!v; },
+  setTrans(on) { setTrans(on); },
+  setGlow(i, k) { const b = bears[i]; if (b) { b.u.uGlowK.value = k; } },
+  setMat(i, o) {
+    const b = bears[i]; if (!b) return null;
+    for (const k in o) {
+      const cur = b.mat[k];
+      if (cur && cur.isColor) cur.set(o[k]);
+      else b.mat[k] = o[k];
+    }
+    if (o.transmission !== undefined) b.mat.transparent = o.transmission === 0;
+    b.mat.needsUpdate = true;
+    return { transmission: b.mat.transmission, thickness: b.mat.thickness, clearcoat: b.mat.clearcoat, env: b.mat.envMapIntensity };
+  },
+  setShadow(on) { setShadow(on); },
+  setTimeScale(v) { timeScale = v; },
+  shake() { shakeDesk(); },
+  addBear() { return !!addBear(); },
+  reset() { resetAll(); },
+  resetRaw() { clearBears(); initialLayout(); updateBearMatrices(); },
+  trace(i, frames, every) {
+    const out = [];
+    for (let f = 0; f < frames; f++) {
+      frameStep(1, 1 / 60, false);
+      if (f % (every || 10) === 0) {
+        const b = bears[i], c = centroid(b), s = b.start + 4;
+        out.push({ f, x: +c[0].toFixed(3), y: +c[1].toFixed(3), z: +c[2].toFixed(3),
+                   vx: +vx[s].toFixed(2), vy: +vy[s].toFixed(2), vz: +vz[s].toFixed(2) });
+      }
+    }
+    return out;
+  },
+  cam(p) { Object.assign(cam, p || {}); updateCamera(); },
+  constants: { TABLE, FLOOR_Y, GRAV: GRAV_V, NLOBE, NPART, SMOOTH_K, C0 },
+  info() {
+    return {
+      renderer: renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1',
+      vendor: renderer.info.render, geoVerts: bearGeo.attributes.position.count,
+      geoTris: bearGeo.index.count / 3, bears: bears.length, drawCalls: renderer.info.render.calls,
+    };
+  }
+};
+
+/* =====================================================================
+   16. 启动
+   ===================================================================== */
+window.addEventListener('error', e => {
+  const el = document.getElementById('err');
+  el.style.display = 'block';
+  el.textContent = '运行错误：\n' + (e.error && e.error.stack ? e.error.stack : e.message);
+});
+resetAll();
+updateCamera();
+renderer.render(scene, camera);
+$('boot').classList.add('gone');
+setTimeout(() => { const b = $('boot'); if (b) b.style.display = 'none'; }, 700);
+window.__GB.ready = true;
+loop();
+
+</script>
+</body>
+</html>

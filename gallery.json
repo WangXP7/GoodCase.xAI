@@ -85,6 +85,14 @@
     },
     {
       "ns": "workbuddy",
+      "dir": "gummy-bears",
+      "entry": "index.html",
+      "title": "软糖熊 · 可抓取软体糖果物理",
+      "desc": "抓起 · 甩出 · 堆叠 · 挤变形 · 撞桌沿滑落，16 只程序化软糖熊（隐式曲面网格 + Shape Matching 软体物理，零外部资源）· 总耗时 1 小时 25 分",
+      "agent": "WorkBuddy + Space Bunny"
+    },
+    {
+      "ns": "workbuddy",
       "dir": "hy4-mcp-shooter",
       "entry": "index.html",
       "title": "NEXUS BREACH · MCP 驱动射击游戏",
