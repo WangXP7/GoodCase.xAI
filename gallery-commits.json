@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "e25bfabd8404a6a8562965b1a947edf5e354ceb3",
+  "snapshot": "061f571ef7364f61565ce8d6ede32fae85a7feed",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -147,6 +147,11 @@
       "committedAt": "2026-10-15T09:22:31Z",
       "commit": "bed668c60eb171bc07a27c643574fae11eb2361b",
       "scope": "workbuddy/emberfall-rpg"
+    },
+    "workbuddy/gummy-bears/index.html": {
+      "committedAt": "2026-10-21T07:26:49Z",
+      "commit": "061f571ef7364f61565ce8d6ede32fae85a7feed",
+      "scope": "workbuddy/gummy-bears"
     },
     "workbuddy/hy4-mcp-shooter/index.html": {
       "committedAt": "2026-10-14T11:07:48Z",
