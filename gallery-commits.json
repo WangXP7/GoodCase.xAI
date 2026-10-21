@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "388e10d54fb7cc1dd4d5334b5174040d30fa5a8a",
+  "snapshot": "b0363969381475eae6d4a891ddfcec3998301179",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -133,6 +133,11 @@
       "commit": "2ced1675fe8e48b98ac080826dc948aa23e1d5cf",
       "scope": "workbuddy/buckshot-roulette"
     },
+    "workbuddy/deepseek-ai-search/README.md": {
+      "committedAt": "2026-10-21T16:22:54Z",
+      "commit": "b0363969381475eae6d4a891ddfcec3998301179",
+      "scope": "workbuddy/deepseek-ai-search"
+    },
     "workbuddy/diorama-winter/index.html": {
       "committedAt": "2026-10-15T17:58:15Z",
       "commit": "f48ef1d04e77f6c6dce139a25635043855a5e742",
@@ -202,6 +207,11 @@
       "committedAt": "2026-10-15T09:22:31Z",
       "commit": "bed668c60eb171bc07a27c643574fae11eb2361b",
       "scope": "workbuddy/penguin-survival"
+    },
+    "workbuddy/procedural-city-cn/index.html": {
+      "committedAt": "2026-10-21T16:22:54Z",
+      "commit": "b0363969381475eae6d4a891ddfcec3998301179",
+      "scope": "workbuddy/procedural-city-cn"
     },
     "workbuddy/rocket-launch-sim/src/index.html": {
       "committedAt": "2026-10-17T16:16:08Z",
