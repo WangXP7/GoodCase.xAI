@@ -260,6 +260,14 @@
       "agent": "WorkBuddy + Step-5-Preview"
     },
     {
+      "ns": "workbuddy",
+      "dir": "last-train-rush",
+      "entry": "index.html",
+      "title": "末班快车 · 3D 地铁跑酷",
+      "desc": "3D 地铁跑酷 · 背电脑包的程序员在末班车离站前追击：换道 / 跳跃 / 翻滚躲避列车与路障、吃金币与擦身加分，越跑越快，3 颗心与受击无敌帧；角色 / 场景 / 音效全程序化生成，Three.js 本地 vendor 零外部素材，附 589KB 单文件离线版 · 总耗时约 3 小时",
+      "agent": "WorkBuddy + Step-5-Preview"
+    },
+    {
       "ns": "zcode",
       "dir": ".",
       "entry": "aurora-ocean.html",

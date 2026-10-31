@@ -15,6 +15,7 @@
   set('workbuddy/hy4-mcp-shooter','裂隙突围 · MCP 射击场','游戏|动作冒险|3D|Three.js');
   set('workbuddy/jarvis-dashboard','贾维斯 · 赛博主控台','工具面板|视觉艺术');
   set('workbuddy/koi-pond','锦鲤池 · 倒影与鱼群','视觉艺术|3D|Three.js|游戏');
+  set('workbuddy/last-train-rush','末班快车 · 3D 地铁跑酷','游戏|动作冒险|3D|Three.js');
   set('workbuddy/lunar-rover','月面运输 · 低重力货运','游戏|模拟仿真|航天|3D|Three.js');
   set('workbuddy/minecraft-clone','方块世界 · 自由探索','游戏|3D|WebGL / GLSL');
   set('workbuddy/minimax-m31-flash-promo','瞬光 · M3.1 Flash 宣传片','视觉艺术','40 秒程序化产品宣传片：单文件 Canvas2D 按确定性时间轴逐帧绘制，六幕结构配程序化合成配乐，零外部素材。制作耗时约 70 分钟。');
