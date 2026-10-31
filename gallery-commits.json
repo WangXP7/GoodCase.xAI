@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "b0363969381475eae6d4a891ddfcec3998301179",
+  "snapshot": "8c2d2818529eb6f90b428c6b0bc3b12d197c5e9e",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -172,6 +172,11 @@
       "committedAt": "2026-10-21T07:34:21Z",
       "commit": "68ed84cd1d04c9dc6281b34939c36cb87b78a44e",
       "scope": "workbuddy/koi-pond"
+    },
+    "workbuddy/last-train-rush/index.html": {
+      "committedAt": "2026-10-31T14:35:02Z",
+      "commit": "8c2d2818529eb6f90b428c6b0bc3b12d197c5e9e",
+      "scope": "workbuddy/last-train-rush"
     },
     "workbuddy/lunar-rover/index.html": {
       "committedAt": "2026-10-14T11:13:12Z",
