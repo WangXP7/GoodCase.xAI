@@ -268,6 +268,14 @@
       "agent": "WorkBuddy + Step-5-Preview"
     },
     {
+      "ns": "workbuddy",
+      "dir": "qingming-hongqiao",
+      "entry": "index.html",
+      "title": "清明上河图 · 虹桥汴河活画卷",
+      "desc": "实时 3D 虹桥场景 · 编木拱 11 榀拱骨 + 26 跨望柱栏杆、货船随桥距连续放倒桅杆穿桥洞、26 名桥上摊贩与行人 + 5 名艄公、两岸 30 余栋宋代店铺与三层远山剪影，画卷视角 / 3D 漫游 / 20 秒自动运镜三态；全程序化零外部素材，Three.js r160 本地内置 · 总耗时约 45 分钟",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+    },
+    {
       "ns": "zcode",
       "dir": ".",
       "entry": "aurora-ocean.html",
