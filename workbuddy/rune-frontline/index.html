@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>符文战线 · 三路弹幕塔防</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#05090e;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{display:block;background:#0b1420;touch-action:none;
+    box-shadow:0 0 60px rgba(116,220,233,.08)}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<script>
+'use strict';
+
+/* ============================ 常量 ============================ */
+const W = 750, H = 1334;
+
+const LANES = 3;
+const COLS = 11;
+const ROWS = 36;              // 每路 36 行，上下各 18 行 → 11×36×3 = 1188 格
+const CELL = 20;
+const LANE_X = [15, 260, 505];
+const LANE_W = 230;
+const GRID_OFF = 5;           // (230 - 11*20)/2
+const GRID_Y = 180;
+const GRID_H = ROWS * CELL;   // 720
+
+const FIELD_TOP = 100;
+const FIELD_BOT = 980;
+
+const ENEMY_CORE_Y = 138;
+const CORE_H = 56;
+
+const DOCK_Y = 980;
+
+const COL_ALLY = '#1D9E75';
+const COL_ALLY_HI = '#5DCAA5';
+const COL_ENEMY = '#C0392B';
+const COL_ENEMY_HI = '#F09595';
+const COL_GOLD = '#d7b776';
+const COL_CYAN = '#74dce9';
+const COL_INK = '#e6edf0';
+const COL_MUTED = '#7d949f';
+
+/* ============================ 英雄 ============================ */
+const HEROES = [
+  { id:'garen', name:'盖伦', role:'坦克', color:'#7fd8c8',
+    hp:1700, atk:26, speed:1.40, proj:1, splash:26,
+    ultName:'德玛西亚正义', ultDmg:900, ultCd:18 },
+  { id:'jinx', name:'金克丝', role:'射手', color:'#ffb179',
+    hp:820, atk:18, speed:2.10, proj:2, splash:0,
+    ultName:'超级死亡火箭', ultDmg:800, ultCd:20 },
+  { id:'ashe', name:'艾希', role:'射手', color:'#8fd0ff',
+    hp:780, atk:20, speed:1.70, proj:2, splash:0, slow:0.35,
+    ultName:'魔法水晶箭', ultDmg:700, ultCd:22 },
+  { id:'lux', name:'拉克丝', role:'法师', color:'#e0c6ff',
+    hp:740, atk:30, speed:1.35, proj:1, splash:0, pierce:3,
+    ultName:'终极闪光', ultDmg:1100, ultCd:24 },
+  { id:'teemo', name:'提莫', role:'诡术', color:'#c8e878',
+    hp:700, atk:13, speed:2.20, proj:2, splash:0, poison:3,
+    ultName:'蘑菇阵', ultDmg:600, ultCd:18 },
+];
+
+/* 6 个点位：每路 2 个，第 6 个空（靠海克斯召唤物补） */
+const SLOTS = [];
+for (let l = 0; l < LANES; l++) {
+  SLOTS.push({ lane:l, kind:'front', row:24, col:4 });
+  SLOTS.push({ lane:l, kind:'rear',  row:31, col:4 });
+}
+const ACTIVE_SLOTS = [0, 1, 2, 3, 4];   // 前 5 个点位有英雄，第 6 个空
+
+/* ============================ 海克斯 ============================ */
+/* apply 接收全局 buff 对象 */
+const HEXES = [
+  // 白银
+  { id:'s1', tier:'silver', name:'迅捷步伐', fac:'攻', desc:'全队攻速 +15%',
+    apply:b => b.spdMul *= 1.15 },
+  { id:'s2', tier:'silver', name:'锐眼', fac:'攻', desc:'全队伤害 +12%',
+    apply:b => b.atkMul *= 1.12 },
+  { id:'s3', tier:'silver', name:'铁壁', fac:'守', desc:'全队最大生命 +20%',
+    apply:b => b.hpMul *= 1.20 },
+  { id:'s4', tier:'silver', name:'荆棘外壳', fac:'守', desc:'水晶获得 400 护盾',
+    apply:b => b.coreShield += 400 },
+  { id:'s5', tier:'silver', name:'剧毒涂层', fac:'术', desc:'命中附带 4 点持续伤害',
+    apply:b => b.poisonAdd += 4 },
+  { id:'s6', tier:'silver', name:'法力涌动', fac:'法', desc:'技能伤害 +25%',
+    apply:b => b.skillMul *= 1.25 },
+  { id:'s7', tier:'silver', name:'淘金热', fac:'财', desc:'碎格金币 +40%',
+    apply:b => b.goldMul *= 1.40 },
+  { id:'s8', tier:'silver', name:'齿轮加速', fac:'械', desc:'弹道 +1（散射 60%）',
+    apply:b => b.projAdd += 1 },
+  // 黄金
+  { id:'g1', tier:'gold', name:'致命节奏', fac:'攻', desc:'攻速 +30%，伤害 +8%',
+    apply:b => { b.spdMul *= 1.30; b.atkMul *= 1.08; } },
+  { id:'g2', tier:'gold', name:'弹幕扩充', fac:'攻', desc:'弹道 +2',
+    apply:b => b.projAdd += 2 },
+  { id:'g3', tier:'gold', name:'处决者', fac:'攻', desc:'全队伤害 +35%',
+    apply:b => b.atkMul *= 1.35 },
+  { id:'g4', tier:'gold', name:'不屈壁垒', fac:'守', desc:'水晶护盾 +900，生命 +15%',
+    apply:b => { b.coreShield += 900; b.hpMul *= 1.15; } },
+  { id:'g5', tier:'gold', name:'瘟疫', fac:'术', desc:'毒 +10，且可叠加',
+    apply:b => { b.poisonAdd += 10; b.poisonStack = true; } },
+  { id:'g6', tier:'gold', name:'无人机群', fac:'械', desc:'每 8 秒自动发射 1 枚全路导弹',
+    apply:b => b.drone = (b.drone||0) + 1 },
+  { id:'g7', tier:'gold', name:'奥术洪流', fac:'法', desc:'技能伤害 +40%，CD -15%',
+    apply:b => { b.skillMul *= 1.40; b.cdMul *= 0.85; } },
+  { id:'g8', tier:'gold', name:'商业帝国', fac:'财', desc:'金币 +60%，立即 +400 金',
+    apply:b => { b.goldMul *= 1.60; b.instantGold += 400; } },
+  // 棱彩
+  { id:'p1', tier:'prismatic', name:'无尽弹幕', fac:'攻', desc:'弹道 +2，且穿透 2 格',
+    apply:b => { b.projAdd += 2; b.pierceAdd += 2; } },
+  { id:'p2', tier:'prismatic', name:'玻璃大炮', fac:'攻', desc:'伤害 +90%，最大生命 -30%',
+    apply:b => { b.atkMul *= 1.90; b.hpMul *= 0.70; } },
+  { id:'p3', tier:'prismatic', name:'时间停止', fac:'法', desc:'每 25 秒，全场敌方静止 1.5 秒',
+    apply:b => b.timeStop = true },
+];
+
+/* ============================ 装备 ============================ */
+const ITEMS = [
+  { id:'i1', name:'无尽锋刃', cost:780, desc:'伤害 +30%，暴击 +20%',
+    apply:b => { b.atkMul *= 1.30; b.crit += 0.20; } },
+  { id:'i2', name:'疾射火炮', cost:620, desc:'攻速 +30%',
+    apply:b => b.spdMul *= 1.30 },
+  { id:'i3', name:'灭世者之帽', cost:820, desc:'技能伤害 +45%',
+    apply:b => b.skillMul *= 1.45 },
+  { id:'i4', name:'狂徒铠甲', cost:560, desc:'最大生命 +35%',
+    apply:b => b.hpMul *= 1.35 },
+  { id:'i5', name:'卢安娜飓风', cost:900, desc:'弹道 +1',
+    apply:b => b.projAdd += 1 },
+  { id:'i6', name:'贪婪之刃', cost:480, desc:'金币 +50%',
+    apply:b => b.goldMul *= 1.50 },
+  { id:'i7', name:'兰德里的苦楚', cost:700, desc:'毒 +8',
+    apply:b => b.poisonAdd += 8 },
+  { id:'i8', name:'明朗之靴', cost:520, desc:'技能 CD -20%',
+    apply:b => b.cdMul *= 0.80 },
+];
+
+/* ============================ 数值 ============================ */
+const CFG = {
+  coreHp: 2600,
+  cellHpOuter: 24,
+  cellHpInner: 80,
+  goldPerCell: 4,
+  expPerCell: 8,
+  expPerSec: 2,
+  lvTable: [0, 0, 50, 110, 190, 290, 420, 580, 780, 1000, 1250, 1550, 1900, 2300, 2650, 3000],
+  hexLevels: [1, 7, 11, 15],
+  bulletSpeed: 520,
+  heroRespawn: 8,
+  battleTime: 110,
+};
+
+/* ============================ 画布 ============================ */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha:false });
+let DPR = 1;
+
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  const wrap = document.getElementById('wrap');
+  const availW = wrap.clientWidth, availH = wrap.clientHeight;
+  const scale = Math.min(availW / W, availH / H);
+  const cssW = Math.floor(W * scale), cssH = Math.floor(H * scale);
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  canvas.width = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+}
+window.addEventListener('resize', resize);
+
+/* ============================ 工具 ============================ */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function hexPath(cx, cy, r, rot) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = rot + i * Math.PI / 3;
+    const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r;
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+}
+function cellX(lane, col) { return LANE_X[lane] + GRID_OFF + col * CELL; }
+function cellY(row) { return GRID_Y + row * CELL; }
+function cellHpMax(row, owner) {
+  const inner = owner < 0 ? (ROWS / 2 - 1 - row) : (row - ROWS / 2);
+  const t = clamp(inner / (ROWS / 2 - 1), 0, 1);
+  return Math.round(CFG.cellHpOuter + (CFG.cellHpInner - CFG.cellHpOuter) * Math.pow(t, 1.5));
+}
+
+/* ============================ 状态 ============================ */
+const G = {
+  phase: 'deploy',          // deploy | battle | hex | result
+  t: 0,
+  gold: 300,
+  exp: 0,
+  level: 1,
+  hexTaken: 0,
+  buff: null,
+  cells: [],
+  lanes: [],
+  heroes: [],
+  bullets: [],
+  particles: [],
+  pick: null,
+  shop: [],
+  selected: 0,
+  result: null,
+  flash: 0,
+  shake: 0,
+};
+
+function newBuff() {
+  return {
+    atkMul:1, spdMul:1, hpMul:1, skillMul:1, cdMul:1, goldMul:1,
+    projAdd:0, pierceAdd:0, poisonAdd:0, poisonStack:false,
+    crit:0.05, coreShield:0, instantGold:0, drone:0, timeStop:false,
+  };
+}
+
+function cellIndex(lane, row, col) { return lane * ROWS * COLS + row * COLS + col; }
+function getCell(lane, row, col) { return G.cells[cellIndex(lane, row, col)]; }
+
+function initGame() {
+  G.phase = 'deploy';
+  G.t = 0; G.gold = 300; G.exp = 0; G.level = 1; G.hexTaken = 0;
+  G.buff = newBuff();
+  G.bullets = []; G.particles = []; G.pick = null; G.result = null;
+  G.selected = 0; G.flash = 0; G.shake = 0; G.kills = 0; G.dmgDone = 0;
+
+  G.cells = [];
+  G.lanes = [];
+  for (let l = 0; l < LANES; l++) {
+    G.lanes.push({
+      enemyCount: ROWS / 2 * COLS,
+      allyCount: ROWS / 2 * COLS,
+      enemyCore: { hp: CFG.coreHp, max: CFG.coreHp },
+      allyCore:  { hp: CFG.coreHp, max: CFG.coreHp },
+      shield: 0,
+    });
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const owner = r < ROWS / 2 ? -1 : 1;
+        G.cells.push({
+          lane: l, row: r, col: c, owner,
+          hp: cellHpMax(r, owner), max: cellHpMax(r, owner),
+          hit: 0, guard: 0, poison: 0,
+        });
+      }
+    }
+  }
+
+  G.heroes = [];
+  ACTIVE_SLOTS.forEach((si, i) => {
+    const slot = SLOTS[si];
+    const def = HEROES[i];
+    G.heroes.push(makeHero(def, slot, 1));
+  });
+  // 敌方 3 英雄（镜像位置，略弱）
+  [0, 1, 2].forEach((l, i) => {
+    const def = HEROES[(i * 2) % HEROES.length];
+    const slot = { lane: l, kind: 'front', row: 11, col: 4 };
+    const h = makeHero(def, slot, -1);
+    h.hp = h.maxHp = Math.round(h.maxHp * 0.85);
+    h.atkScale = 0.45;
+    G.heroes.push(h);
+  });
+
+  G.shop = rollShop(3);
+}
+
+function makeHero(def, slot, owner) {
+  const cx = cellX(slot.lane, slot.col) + CELL * 1.5;
+  const cy = cellY(slot.row) + CELL * 1.5;
+  const maxHp = Math.round(def.hp * G.buff.hpMul);
+  return {
+    def, slot, owner, x: cx, y: cy,
+    hp: maxHp, maxHp,
+    atkTimer: 0, cd: 0, ultCd: 6, dead: false, respawn: 0,
+    hit: 0, ultFlash: 0,
+  };
+}
+
+function rollShop(n) {
+  const pool = ITEMS.slice();
+  const out = [];
+  while (out.length < n && pool.length) {
+    out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
+  return out;
+}
+
+function heroAtk(h) {
+  const d = h.def;
+  return d.atk * G.buff.atkMul * (h.atkScale || 1);
+}
+
+/* ============================ 战斗更新 ============================ */
+function canAttack(cell, owner) {
+  // 只允许纵向推进：己方子弹打"下方是己方"的格，敌方反之。
+  // 去掉横向相邻，避免战线横向渗流成长条。
+  const l = cell.lane, r = cell.row, c = cell.col;
+  const back = owner > 0 ? r + 1 : r - 1;
+  if (back < 0 || back >= ROWS) return false;
+  return getCell(l, back, c).owner === owner;
+}
+
+function targetCol(lane, owner) {
+  // 只挑"可攻击"的敌方格：优先最靠己方的那一行
+  let bestRow = owner > 0 ? -1 : ROWS;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = getCell(lane, r, c);
+      if (cell.owner !== -owner) continue;
+      if (!canAttack(cell, owner)) continue;
+      if (owner > 0 ? r > bestRow : r < bestRow) bestRow = r;
+    }
+  }
+  if (bestRow === -1 || bestRow === ROWS) return -1;
+  const cand = [];
+  for (let c = 0; c < COLS; c++) {
+    const cell = getCell(lane, bestRow, c);
+    if (cell.owner === -owner && canAttack(cell, owner)) cand.push(c);
+  }
+  if (!cand.length) return -1;
+  return cand[Math.floor(Math.random() * cand.length)];
+}
+
+function fire(h) {
+  const d = h.def;
+  const b = G.buff;
+  const n = d.proj + b.projAdd;
+  let base = targetCol(h.slot.lane, h.owner);
+  if (base < 0) base = Math.floor(Math.random() * COLS);
+  for (let i = 0; i < n; i++) {
+    const spread = (i - (n - 1) / 2) * 0.9;
+    let col = clamp(Math.round(base + spread + (Math.random() * 1.2 - 0.6)), 0, COLS - 1);
+    let dmg = heroAtk(h) * (1 + ((d.pierce || 0) + b.pierceAdd) * 0.15);
+    let crit = false;
+    if (Math.random() < b.crit) { dmg *= 1.8; crit = true; }
+    G.bullets.push({
+      x: cellX(h.slot.lane, col) + CELL / 2,
+      y: h.y - 26,
+      vy: h.owner > 0 ? -CFG.bulletSpeed : CFG.bulletSpeed,
+      lane: h.slot.lane,
+      dmg, crit,
+      owner: h.owner,
+      splash: d.splash || 0,
+      poison: (d.poison || 0) + b.poisonAdd,
+      color: h.owner > 0 ? '#8ff3ff' : '#ff9c8a',
+      trail: [],
+      life: 2.2,
+    });
+  }
+}
+
+function fireUlt(h) {
+  if (h.dead || h.ultCd > 0) return;
+  const d = h.def;
+  const b = G.buff;
+  h.ultCd = d.ultCd * b.cdMul;
+  h.ultFlash = 0.45;
+  const target = d.ultDmg * b.skillMul * b.atkMul;
+  // 对该路所有对方格子造成伤害
+  const lane = G.lanes[h.slot.lane];
+  // 先快照"当前可攻击"的格子，避免一次大招顺着连锁清空整路
+  const targets = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = getCell(h.slot.lane, r, c);
+      if (cell.owner === h.owner) continue;
+      if (!canAttack(cell, h.owner)) continue;
+      targets.push(cell);
+    }
+  }
+  for (const cell of targets) damageCell(cell, target / 2, h.owner);
+  addBurst(cellX(h.slot.lane, 3), h.y, h.owner > 0 ? '#8ff3ff' : '#ff9c8a', 26, 320);
+  G.shake = Math.max(G.shake, h.owner > 0 ? 6 : 3);
+}
+
+function damageCell(cell, dmg, owner) {
+  if (cell.owner === owner) return dmg;
+  if (!canAttack(cell, owner)) return dmg;   // 不可攻击 → 伤害穿透
+  if (cell.guard > 0) return dmg;            // 刚易手，短暂免伤
+  const before = cell.hp;
+  cell.hp -= dmg;
+  cell.hit = 0.16;
+  G.dmgDone = (G.dmgDone || 0) + Math.min(before, dmg);
+  if (cell.hp <= 0) { flipCell(cell, owner); return dmg - before; }
+  if (Math.random() < 0.18) addSpark(cellX(cell.lane, cell.col) + CELL / 2, cellY(cell.row) + CELL / 2, owner > 0 ? '#9df0ff' : '#ffb0a0', 2);
+  return 0;
+}
+
+function flipCell(cell, owner) {
+  const lane = G.lanes[cell.lane];
+  if (cell.owner === -1) lane.enemyCount--; else lane.allyCount--;
+  if (owner === -1) lane.enemyCount++; else lane.allyCount++;
+
+  cell.owner = owner;
+  cell.max = cellHpMax(cell.row, owner);
+  cell.hp = cell.max;          // 翻转即满血，防止来回秒夺
+  cell.guard = 3.0;            // 0.8s 免伤保护
+  cell.hit = 0.22;
+  G.kills = (G.kills || 0) + 1;
+
+  addBurst(cellX(cell.lane, cell.col) + CELL / 2, cellY(cell.row) + CELL / 2,
+    owner > 0 ? '#5DCAA5' : '#F09595', 7, 180);
+
+  if (owner > 0 && !cell.rewarded) {
+    cell.rewarded = true;                     // 只按"净占领"给收益，反复易手不刷钱
+    G.gold += CFG.goldPerCell * G.buff.goldMul;
+    addExp(CFG.expPerCell);
+  }
+  G.shake = Math.max(G.shake, 1.4);
+}
+
+function addExp(n) {
+  G.exp += n;
+  let lv = 1;
+  for (let i = 1; i < CFG.lvTable.length; i++) if (G.exp >= CFG.lvTable[i]) lv = i;
+  if (lv > G.level) {
+    G.level = lv;
+    tryOpenHex();
+  }
+}
+
+function tryOpenHex() {
+  const need = CFG.hexLevels[G.hexTaken];
+  if (need !== undefined && G.level >= need) openHexPick();
+}
+
+function hexTier(index) {
+  if (index === 0) return 'silver';
+  if (index === 1) return 'gold';
+  if (index === 2) return Math.random() < 0.45 ? 'prismatic' : 'gold';
+  return 'prismatic';
+}
+
+function openHexPick() {
+  if (G.phase === 'hex') return;
+  const tier = hexTier(G.hexTaken);
+  let pool = HEXES.filter(h => h.tier === tier);
+  if (pool.length < 3) pool = HEXES.slice();
+  const picks = [];
+  const copy = pool.slice();
+  while (picks.length < 3 && copy.length) {
+    picks.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0]);
+  }
+  G.pick = { tier, cards: picks, index: G.hexTaken };
+  G.phase = 'hex';
+}
+
+function chooseHex(card) {
+  card.apply(G.buff);
+  if (G.buff.instantGold) { G.gold += G.buff.instantGold; G.buff.instantGold = 0; }
+  if (G.buff.coreShield) {
+    G.lanes.forEach(l => { l.shield = G.buff.coreShield; });
+  }
+  // 生命上限变化要重算英雄
+  if (G.buff.hpMul !== 1) {
+    G.heroes.forEach(h => {
+      const nm = Math.round(h.def.hp * G.buff.hpMul) * (h.owner > 0 ? 1 : 0.85);
+      const ratio = h.hp / h.maxHp;
+      h.maxHp = Math.round(nm);
+      h.hp = Math.max(1, h.maxHp * ratio);
+    });
+  }
+  G.hexTaken++;
+  G.pick = null;
+  G.phase = 'battle';
+  G.flash = 0.3;
+}
+
+function buyItem(item) {
+  if (G.gold < item.cost) return;
+  G.gold -= item.cost;
+  item.apply(G.buff);
+  if (G.buff.hpMul !== 1) {
+    G.heroes.forEach(h => {
+      const nm = Math.round(h.def.hp * G.buff.hpMul) * (h.owner > 0 ? 1 : 0.85);
+      const ratio = h.hp / h.maxHp;
+      h.maxHp = Math.round(nm);
+      h.hp = Math.max(1, h.maxHp * ratio);
+    });
+  }
+  const i = G.shop.indexOf(item);
+  if (i >= 0) G.shop[i] = rollShop(1)[0];
+  G.flash = 0.15;
+}
+
+/* ============================ 粒子 ============================ */
+function addSpark(x, y, color, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = 40 + Math.random() * 120;
+    G.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.3, max: 0.3, color, size: 2 + Math.random() * 2, g: 0 });
+  }
+}
+function addBurst(x, y, color, n, spd) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = spd * (0.3 + Math.random() * 0.9);
+    G.particles.push({
+      x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60,
+      life: 0.35 + Math.random() * 0.35, max: 0.7, color,
+      size: 3 + Math.random() * 4, g: 420,
+    });
+  }
+}
+
+/* ============================ 主更新 ============================ */
+function update(dt) {
+  G.flash = Math.max(0, G.flash - dt * 3);
+  G.shake = Math.max(0, G.shake - dt * 22);
+  for (const c of G.cells) {
+    if (c.hit > 0) c.hit -= dt;
+    if (c.guard > 0) c.guard -= dt;
+  }
+  if (G.phase !== 'battle') { updateParticles(dt); return; }
+
+  G.t += dt;
+
+  // 经济经验
+  addExp(CFG.expPerSec * dt);
+
+  // 英雄
+  for (const h of G.heroes) {
+    if (h.dead) {
+      h.respawn -= dt;
+      if (h.respawn <= 0) {
+        h.dead = false;
+        h.hp = h.maxHp;
+        addBurst(h.x, h.y, h.owner > 0 ? '#5DCAA5' : '#F09595', 10, 160);
+      }
+      continue;
+    }
+    h.hit = Math.max(0, h.hit - dt);
+    h.ultCd = Math.max(0, h.ultCd - dt);
+    h.ultFlash = Math.max(0, h.ultFlash - dt);
+    const spd = h.def.speed * G.buff.spdMul;
+    h.atkTimer -= dt;
+    if (h.atkTimer <= 0) {
+      h.atkTimer += 1 / spd;
+      if (h.atkTimer < 0) h.atkTimer = 1 / spd;
+      fire(h);
+    }
+    // 自动大招
+    if (h.owner > 0 && h.ultCd <= 0 && autoUlt) fireUlt(h);
+  }
+
+  // 子弹
+  for (let i = G.bullets.length - 1; i >= 0; i--) {
+    const b = G.bullets[i];
+    b.life -= dt;
+    b.trail.push(b.y);
+    if (b.trail.length > 4) b.trail.shift();
+    b.y += b.vy * dt;
+
+    let hit = false;
+    // 命中英雄
+    for (const h of G.heroes) {
+      if (h.dead || h.owner === b.owner) continue;
+      if (Math.abs(b.x - h.x) < 30 && Math.abs(b.y - h.y) < 34) {
+        h.hp -= b.dmg;
+        h.hit = 0.15;
+        addSpark(b.x, b.y, b.color, 4);
+        if (h.hp <= 0) {
+          h.dead = true; h.hp = 0;
+          h.respawn = CFG.heroRespawn;
+          addBurst(h.x, h.y, h.color, 16, 240);
+          if (b.owner > 0) { G.gold += 120; addExp(30); }
+        }
+        hit = true;
+        break;
+      }
+    }
+    if (hit) { G.bullets.splice(i, 1); continue; }
+
+    // 命中格子：伤害溢出 → 继续打下一格（打砖块手感）
+    let consumed = false;
+    let guard = 0;
+    while (!consumed && guard++ < 8) {
+      const row = Math.floor((b.y - GRID_Y) / CELL);
+      const col = Math.floor((b.x - LANE_X[b.lane] - GRID_OFF) / CELL);
+      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) break;
+      const enemySide = b.owner > 0 ? (row < ROWS / 2) : (row >= ROWS / 2);
+      if (!enemySide) break;
+      const cell = getCell(b.lane, row, col);
+      if (cell.owner === b.owner) {
+        b.y = b.vy > 0 ? GRID_Y + (row + 1) * CELL + 0.5 : GRID_Y + row * CELL - 0.5;
+        continue;
+      }
+      if (b.splash > 0) {
+        for (const [dr, dc] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+          const nr = row + dr, nc = col + dc;
+          if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+            const nb = getCell(b.lane, nr, nc);
+            if (nb.owner !== b.owner) damageCell(nb, b.dmg * b.splash / 100, b.owner);
+          }
+        }
+      }
+      const left = damageCell(cell, b.dmg, b.owner);
+      b.y = b.vy > 0 ? GRID_Y + (row + 1) * CELL + 0.5 : GRID_Y + row * CELL - 0.5;
+      if (left > 0) b.dmg = left;
+      else consumed = true;
+    }
+    if (consumed) { G.bullets.splice(i, 1); continue; }
+
+    // 越过顶部/底部
+    if (b.y < GRID_Y - 10) {
+      if (b.owner > 0) {
+        const lane = G.lanes[b.lane];
+        if (lane.enemyCount <= 0) {
+          damageCore(lane, 'enemy', b.dmg);
+          if (b.pierce > 0) { b.pierce--; b.y = GRID_Y - 10; }
+          else { G.bullets.splice(i, 1); continue; }
+        } else { G.bullets.splice(i, 1); continue; }
+      } else { G.bullets.splice(i, 1); continue; }
+    }
+    if (b.y > GRID_Y + GRID_H + 10) {
+      if (b.owner < 0) {
+        const lane = G.lanes[b.lane];
+        if (lane.allyCount <= 0) damageCore(lane, 'ally', b.dmg);
+      }
+      G.bullets.splice(i, 1); continue;
+    }
+    if (b.life <= 0) G.bullets.splice(i, 1);
+  }
+
+  updateParticles(dt);
+  checkEnd();
+}
+
+function damageCore(lane, side, dmg) {
+  const core = side === 'enemy' ? lane.enemyCore : lane.allyCore;
+  if (lane.shield > 0) {
+    const use = Math.min(lane.shield, dmg);
+    lane.shield -= use;
+    dmg -= use;
+  }
+  core.hp -= dmg;
+  G.shake = Math.max(G.shake, 1.2);
+  if (core.hp <= 0) core.hp = 0;
+}
+
+function updateParticles(dt) {
+  for (let i = G.particles.length - 1; i >= 0; i--) {
+    const p = G.particles[i];
+    p.life -= dt;
+    if (p.life <= 0) { G.particles.splice(i, 1); continue; }
+    p.vy += p.g * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+  }
+}
+
+function checkEnd() {
+  for (let l = 0; l < LANES; l++) {
+    if (G.lanes[l].enemyCore.hp <= 0) { finish('win', l); return; }
+    if (G.lanes[l].allyCore.hp <= 0) { finish('lose', l); return; }
+  }
+  if (G.t >= CFG.battleTime) {
+    const a = G.lanes.reduce((s, l) => s + l.enemyCore.hp / l.enemyCore.max, 0);
+    const b = G.lanes.reduce((s, l) => s + l.allyCore.hp / l.allyCore.max, 0);
+    finish(b > a ? 'win' : a > b ? 'lose' : 'draw', -1);
+  }
+}
+
+function finish(kind, lane) {
+  G.phase = 'result';
+  G.result = { kind, lane, t: G.t };
+  G.shake = 8;
+}
+
+/* ============================ 背景缓存 ============================ */
+let bgCanvas = null;
+function buildBg() {
+  bgCanvas = document.createElement('canvas');
+  bgCanvas.width = W; bgCanvas.height = H;
+  const g = bgCanvas.getContext('2d');
+  g.fillStyle = '#0b1420';
+  g.fillRect(0, 0, W, H);
+  // 星点
+  for (let i = 0; i < 90; i++) {
+    const x = Math.random() * W, y = Math.random() * H;
+    const a = 0.08 + Math.random() * 0.22;
+    g.fillStyle = `rgba(150,200,230,${a})`;
+    const s = Math.random() < 0.85 ? 1 : 2;
+    g.fillRect(x, y, s, s);
+  }
+  // 三条通道底色
+  for (let l = 0; l < LANES; l++) {
+    const x = LANE_X[l];
+    const grd = g.createLinearGradient(0, FIELD_TOP, 0, FIELD_BOT);
+    grd.addColorStop(0, 'rgba(120,40,40,0.10)');
+    grd.addColorStop(0.5, 'rgba(20,40,55,0.22)');
+    grd.addColorStop(1, 'rgba(20,90,80,0.10)');
+    g.fillStyle = grd;
+    g.fillRect(x, FIELD_TOP, LANE_W, FIELD_BOT - FIELD_TOP);
+    g.strokeStyle = 'rgba(120,160,180,0.10)';
+    g.lineWidth = 1;
+    g.strokeRect(x + 0.5, FIELD_TOP + 0.5, LANE_W - 1, FIELD_BOT - FIELD_TOP - 1);
+  }
+  // 路标题
+  g.fillStyle = 'rgba(125,148,159,0.55)';
+  g.font = '500 13px sans-serif';
+  g.textAlign = 'center';
+  for (let l = 0; l < LANES; l++) g.fillText('路 ' + (l + 1), LANE_X[l] + LANE_W / 2, FIELD_TOP + 18);
+  g.textAlign = 'left';
+}
+
+/* ============================ 渲染 ============================ */
+function render() {
+  ctx.save();
+  if (G.shake > 0.1) {
+    ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
+  }
+  if (bgCanvas) ctx.drawImage(bgCanvas, 0, 0);
+
+  drawLanes();
+  drawCores();
+  drawHeroes();
+  drawBullets();
+  drawParticles();
+  ctx.restore();
+
+  drawHud();
+  if (G.phase === 'deploy') drawDeploy();
+  if (G.phase === 'hex') drawHexPick();
+  if (G.phase === 'result') drawResult();
+
+  if (G.flash > 0) {
+    ctx.fillStyle = `rgba(215,183,118,${G.flash * 0.35})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function drawLanes() {
+  // 中线
+  ctx.strokeStyle = 'rgba(215,183,118,0.28)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6, 6]);
+  for (let l = 0; l < LANES; l++) {
+    const y = cellY(ROWS / 2) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(LANE_X[l], y);
+    ctx.lineTo(LANE_X[l] + LANE_W, y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  for (const cell of G.cells) {
+    const x = cellX(cell.lane, cell.col);
+    const y = cellY(cell.row);
+    const ratio = clamp(cell.hp / cell.max, 0, 1);
+    if (cell.owner > 0) {
+      const a = 0.16 + ratio * 0.52;
+      ctx.fillStyle = `rgba(29,158,117,${a.toFixed(3)})`;
+    } else {
+      const a = 0.16 + ratio * 0.52;
+      ctx.fillStyle = `rgba(192,57,43,${a.toFixed(3)})`;
+    }
+    ctx.fillRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1);
+
+    if (cell.hit > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${(cell.hit * 2.6).toFixed(3)})`;
+      ctx.fillRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1);
+    }
+  }
+}
+
+function drawCores() {
+  for (let l = 0; l < LANES; l++) {
+    const lane = G.lanes[l];
+    const cx = LANE_X[l] + LANE_W / 2;
+
+    // 敌方核心（上）
+    drawCore(cx, 138, lane.enemyCore, false);
+    // 己方核心（下）
+    drawCore(cx, 940, lane.allyCore, true);
+
+    // 护盾
+    if (lane.shield > 0) {
+      ctx.strokeStyle = 'rgba(116,220,233,0.75)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, 940, 34, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawCore(cx, cy, core, ally) {
+  const ratio = clamp(core.hp / core.max, 0, 1);
+  const base = ally ? [29, 158, 117] : [192, 57, 43];
+  const hi = ally ? '#9FE1CB' : '#F5C4B3';
+  ctx.save();
+  ctx.translate(cx, cy);
+  // 外环
+  ctx.strokeStyle = `rgba(${base[0]},${base[1]},${base[2]},0.55)`;
+  ctx.lineWidth = 1.5;
+  hexPath(0, 0, 26, Math.PI / 6);
+  ctx.stroke();
+  // 内六边形填充
+  ctx.fillStyle = `rgba(${base[0]},${base[1]},${base[2]},${0.25 + ratio * 0.5})`;
+  hexPath(0, 0, 20, Math.PI / 6);
+  ctx.fill();
+  // 核心光点
+  ctx.fillStyle = ratio > 0.3 ? hi : '#ffffff';
+  ctx.globalAlpha = 0.5 + ratio * 0.5;
+  hexPath(0, 0, 8, Math.PI / 6);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // 血条
+  const bw = LANE_W - 30, bh = 5;
+  const bx = cx - bw / 2, by = ally ? cy + 34 : cy - 34;
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.fillStyle = ally ? '#5DCAA5' : '#F09595';
+  ctx.fillRect(bx, by, bw * ratio, bh);
+}
+
+function drawHeroes() {
+  for (const h of G.heroes) {
+    const ally = h.owner > 0;
+    if (h.dead) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = 'rgba(120,140,150,0.5)';
+      hexPath(h.x, h.y, 22, Math.PI / 6);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = COL_MUTED;
+      ctx.font = '500 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.ceil(h.respawn) + 's', h.x, h.y + 1);
+      ctx.textAlign = 'left';
+      continue;
+    }
+    // 暗底 + 亮环，让英雄从格子墙里跳出来
+    ctx.fillStyle = 'rgba(5,12,18,0.78)';
+    ctx.beginPath(); ctx.arc(h.x, h.y + 2, 28, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = ally ? 'rgba(116,220,233,0.85)' : 'rgba(240,149,149,0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(h.x, h.y + 2, 28, 0, Math.PI * 2); ctx.stroke();
+
+    // 底座
+    ctx.strokeStyle = ally ? 'rgba(116,220,233,0.55)' : 'rgba(240,149,149,0.55)';
+    ctx.lineWidth = 1.5;
+    hexPath(h.x, h.y + 8, 24, Math.PI / 6);
+    ctx.stroke();
+    ctx.fillStyle = ally ? 'rgba(20,60,70,0.85)' : 'rgba(60,25,25,0.85)';
+    hexPath(h.x, h.y + 8, 23, Math.PI / 6);
+    ctx.fill();
+
+    const hurt = h.hit > 0 ? 0.5 : 0;
+    // 身体
+    ctx.fillStyle = h.def.color;
+    ctx.globalAlpha = 0.85 - hurt * 0.4;
+    hexPath(h.x, h.y + 2, 15, Math.PI / 6);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // 头
+    ctx.beginPath();
+    ctx.arc(h.x, h.y - 9, 7, 0, Math.PI * 2);
+    ctx.fillStyle = ally ? '#d9f7ff' : '#ffd6cc';
+    ctx.fill();
+    // 武器指示（朝上）
+    ctx.fillStyle = h.def.color;
+    ctx.fillRect(h.x - 1.5, h.y - 34, 3, 12);
+
+    if (h.ultFlash > 0) {
+      ctx.strokeStyle = `rgba(215,183,118,${h.ultFlash * 1.5})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(h.x, h.y, 28 + (1 - h.ultFlash / 0.45) * 26, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // 血条
+    const bw = 46, bh = 4, bx = h.x - bw / 2, by = h.y - 30;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+    ctx.fillStyle = ally ? '#74dce9' : '#F09595';
+    ctx.fillRect(bx, by, bw * clamp(h.hp / h.maxHp, 0, 1), bh);
+  }
+}
+
+function drawBullets() {
+  for (const b of G.bullets) {
+    ctx.strokeStyle = b.color;
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 2;
+    if (b.trail.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x, b.trail[0]);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = b.color;
+    ctx.fillRect(b.x - 1.5, b.y - 6, 3, 12);
+    if (b.crit) {
+      ctx.fillStyle = '#ffe9a8';
+      ctx.fillRect(b.x - 3, b.y - 9, 6, 4);
+    }
+  }
+}
+
+function drawParticles() {
+  for (const p of G.particles) {
+    const a = clamp(p.life / p.max, 0, 1);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ============================ HUD ============================ */
+function drawHud() {
+  // 顶部条
+  ctx.fillStyle = 'rgba(10,20,30,0.92)';
+  ctx.fillRect(0, 0, W, 100);
+  ctx.strokeStyle = 'rgba(215,183,118,0.22)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, 99.5); ctx.lineTo(W, 99.5); ctx.stroke();
+
+  ctx.fillStyle = COL_MUTED;
+  ctx.font = '500 12px sans-serif';
+  ctx.fillText('敌方核心', 20, 26);
+
+  // 3 路敌方水晶条
+  for (let l = 0; l < LANES; l++) {
+    const lane = G.lanes[l];
+    const bx = 20 + l * 240, by = 38, bw = 228, bh = 12;
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    rr(bx, by, bw, bh, 6); ctx.fill();
+    const ratio = clamp(lane.enemyCore.hp / lane.enemyCore.max, 0, 1);
+    ctx.fillStyle = ratio > 0.5 ? '#E24B4A' : '#8B1E1E';
+    rr(bx, by, Math.max(0, bw * ratio), bh, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '500 10px sans-serif';
+    ctx.fillText('路' + (l + 1), bx + 4, by + 6);
+  }
+
+  // 等级 / 经验
+  const need = CFG.lvTable[Math.min(G.level, CFG.lvTable.length - 1)] || 0;
+  const prev = CFG.lvTable[Math.max(1, G.level - 1)] || 0;
+  const prog = need > prev ? clamp((G.exp - prev) / (need - prev), 0, 1) : 1;
+  ctx.fillStyle = COL_GOLD;
+  ctx.font = '500 15px sans-serif';
+  ctx.fillText('基地 Lv.' + G.level, 20, 72);
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  rr(110, 62, 180, 10, 5); ctx.fill();
+  ctx.fillStyle = COL_GOLD;
+  rr(110, 62, 180 * prog, 10, 5); ctx.fill();
+
+  const nextHex = CFG.hexLevels[G.hexTaken];
+  ctx.fillStyle = nextHex !== undefined ? 'rgba(215,183,118,0.75)' : COL_MUTED;
+  ctx.font = '500 12px sans-serif';
+  ctx.fillText(nextHex !== undefined ? ('下次海克斯 Lv.' + nextHex) : '海克斯已满', 300, 68);
+
+  ctx.fillStyle = COL_INK;
+  ctx.font = '500 13px sans-serif';
+  ctx.fillText('倒计时 ' + Math.max(0, Math.ceil(CFG.battleTime - G.t)) + 's', 560, 68);
+
+  // 底部面板
+  drawDock();
+}
+
+function drawDock() {
+  const y0 = DOCK_Y;
+  ctx.fillStyle = 'rgba(9,18,26,0.96)';
+  ctx.fillRect(0, y0, W, H - y0);
+  ctx.strokeStyle = 'rgba(215,183,118,0.22)';
+  ctx.beginPath(); ctx.moveTo(0, y0 + 0.5); ctx.lineTo(W, y0 + 0.5); ctx.stroke();
+
+  // 5 英雄卡
+  const cw = 140, ch = 58, gap = 6;
+  const total = 5 * cw + 4 * gap;
+  const sx = (W - total) / 2;
+  for (let i = 0; i < 5; i++) {
+    const h = G.heroes[i];
+    const x = sx + i * (cw + gap), y = y0 + 8;
+    const on = i === G.selected;
+    ctx.fillStyle = on ? 'rgba(215,183,118,0.16)' : 'rgba(255,255,255,0.045)';
+    rr(x, y, cw, ch, 8); ctx.fill();
+    if (on) { ctx.strokeStyle = 'rgba(215,183,118,0.85)'; ctx.lineWidth = 1.5; rr(x, y, cw, ch, 8); ctx.stroke(); }
+
+    ctx.fillStyle = h.def.color;
+    hexPath(x + 20, y + 20, 11, Math.PI / 6); ctx.fill();
+    ctx.fillStyle = COL_INK;
+    ctx.font = '500 14px sans-serif';
+    ctx.fillText(h.def.name, x + 38, y + 21);
+    ctx.fillStyle = COL_MUTED;
+    ctx.font = '400 11px sans-serif';
+    ctx.fillText('路' + (h.slot.lane + 1) + (h.slot.kind === 'front' ? ' · 前哨' : ' · 主阵'), x + 38, y + 37);
+
+    const hr = clamp(h.hp / h.maxHp, 0, 1);
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.fillRect(x + 10, y + 50, cw - 20, 4);
+    ctx.fillStyle = hr > 0.3 ? '#74dce9' : '#E24B4A';
+    ctx.fillRect(x + 10, y + 50, (cw - 20) * hr, 4);
+  }
+
+  // 大招按钮 + 金币
+  const hy = y0 + 74;
+  const sel = G.heroes[G.selected];
+  const bw = 300, bh = 54, bx = 16;
+  const ready = !sel.dead && sel.ultCd <= 0;
+  ctx.fillStyle = ready ? 'rgba(215,183,118,0.20)' : 'rgba(255,255,255,0.05)';
+  rr(bx, hy, bw, bh, 10); ctx.fill();
+  ctx.strokeStyle = ready ? 'rgba(215,183,118,0.85)' : 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1.5; rr(bx, hy, bw, bh, 10); ctx.stroke();
+  ctx.fillStyle = ready ? COL_GOLD : COL_MUTED;
+  ctx.font = '500 17px sans-serif';
+  ctx.fillText(sel.def.ultName, bx + 16, hy + 21);
+  ctx.font = '400 12px sans-serif';
+  ctx.fillStyle = COL_MUTED;
+  ctx.fillText(sel.dead ? '阵亡 ' + Math.ceil(sel.respawn) + 's'
+    : (sel.ultCd > 0 ? '冷却 ' + sel.ultCd.toFixed(1) + 's' : '点击释放 · 该路全屏'), bx + 16, hy + 40);
+
+  // 自动
+  ctx.fillStyle = autoUlt ? 'rgba(116,220,233,0.18)' : 'rgba(255,255,255,0.05)';
+  rr(bx + bw + 10, hy, 92, bh, 10); ctx.fill();
+  ctx.strokeStyle = autoUlt ? 'rgba(116,220,233,0.85)' : 'rgba(255,255,255,0.12)';
+  rr(bx + bw + 10, hy, 92, bh, 10); ctx.stroke();
+  ctx.fillStyle = autoUlt ? COL_CYAN : COL_MUTED;
+  ctx.font = '500 15px sans-serif';
+  ctx.fillText('自动', bx + bw + 32, hy + 21);
+  ctx.font = '400 11px sans-serif';
+  ctx.fillText(autoUlt ? '开' : '关', bx + bw + 46, hy + 40);
+
+  // 金币
+  ctx.fillStyle = COL_GOLD;
+  ctx.font = '500 22px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(Math.floor(G.gold), W - 20, hy + 22);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = COL_MUTED;
+  ctx.font = '400 12px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('金币', W - 20, hy + 42);
+  ctx.textAlign = 'left';
+
+  // 商店
+  const sy = y0 + 140;
+  const iw = 228, ih = 118, ig = 10;
+  for (let i = 0; i < G.shop.length; i++) {
+    const it = G.shop[i];
+    const x = 16 + i * (iw + ig), y = sy;
+    const afford = G.gold >= it.cost;
+    ctx.fillStyle = 'rgba(255,255,255,0.045)';
+    rr(x, y, iw, ih, 10); ctx.fill();
+    ctx.strokeStyle = afford ? 'rgba(215,183,118,0.55)' : 'rgba(255,255,255,0.10)';
+    ctx.lineWidth = 1;
+    rr(x, y, iw, ih, 10); ctx.stroke();
+
+    ctx.fillStyle = COL_INK;
+    ctx.font = '500 16px sans-serif';
+    ctx.fillText(it.name, x + 14, y + 26);
+    ctx.fillStyle = COL_MUTED;
+    ctx.font = '400 12px sans-serif';
+    wrapText(it.desc, x + 14, y + 50, iw - 28, 16);
+    ctx.fillStyle = afford ? COL_GOLD : '#8a6a4a';
+    ctx.font = '500 15px sans-serif';
+    ctx.fillText(it.cost + ' 金', x + 14, y + ih - 16);
+  }
+}
+
+function wrapText(text, x, y, maxW, lh) {
+  let line = '', yy = y;
+  for (const ch of text) {
+    if (ctx.measureText(line + ch).width > maxW) {
+      ctx.fillText(line, x, yy);
+      line = ch; yy += lh;
+    } else line += ch;
+  }
+  ctx.fillText(line, x, yy);
+}
+
+/* ============================ 浮层 ============================ */
+function drawDeploy() {
+  ctx.fillStyle = 'rgba(5,10,16,0.55)';
+  ctx.fillRect(0, FIELD_TOP, W, FIELD_BOT - FIELD_TOP);
+  ctx.fillStyle = COL_INK;
+  ctx.font = '500 30px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('三路 · 六点位 · 五英雄', W / 2, 300);
+  ctx.font = '400 16px sans-serif';
+  ctx.fillStyle = COL_MUTED;
+  ctx.fillText('弹幕自动推进，打穿一路即胜', W / 2, 340);
+  ctx.fillText('第 6 点位留空 —— 靠海克斯召唤物补上', W / 2, 368);
+
+  // 英雄布阵示意
+  for (const h of G.heroes) {
+    if (h.owner < 0) continue;
+    ctx.strokeStyle = h.def.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, 30, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = h.def.color;
+    ctx.font = '500 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(h.def.name, h.x, h.y + 48);
+  }
+
+  const bx = W / 2 - 130, by = 700, bw = 260, bh = 64;
+  ctx.fillStyle = 'rgba(215,183,118,0.18)';
+  rr(bx, by, bw, bh, 12); ctx.fill();
+  ctx.strokeStyle = COL_GOLD; ctx.lineWidth = 2;
+  rr(bx, by, bw, bh, 12); ctx.stroke();
+  ctx.fillStyle = COL_GOLD;
+  ctx.font = '500 24px sans-serif';
+  ctx.fillText('开始战斗', W / 2, by + bh / 2 + 1);
+  ctx.textAlign = 'left';
+}
+
+const TIER_STYLE = {
+  silver:    { label: '白银', color: '#c5d6e5' },
+  gold:      { label: '黄金', color: '#eac368' },
+  prismatic: { label: '棱彩', color: '#c6a2ff' },
+};
+
+function drawHexPick() {
+  ctx.fillStyle = 'rgba(4,9,14,0.58)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center';
+  const st = TIER_STYLE[G.pick.tier];
+  ctx.fillStyle = st.color;
+  ctx.font = '500 26px sans-serif';
+  ctx.fillText('⚡ 强化符文 · ' + st.label, W / 2, 300);
+  ctx.fillStyle = COL_MUTED;
+  ctx.font = '400 14px sans-serif';
+  ctx.fillText('第 ' + (G.pick.index + 1) + ' / 4 次 · 选择后立即生效', W / 2, 332);
+  ctx.textAlign = 'left';
+
+  const cw = 210, ch = 252, gap = 18;
+  const total = 3 * cw + 2 * gap;
+  const sx = (W - total) / 2;
+  for (let i = 0; i < 3; i++) {
+    const card = G.pick.cards[i];
+    const x = sx + i * (cw + gap), y = 408;
+    ctx.fillStyle = 'rgba(18,30,40,0.98)';
+    rr(x, y, cw, ch, 14); ctx.fill();
+    ctx.strokeStyle = st.color; ctx.lineWidth = 2;
+    rr(x, y, cw, ch, 14); ctx.stroke();
+
+    // 顶部色条
+    ctx.fillStyle = st.color;
+    ctx.globalAlpha = 0.85;
+    rr(x + 14, y + 14, cw - 28, 5, 2.5); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = st.color;
+    ctx.font = '500 15px sans-serif';
+    ctx.fillText(card.fac + ' ' + st.label, x + 18, y + 44);
+
+    ctx.fillStyle = COL_INK;
+    ctx.font = '500 22px sans-serif';
+    ctx.fillText(card.name, x + 18, y + 82);
+
+    ctx.fillStyle = COL_MUTED;
+    ctx.font = '400 13px sans-serif';
+    wrapText(card.desc, x + 18, y + 116, cw - 36, 20);
+
+    ctx.fillStyle = 'rgba(215,183,118,0.12)';
+    rr(x + 18, y + ch - 58, cw - 36, 38, 8); ctx.fill();
+    ctx.fillStyle = COL_GOLD;
+    ctx.font = '500 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('选择', x + cw / 2, y + ch - 38);
+    ctx.textAlign = 'left';
+  }
+
+  ctx.fillStyle = COL_MUTED;
+  ctx.font = '400 13px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('战场已暂停', W / 2, 700);
+  ctx.textAlign = 'left';
+}
+
+function drawResult() {
+  ctx.fillStyle = 'rgba(4,9,14,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  const win = G.result.kind === 'win';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = win ? COL_GOLD : '#E24B4A';
+  ctx.font = '500 56px sans-serif';
+  ctx.fillText(win ? '胜 利' : G.result.kind === 'draw' ? '平 局' : '失 败', W / 2, 480);
+
+  ctx.fillStyle = COL_MUTED;
+  ctx.font = '400 16px sans-serif';
+  ctx.fillText('用时 ' + G.t.toFixed(1) + 's · 基地 Lv.' + G.level + ' · 海克斯 ' + G.hexTaken + ' 个', W / 2, 528);
+  ctx.fillText('击碎格子 ' + Math.round(G.kills || 0) + ' · 金币 ' + Math.floor(G.gold), W / 2, 556);
+
+  const bx = W / 2 - 130, by = 640, bw = 260, bh = 62;
+  ctx.fillStyle = 'rgba(215,183,118,0.18)';
+  rr(bx, by, bw, bh, 12); ctx.fill();
+  ctx.strokeStyle = COL_GOLD; ctx.lineWidth = 2;
+  rr(bx, by, bw, bh, 12); ctx.stroke();
+  ctx.fillStyle = COL_GOLD;
+  ctx.font = '500 24px sans-serif';
+  ctx.fillText('再来一局', W / 2, by + bh / 2 + 1);
+  ctx.textAlign = 'left';
+}
+
+/* ============================ 输入 ============================ */
+const hitAreas = [];
+function hit(x, y, w, h, fn) { hitAreas.push({ x, y, w, h, fn }); }
+
+function pointerPos(e) {
+  const r = canvas.getBoundingClientRect();
+  const px = (e.clientX - r.left) / r.width * W;
+  const py = (e.clientY - r.top) / r.height * H;
+  return { x: px, y: py };
+}
+
+function onDown(e) {
+  e.preventDefault();
+  const { x, y } = pointerPos(e);
+
+  if (G.phase === 'deploy') {
+    if (x > W / 2 - 130 && x < W / 2 + 130 && y > 700 && y < 764) {
+      openHexPick();
+      G.flash = 0.4;
+    }
+    return;
+  }
+
+  if (G.phase === 'hex') {
+    const cw = 210, ch = 330, gap = 18;
+    const sx = (W - 3 * cw - 2 * gap) / 2;
+    for (let i = 0; i < 3; i++) {
+      const cx = sx + i * (cw + gap);
+      if (x > cx && x < cx + cw && y > 408 && y < 408 + ch) {
+        chooseHex(G.pick.cards[i]);
+        return;
+      }
+    }
+    return;
+  }
+
+  if (G.phase === 'result') {
+    if (x > W / 2 - 130 && x < W / 2 + 130 && y > 640 && y < 702) {
+      initGame();
+      buildBg();
+    }
+    return;
+  }
+
+  // 战斗中
+  const y0 = DOCK_Y;
+  const cw = 140, ch = 58, gap = 6;
+  const total = 5 * cw + 4 * gap;
+  const sx = (W - total) / 2;
+  if (y > y0 + 8 && y < y0 + 8 + ch) {
+    for (let i = 0; i < 5; i++) {
+      const hx = sx + i * (cw + gap);
+      if (x > hx && x < hx + cw) { G.selected = i; return; }
+    }
+  }
+  const hy = y0 + 74, bw = 300, bh = 54, bx = 16;
+  if (x > bx && x < bx + bw && y > hy && y < hy + bh) {
+    fireUlt(G.heroes[G.selected]);
+    return;
+  }
+  if (x > bx + bw + 10 && x < bx + bw + 102 && y > hy && y < hy + bh) {
+    autoUlt = !autoUlt;
+    return;
+  }
+  const sy = y0 + 140, iw = 228, ih = 118, ig = 10;
+  if (y > sy && y < sy + ih) {
+    for (let i = 0; i < G.shop.length; i++) {
+      const ix = 16 + i * (iw + ig);
+      if (x > ix && x < ix + iw) { buyItem(G.shop[i]); return; }
+    }
+  }
+}
+
+canvas.addEventListener('pointerdown', onDown, { passive: false });
+
+/* ============================ 主循环 ============================ */
+let autoUlt = false;
+let lastTime = performance.now();
+let acc = 0;
+const STEP = 1 / 60;
+
+function loop(now) {
+  const raw = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+  acc += raw;
+  let guard = 0;
+  while (acc >= STEP && guard < 4) {
+    update(STEP);
+    acc -= STEP;
+    guard++;
+  }
+  if (acc > STEP) acc = 0;
+  render();
+  requestAnimationFrame(loop);
+}
+
+window.G = G;
+initGame();
+buildBg();
+resize();
+requestAnimationFrame(loop);
+
+
+</script>
+</body>
+</html>

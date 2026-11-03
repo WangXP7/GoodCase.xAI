@@ -125,6 +125,14 @@
     },
     {
       "ns": "workbuddy",
+      "dir": "rune-frontline",
+      "entry": "index.html",
+      "title": "符文战线 · 三路弹幕塔防",
+      "desc": "竖版三路 1v1 弹幕塔防 · 1188 格逐格打碎翻色、5 英雄坐 6 个固定点位、海克斯三选一张张抽，18 张海克斯与 8 件共享装备池撑起 build，打穿一路直捣敌方水晶；零外部资源全程序化绘制，单文件 Canvas2D，另附 82K 字 GDD 与无头 8 局平衡模拟 · 总耗时约 45 分钟",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+    },
+    {
+      "ns": "workbuddy",
       "dir": "lunar-rover",
       "entry": "index.html",
       "title": "月面运输 · 低重力货运",

@@ -27,6 +27,7 @@
   set('workbuddy/qingming-hongqiao','清明上河图 · 虹桥活画卷','视觉艺术|3D|国风历史|Three.js');
   set('workbuddy/penguin-survival','企鹅生存 · 冰原漂流','游戏|动作冒险|3D|Three.js');
   set('workbuddy/rocket-launch-sim','火箭发射 · 模拟原型','模拟仿真|航天');
+  set('workbuddy/rune-frontline','符文战线 · 三路弹幕塔防','游戏|策略博弈|视觉艺术');
   set('workbuddy/snake-survivors','蛇人幸存者 · 黑暗废墟','游戏|动作冒险');
   set('workbuddy/solar-system','太阳系 · 八大行星','科普教育|航天|3D|Three.js');
   set('workbuddy/song-courtyard','宋代庭院 · 五路院落','建模|3D|Blender|国风历史');
@@ -80,6 +81,7 @@
     'workbuddy/minimax-m31-flash-promo':'shots/02-identity.jpg',
     'workbuddy/qingming-hongqiao':'shots/01-scroll.jpg',
     'workbuddy/lol-idle':'shots/02-mid.jpg',
+    'workbuddy/rune-frontline':'shots/03-battle.jpg',
     'workbuddy/tideline':'tests/_shots-public/04-title-final.png'
   };
   const unknown = '模型未记录';
