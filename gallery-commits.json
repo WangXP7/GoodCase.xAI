@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "14e3205ed80c30c9c7b0b526c6a15f93cdfedc6b",
+  "snapshot": "3f2b6fbe5635b4c419545208ede2a68314859456",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -232,6 +232,11 @@
       "committedAt": "2026-10-17T16:16:08Z",
       "commit": "2ced1675fe8e48b98ac080826dc948aa23e1d5cf",
       "scope": "workbuddy/rocket-launch-sim"
+    },
+    "workbuddy/rune-frontline/index.html": {
+      "committedAt": "2026-11-03T06:16:23Z",
+      "commit": "3f2b6fbe5635b4c419545208ede2a68314859456",
+      "scope": "workbuddy/rune-frontline"
     },
     "workbuddy/snake-survivors/index.html": {
       "committedAt": "2026-10-15T11:17:57Z",
