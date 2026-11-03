@@ -117,6 +117,14 @@
     },
     {
       "ns": "workbuddy",
+      "dir": "lol-idle",
+      "entry": "index.html",
+      "title": "峡谷挂机王 · 15 英雄放置挂机",
+      "desc": "英雄联盟题材放置挂机 · 15 位英雄（3 人上阵、待命仍供 30% 被动）、6 件装备 ×10 级、6 枚符文、10 段位 ×4 星；兵线自动推中路、拆塔破水晶，离线 8 小时按 60% 结算，开小号转生换荣耀点；单文件 Canvas2D 全程序化绘制，零依赖零外部素材 · 总耗时约 30 分钟",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+    },
+    {
+      "ns": "workbuddy",
       "dir": "lunar-rover",
       "entry": "index.html",
       "title": "月面运输 · 低重力货运",
