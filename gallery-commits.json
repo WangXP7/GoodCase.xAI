@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "8c2d2818529eb6f90b428c6b0bc3b12d197c5e9e",
+  "snapshot": "53003ee5dc0d88dc45ff1a2809d11ea13bd21abb",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -217,6 +217,11 @@
       "committedAt": "2026-10-21T16:22:54Z",
       "commit": "b0363969381475eae6d4a891ddfcec3998301179",
       "scope": "workbuddy/procedural-city-cn"
+    },
+    "workbuddy/qingming-hongqiao/index.html": {
+      "committedAt": "2026-11-03T02:06:03Z",
+      "commit": "53003ee5dc0d88dc45ff1a2809d11ea13bd21abb",
+      "scope": "workbuddy/qingming-hongqiao"
     },
     "workbuddy/rocket-launch-sim/src/index.html": {
       "committedAt": "2026-10-17T16:16:08Z",
