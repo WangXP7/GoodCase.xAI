@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#050813">
+<title>为什么一年不一样？｜太阳系公转周期互动实验</title>
+<style>
+:root{
+  --bg:#050813; --panel:rgba(15,21,40,.82); --panel2:rgba(20,28,52,.72);
+  --line:rgba(143,173,231,.18); --line2:rgba(143,173,231,.30);
+  --txt:#eaf0ff; --dim:#94a3c4; --faint:#68789c;
+  --gold:#ffc46b; --cyan:#74d8ff; --good:#7fe0b0;
+  --sh:0 10px 34px rgba(0,0,0,.34);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1100px 700px at 12% -10%,rgba(62,86,170,.20),transparent 60%),
+    radial-gradient(900px 620px at 92% 8%,rgba(126,64,140,.16),transparent 62%),
+    var(--bg);
+  color:var(--txt);
+  font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+button,input{font-family:inherit}
+button{cursor:pointer;color:inherit}
+#app{max-width:1520px;margin:0 auto;padding:18px 20px 44px}
+
+/* ---------- header ---------- */
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.brand .mark{width:34px;height:34px;border-radius:50%;flex:none;
+  background:radial-gradient(circle at 34% 32%,#fff3cf,#ffc46b 42%,#e2762a 76%,#6a2c12);
+  box-shadow:0 0 18px rgba(255,178,80,.55),0 0 46px rgba(255,150,50,.24)}
+h1{font-size:clamp(19px,2.3vw,28px);letter-spacing:.5px;margin:0;font-weight:700}
+h1 span{color:var(--gold)}
+.sub{font-size:12.5px;color:var(--dim);margin-top:4px;letter-spacing:.3px}
+.headnote{font-size:12px;color:var(--faint);text-align:right;line-height:1.7;max-width:330px}
+.headnote b{color:var(--cyan);font-weight:600}
+
+/* ---------- grid ---------- */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 348px;gap:14px;align-items:start}
+.stage{grid-column:1;grid-row:1;position:relative;height:clamp(410px,63vh,690px);
+  border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#03050e;box-shadow:var(--sh)}
+#sky{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:manipulation}
+.controls{grid-column:1;grid-row:2}
+.side{grid-column:2;grid-row:1/span 2;display:flex;flex-direction:column;gap:12px;min-width:0}
+.theory{grid-column:1/-1;margin-top:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);backdrop-filter:blur(8px)}
+
+/* ---------- stage HUD ---------- */
+.hud{position:absolute;left:16px;top:14px;pointer-events:none;text-shadow:0 2px 10px #000}
+.hud .lab{font-size:11px;color:var(--dim);letter-spacing:1.6px}
+.hud .big{font-size:clamp(24px,3.2vw,38px);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:2px}
+.hud .big em{font-style:normal;font-size:.5em;color:var(--dim);font-weight:500;margin-left:5px}
+.hud .small{font-size:12px;color:var(--cyan);margin-top:3px;font-variant-numeric:tabular-nums}
+.legend{position:absolute;right:14px;top:14px;text-align:right;pointer-events:none;
+  font-size:11px;color:var(--dim);line-height:1.9;text-shadow:0 1px 8px #000}
+.legend i{display:inline-block;width:16px;height:3px;border-radius:3px;vertical-align:middle;margin-right:6px;
+  background:linear-gradient(90deg,#b3aaa0,#5aa9ec,#e0bd95,#5b83f0)}
+.footnote{position:absolute;left:16px;bottom:12px;font-size:10.5px;color:var(--faint);pointer-events:none;
+  text-shadow:0 1px 6px #000;line-height:1.6}
+.fn-short{display:none}
+.pausebadge{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);
+  font-size:11px;letter-spacing:1px;color:rgba(234,240,255,.72);border:1px solid var(--line2);
+  border-radius:999px;padding:6px 14px;background:rgba(6,10,24,.62);pointer-events:none;
+  opacity:0;transition:opacity .25s;white-space:nowrap}
+.pausebadge.on{opacity:1}
+
+/* challenge result */
+.result{position:absolute;left:14px;right:14px;bottom:14px;z-index:4;
+  background:linear-gradient(135deg,rgba(24,32,58,.96),rgba(12,18,36,.96));
+  border:1px solid rgba(255,196,107,.42);border-radius:14px;padding:13px 15px;
+  box-shadow:0 12px 40px rgba(0,0,0,.5);transform:translateY(18px);opacity:0;
+  pointer-events:none;transition:transform .32s ease,opacity .32s ease}
+.result.on{transform:translateY(0);opacity:1;pointer-events:auto}
+.result h3{margin:0 0 8px;font-size:14px;color:var(--gold)}
+.result p{margin:0 0 9px;font-size:12px;color:var(--dim);line-height:1.6}
+.result .laps-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px 8px;margin-bottom:10px}
+.result .lg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.result .lg b{color:var(--txt);font-weight:600;margin-left:auto}
+.result .lg i{width:8px;height:8px;border-radius:50%;flex:none}
+.result .acts{display:flex;gap:8px}
+
+/* ---------- controls ---------- */
+.controls{padding:13px 15px}
+.ctl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ctl-row+.ctl-row{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+.btn{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;
+  min-height:38px;padding:0 13px;font-size:12.5px;font-weight:600;white-space:nowrap;
+  transition:background .15s,border-color .15s,transform .1s}
+.btn:hover{background:rgba(70,96,158,.34);border-color:rgba(143,173,231,.5)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:linear-gradient(135deg,#ffc46b,#f09335);border-color:transparent;color:#2a1806}
+.btn.primary:hover{filter:brightness(1.1)}
+.btn.play{min-width:92px;font-size:13px}
+.btn.tiny{min-height:32px;padding:0 10px;font-size:11.5px;font-weight:500;color:var(--dim)}
+.btn.tiny:hover{color:var(--txt)}
+.sep{width:1px;height:24px;background:var(--line);flex:none}
+.speed{display:flex;align-items:center;gap:10px;flex:1;min-width:210px}
+.speed label{font-size:12px;color:var(--dim);white-space:nowrap}
+.speed input[type=range]{flex:1;min-width:100px;height:26px;accent-color:var(--gold);cursor:pointer}
+.speed .val{font-size:14px;font-weight:700;color:var(--gold);min-width:62px;text-align:right;
+  font-variant-numeric:tabular-nums}
+.speed .hint{font-size:10.5px;color:var(--faint);white-space:nowrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.035);
+  border:1px solid var(--line);border-radius:999px;padding:6px 10px;min-height:32px;
+  font-size:11.5px;color:var(--dim);transition:all .15s}
+.chip i{width:8px;height:8px;border-radius:50%;flex:none}
+.chip:hover{border-color:var(--line2);color:var(--txt)}
+.chip.on{background:rgba(255,196,107,.14);border-color:rgba(255,196,107,.7);color:#fff;font-weight:600}
+.challenge-tip{font-size:11px;color:var(--faint);line-height:1.5;flex:1;min-width:160px}
+
+/* ---------- info card ---------- */
+.info{padding:16px}
+.info-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.info-head .orb{width:34px;height:34px;border-radius:50%;flex:none;box-shadow:0 0 16px rgba(255,255,255,.18)}
+.info-head h2{margin:0;font-size:19px;line-height:1.2}
+.info-head h2 small{font-size:11px;color:var(--faint);font-weight:500;margin-left:7px;letter-spacing:.5px}
+.info-head .tag{margin-left:auto;font-size:10px;color:var(--cyan);border:1px solid var(--line2);
+  border-radius:999px;padding:3px 8px;white-space:nowrap}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:11px}
+.info-grid div{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:9px;padding:7px 9px}
+.info-grid label{display:block;font-size:10px;color:var(--faint);margin-bottom:2px}
+.info-grid b{font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.year-hero{border-radius:11px;padding:11px 13px;margin-bottom:11px;
+  background:linear-gradient(120deg,rgba(255,196,107,.15),rgba(255,196,107,.03));
+  border:1px solid rgba(255,196,107,.3)}
+.year-hero label{font-size:10px;color:var(--gold);letter-spacing:1px}
+.year-hero .v{font-size:23px;font-weight:700;color:#fff;line-height:1.25;font-variant-numeric:tabular-nums}
+.year-hero .v em{font-style:normal;font-size:.5em;color:var(--dim);font-weight:500;margin-left:5px}
+.year-hero .r{font-size:11px;color:var(--dim);margin-top:2px}
+.info p.desc{margin:0 0 10px;font-size:12px;line-height:1.75;color:var(--dim)}
+.fact{font-size:11.5px;line-height:1.65;color:var(--txt);background:rgba(116,216,255,.075);
+  border-left:2px solid var(--cyan);border-radius:0 8px 8px 0;padding:8px 10px}
+.fact b{color:var(--cyan);font-weight:600}
+.live{margin-top:10px;font-size:11.5px;color:var(--dim);display:flex;justify-content:space-between;
+  border-top:1px solid var(--line);padding-top:9px;font-variant-numeric:tabular-nums}
+.live b{color:var(--good);font-weight:600}
+
+/* ---------- compare ---------- */
+.compare{padding:14px 15px 15px}
+.card-title{font-size:13px;font-weight:700;margin:0 0 3px;display:flex;align-items:center;gap:7px}
+.card-title .k{font-size:10px;color:var(--faint);font-weight:500;margin-left:auto}
+.card-sub{font-size:10.5px;color:var(--faint);margin:0 0 11px;line-height:1.5}
+.prow{display:grid;grid-template-columns:52px minmax(0,1fr) 62px 56px;
+  gap:7px;align-items:center;padding:5px 0;cursor:pointer;border-radius:7px;transition:background .15s}
+.prow:hover{background:rgba(255,255,255,.045)}
+.prow.on{background:rgba(255,196,107,.10)}
+.pname{display:flex;align-items:center;gap:5px;font-size:11.5px;white-space:nowrap}
+.pname i{width:7px;height:7px;border-radius:50%;flex:none}
+.pbar{height:8px;border-radius:5px;background:rgba(255,255,255,.07);overflow:hidden;position:relative}
+.pbar>i{display:block;height:100%;border-radius:5px;opacity:.85}
+.pbar .tick{position:absolute;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.22)}
+.pval{font-size:10.5px;color:var(--dim);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.plaps{font-size:10.5px;color:var(--good);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.prow.on .pname{color:var(--gold);font-weight:700}
+.prog-wrap{grid-column:2/4;height:3px;border-radius:3px;background:rgba(255,255,255,.07);margin-top:-2px;overflow:hidden}
+.prog-wrap>i{display:block;height:100%;width:0;background:var(--good);border-radius:3px}
+.scale-note{display:flex;justify-content:space-between;font-size:10px;color:var(--faint);margin-top:9px;
+  padding-top:8px;border-top:1px solid var(--line)}
+
+/* ---------- theory ---------- */
+.theory h2{font-size:15px;margin:0 0 11px;color:var(--gold)}
+.tcards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.tcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 15px}
+.tcard .n{font-size:10px;color:var(--faint);letter-spacing:1.5px}
+.tcard h3{margin:5px 0 7px;font-size:13.5px}
+.tcard p{margin:0;font-size:11.5px;line-height:1.8;color:var(--dim)}
+.tcard .formula{font-size:17px;color:var(--cyan);font-weight:700;letter-spacing:1px;
+  margin:5px 0 8px;font-variant-numeric:tabular-nums}
+.tcard b{color:var(--txt)}
+.tcard code{background:rgba(116,216,255,.10);color:var(--cyan);padding:1px 5px;border-radius:4px;font-size:11px}
+.disclaimer{margin-top:11px;font-size:10.5px;color:var(--faint);line-height:1.7}
+
+/* ---------- responsive ---------- */
+@media (max-width:1040px){
+  .grid{grid-template-columns:minmax(0,1fr) 300px}
+  .side{grid-column:2}
+  .result .laps-grid{grid-template-columns:repeat(4,1fr)}
+}
+@media (max-width:880px){
+  #app{padding:14px 12px 34px}
+  .grid{grid-template-columns:1fr;gap:12px}
+  .stage,.controls,.side,.theory{grid-column:1;grid-row:auto}
+  .stage{height:min(86vw,490px);min-height:330px}
+  .side{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+  .headnote{display:none}
+  .pausebadge{display:none}
+  .tcards{grid-template-columns:1fr}
+  .hud .big{font-size:26px}
+  .hud{left:8px;top:8px;padding:6px 30px 8px 10px;border-radius:11px;
+    background:linear-gradient(100deg,rgba(4,8,20,.80),rgba(4,8,20,.60) 62%,rgba(4,8,20,0))}
+  .legend{font-size:10px;line-height:1.7}
+}
+@media (max-width:620px){
+  .side{display:flex}
+  .stage{height:min(96vw,420px);min-height:300px}
+  .footnote{font-size:9.5px;max-width:100%;bottom:8px}
+  .fn-long{display:none}
+  .fn-short{display:inline}
+  .legend{display:none}
+  .btn.play{min-width:80px}
+  .speed{order:3;width:100%;flex-basis:100%}
+  .speed .hint{display:none}
+  .result .laps-grid{grid-template-columns:repeat(2,1fr);gap:5px 8px}
+  .result{padding:11px 12px;bottom:10px;left:10px;right:10px}
+  .result .lg{font-size:10px}
+  .ctl-row{gap:7px}
+  .chip{padding:5px 8px;min-height:30px;font-size:11px}
+  .info-grid b{font-size:12px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="mark"></div>
+      <div>
+        <h1>为什么<span>一年</span>不一样？</h1>
+        <div class="sub">太阳系公转周期互动实验 · 点击行星查看资料 · 拖动滑块改变时间流速</div>
+      </div>
+    </div>
+    <div class="headnote">同样绕太阳一圈，水星只要 <b>88 天</b>，海王星要 <b>165 年</b>。<br>把时间加速，看差别是怎么来的。</div>
+  </header>
+
+  <div class="grid">
+    <section class="stage" id="stage">
+      <canvas id="sky" aria-label="太阳系公转模拟图，点击任意行星查看详情"></canvas>
+      <div class="hud">
+        <div class="lab">已模拟时间</div>
+        <div class="big" id="hudDays">0.0<em>地球日</em></div>
+        <div class="small" id="hudYears">0.00 地球年 · 地球转了 0.00 圈</div>
+      </div>
+      <div class="legend">
+        <div><i></i>行星色亮弧 = 过去 60 地球日走过的轨道</div>
+        <div>细刻度 = 起跑位置 · 点击行星或轨道查看详情</div>
+      </div>
+      <div class="footnote"><span class="fn-long">轨道半径按对数压缩显示（非真实比例）· 角速度按真实公转周期 · 忽略偏心率与轨道倾角</span><span class="fn-short">轨道半径已压缩 · 亮弧 = 过去 60 地球日走过的轨道</span></div>
+      <div class="pausebadge" id="pauseBadge">已暂停 · 点播放或按空格继续</div>
+      <div class="result" id="result">
+        <h3 id="resultTitle">地球刚好转满 1 圈</h3>
+        <p id="resultText"></p>
+        <div class="laps-grid" id="resultGrid"></div>
+        <div class="acts">
+          <button class="btn tiny" id="resultReplay">再看一遍</button>
+          <button class="btn tiny" id="resultClose">关闭</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="controls card" aria-label="时间控制">
+      <div class="ctl-row">
+        <button class="btn play primary" id="playBtn">⏸ 暂停</button>
+        <button class="btn" id="resetBtn">↺ 归零</button>
+        <div class="sep"></div>
+        <div class="speed">
+          <label for="speedRange">时间流速</label>
+          <input type="range" id="speedRange" min="0" max="100" step="1" value="50" aria-label="时间流速倍率">
+          <span class="val" id="speedVal">1.00×</span>
+          <span class="hint" id="speedHint">1 秒 ≈ 30 地球日</span>
+        </div>
+      </div>
+      <div class="ctl-row">
+        <button class="btn tiny" data-jump="1">+1 日</button>
+        <button class="btn tiny" data-jump="30">+30 日</button>
+        <button class="btn tiny" data-jump="365.256">+1 年</button>
+        <button class="btn tiny" data-jump="3652.56">+10 年</button>
+        <div class="sep"></div>
+        <button class="btn primary" id="challengeBtn">⚡ 1 地球年挑战</button>
+        <div class="challenge-tip">一键重放：让地球刚好转满一圈，看其它行星各自走了多远</div>
+      </div>
+      <div class="ctl-row"><div class="chips" id="chips"></div></div>
+    </section>
+
+    <aside class="side">
+      <div class="info card" id="infoCard"></div>
+      <div class="compare card">
+        <h2 class="card-title">一年的长度对比 <span class="k">点击行可选中</span></h2>
+        <p class="card-sub">横条 = 公转周期长度（对数刻度）；下方细条 = 当前这一圈已完成的比例；右侧 = 累计转过的圈数（含小数）</p>
+        <div id="compareRows"></div>
+        <div class="scale-note"><span>88 天</span><span>1 年</span><span>11.9 年</span><span>165 年</span></div>
+      </div>
+    </aside>
+
+    <section class="theory">
+      <h2>为什么离太阳越远，一年越长？</h2>
+      <div class="tcards">
+        <div class="tcard">
+          <div class="n">01 / 规律</div>
+          <h3>开普勒第三定律</h3>
+          <div class="formula">T² ∝ a³ &nbsp;→&nbsp; T ∝ a<sup>1.5</sup></div>
+          <p><b>T</b> 是公转周期，<b>a</b> 是到太阳的平均距离。距离变为 4 倍，一年就变成 4<sup>1.5</sup> = <b>8 倍</b>。海王星 30 AU → 30<sup>1.5</sup> ≈ 164 年，与实测 165 年吻合。</p>
+        </div>
+        <div class="tcard">
+          <div class="n">02 / 直觉</div>
+          <h3>两件事同时发生</h3>
+          <p>① <b>路更长</b>：轨道周长正比于距离 a。<br>② <b>跑更慢</b>：引力随距离衰减，轨道速度 v ∝ 1/√a。<br>时间 = 路程 ÷ 速度 ∝ a ÷ (1/√a) = <code>a√a</code>。所以外行星不是"稍微慢一点"，而是被双重放大。</p>
+        </div>
+        <div class="tcard">
+          <div class="n">03 / 自己验证</div>
+          <h3>在图上找出证据</h3>
+          <p>点 <b>⚡ 1 地球年挑战</b>：地球走满 1 圈时，水星已绕 <b>4.15</b> 圈，火星才半圈，海王星只挪了约 <b>2.2°</b>。<br>再把流速拉到 30× 以上，看轨道上的亮弧：同样的 60 天，内行星划出长弧，外行星几乎没动。</p>
+        </div>
+      </div>
+      <div class="disclaimer">数据：NASA Planetary Fact Sheet（公转周期取恒星年，地球 = 365.256 日）。为便于同屏观察，轨道半径做了对数压缩；行星大小亦非真实比例；所有角速度严格按真实周期比计算。太阳与八大行星均可点击查看资料。</div>
+    </section>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* PURE_START — 纯数据与纯函数，不依赖 DOM，供静态探针按锚点切出 */
+const EARTH_YEAR = 365.256;
+const A_MIN = 0.387, A_MAX = 30.07;
+const BASE_DAYS_PER_SEC = 30;
+const TRAIL_DAYS = 60;
+const START_ANGLE = -Math.PI / 2;
+const TWO_PI = Math.PI * 2;
+/* 各行星起跑相位错开（黄金角），首帧即呈现完整太阳系；不改变角速度/周期比 */
+const GOLDEN_ANGLE = 2.39996323;
+
+const SUN = {
+  id:'sun', name:'太阳', en:'Sun', kind:'star', color:'#ffd27a', dark:'#d9661e',
+  diameter:1392700, mass:333000, temp:5505, age:'约 46 亿年',
+  desc:'太阳占太阳系总质量的 99.86%。它的引力决定了每颗行星的轨道速度：离得越远，引力越弱，行星就必须用更慢的速度维持轨道，也更难跑完一圈。',
+  fact:'太阳自己也带着整个太阳系绕银河系中心公转，一圈约 2.3 亿年 —— 那是另一种尺度的"一年"。'
+};
+
+const PLANETS = [
+  {id:'mercury',name:'水星',en:'Mercury',a:0.387,period:87.969,diameter:4879,rotation:1407.6,temp:167,moons:0,mass:0.055,
+   color:'#b3aaa0',dark:'#4a423c',
+   desc:'离太阳最近，轨道最短、跑得最快（约 47.4 km/s）。它只需要 88 个地球日就过完一年，是太阳系里"年"最短的行星。',
+   fact:'水星一个太阳日（两次日出之间）长达 176 地球日，比它的一年（88 日）还长两倍 —— 在这里"一天"比"一年"久。'},
+  {id:'venus',name:'金星',en:'Venus',a:0.723,period:224.701,diameter:12104,rotation:-5832.5,temp:464,moons:0,mass:0.815,
+   color:'#f0d29a',dark:'#8a6433',
+   desc:'轨道半径约 0.72 AU，周期 225 日。浓密的二氧化碳大气造成 464°C 的失控温室效应，是太阳系最热的行星。',
+   fact:'金星逆向自转，一天（243 地球日）比一年（225 地球日）还长，是太阳系唯一"日长于年"的行星。'},
+  {id:'earth',name:'地球',en:'Earth',a:1.000,period:365.256,diameter:12756,rotation:23.93,temp:15,moons:1,mass:1,
+   color:'#5aa9ec',dark:'#123a68',
+   desc:'我们的时间标尺：1 个地球年 = 365.256 日，轨道速度约 29.8 km/s。页面里所有"年""日"都以地球为单位。',
+   fact:'地球公转一圈时，水星已过完 4 年多，而木星还要再花 10.86 年才走完它的第一圈。'},
+  {id:'mars',name:'火星',en:'Mars',a:1.524,period:686.980,diameter:6792,rotation:24.62,temp:-65,moons:2,mass:0.107,
+   color:'#dd7547',dark:'#6c2a17',
+   desc:'距离 1.52 AU，一年 687 日，约等于 1.88 个地球年。轨道更偏，季节变化比地球剧烈得多。',
+   fact:'火星的一年接近两个地球年，所以一次载人探测窗口（地火转移）大约每 26 个月才出现一次。'},
+  {id:'jupiter',name:'木星',en:'Jupiter',a:5.203,period:4332.589,diameter:142984,rotation:9.93,temp:-110,moons:95,mass:317.8,
+   color:'#e0bd95',dark:'#7c5236',stripes:true,
+   desc:'距离跃升到 5.2 AU，一年变成 11.86 地球年。它是质量最大的行星，自转却最快，一天不到 10 小时。',
+   fact:'按 T ∝ a^1.5 估算：5.2^1.5 ≈ 11.9 年，与实测 11.86 年几乎完全一致。'},
+  {id:'saturn',name:'土星',en:'Saturn',a:9.537,period:10759.22,diameter:120536,rotation:10.66,temp:-140,moons:146,mass:95.2,
+   color:'#e9d5a2',dark:'#8a7245',ring:true,
+   desc:'距离 9.54 AU，一年 29.46 地球年。壮观的环由无数冰粒组成，宽度超过 28 万公里，厚度却常常不到 1 公里。',
+   fact:'土星的一年接近 30 个地球年：人类一生大约只能看它绕太阳 2～3 圈。'},
+  {id:'uranus',name:'天王星',en:'Uranus',a:19.191,period:30688.5,diameter:51118,rotation:-17.24,temp:-195,moons:28,mass:14.5,
+   color:'#a6e2e6',dark:'#3c7d8b',
+   desc:'距离 19.2 AU，一年 84 地球年。自转轴几乎躺倒在轨道面上，极区会连续 42 年晒太阳、再连续 42 年黑夜。',
+   fact:'1781 年被发现，到今天（2026 年）它才绕太阳转了约 2.9 圈。'},
+  {id:'neptune',name:'海王星',en:'Neptune',a:30.07,period:60182,diameter:49528,rotation:16.11,temp:-200,moons:16,mass:17.1,
+   color:'#5b83f0',dark:'#1c2f80',
+   desc:'最远的行星，30 AU、轨道速度仅 5.4 km/s，一年 164.8 地球年。阳光到达这里要 4 小时 10 分。',
+   fact:'1846 年发现，直到 2011 年才完成被发现后的第一圈公转 —— 天文学家等了整整 165 年。'}
+];
+
+/* 对数压缩后的轨道半径比例 0..1（幂 0.8 让内行星不至于挤成一团） */
+function orbitT(p){
+  const r = Math.log(p.a / A_MIN) / Math.log(A_MAX / A_MIN);
+  return Math.pow(Math.max(0, Math.min(1, r)), 0.8);
+}
+function phaseOf(p){ return PLANETS.indexOf(p) * GOLDEN_ANGLE; }
+function startAngleOf(p){ return START_ANGLE + phaseOf(p); }
+function angleOf(p, days){ return startAngleOf(p) + TWO_PI * days / p.period; }
+function lapsOf(p, days){ return Math.floor(days / p.period); }
+function fracOf(p, days){ const x = days / p.period; return x - Math.floor(x); }
+function yearsOf(p){ return p.period / EARTH_YEAR; }
+function orbitRadius(p, rMin, rMax){ return rMin + (rMax - rMin) * orbitT(p); }
+function trailAngle(p){
+  return Math.min(TWO_PI, TWO_PI * TRAIL_DAYS / p.period);
+}
+function bodyRadius(p, scale){
+  const t = (Math.log(p.diameter) - Math.log(4879)) / (Math.log(142984) - Math.log(4879));
+  return (3.6 + 7.4 * Math.max(0, Math.min(1, t))) * scale;
+}
+function speedFromSlider(v){ return Math.pow(10, (v - 50) / 25); }
+function fmtLaps(v){
+  if (v >= 10) return v.toFixed(1);
+  if (v >= 1) return v.toFixed(2);
+  if (v >= 0.01) return v.toFixed(3);
+  return v.toFixed(4);
+}
+function fmtYears(v){
+  if (v < 1) return v.toFixed(2);
+  if (v < 10) return v.toFixed(2);
+  if (v < 100) return v.toFixed(1);
+  return v.toFixed(0);
+}
+function fmtBigDays(d){
+  if (d < 1000) return d.toFixed(1);
+  if (d < 100000) return Math.round(d).toLocaleString('en-US');
+  return d.toExponential(2);
+}
+/* PURE_END */
+
+/* ---------------- 状态与 DOM ---------------- */
+const $ = s => document.querySelector(s);
+const el = {
+  canvas:$('#sky'), stage:$('#stage'), hudDays:$('#hudDays'), hudYears:$('#hudYears'),
+  pauseBadge:$('#pauseBadge'), playBtn:$('#playBtn'), resetBtn:$('#resetBtn'),
+  speedRange:$('#speedRange'), speedVal:$('#speedVal'), speedHint:$('#speedHint'),
+  chips:$('#chips'), infoCard:$('#infoCard'), compareRows:$('#compareRows'),
+  challengeBtn:$('#challengeBtn'), result:$('#result'), resultTitle:$('#resultTitle'),
+  resultText:$('#resultText'), resultGrid:$('#resultGrid'),
+  resultReplay:$('#resultReplay'), resultClose:$('#resultClose')
+};
+const ctx = el.canvas.getContext('2d');
+const ALL = [SUN, ...PLANETS];
+const state = {days:0, playing:true, speed:1, selected:'earth', hover:null, challenge:null};
+let layout = null, bgCanvas = null, rowRefs = {};
+let W = 0, H = 0, DPR = 1;
+
+function byId(id){ return id === 'sun' ? SUN : PLANETS.find(p => p.id === id); }
+function lighten(hex, k){
+  const n = parseInt(hex.slice(1),16);
+  const r = Math.min(255, ((n>>16)&255) + k), g = Math.min(255, ((n>>8)&255) + k), b = Math.min(255, (n&255) + k);
+  return 'rgb(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ')';
+}
+function pctBar(p){
+  const t = (Math.log10(p.period) - 1.9) / (4.85 - 1.9);
+  return Math.max(4, Math.min(100, t * 100));
+}
+function periodLabel(p){
+  const y = yearsOf(p);
+  return y < 1 ? Math.round(p.period) + ' 天' : fmtYears(y) + ' 年';
+}
+function rotationLabel(p){
+  const a = Math.abs(p.rotation);
+  const v = a >= 48 ? (a / 24).toFixed(1) + ' 天' : a.toFixed(1) + ' 小时';
+  return v + (p.rotation < 0 ? ' ↺' : '');
+}
+
+/* ---------------- 构建静态 UI ---------------- */
+el.chips.innerHTML = ALL.map(b =>
+  '<button class="chip" data-id="' + b.id + '"><i style="background:' + b.color + '"></i>' + b.name + '</button>'
+).join('');
+
+el.compareRows.innerHTML = PLANETS.map(p =>
+  '<div class="prow" data-id="' + p.id + '">' +
+    '<div class="pname"><i style="background:' + p.color + '"></i>' + p.name + '</div>' +
+    '<div class="pbar"><i style="width:' + pctBar(p).toFixed(1) + '%;background:' + p.color + '"></i>' +
+      '<span class="tick" style="left:22.4%"></span></div>' +
+    '<div class="pval">' + periodLabel(p) + '</div>' +
+    '<div class="plaps" data-laps="' + p.id + '">0.0000 圈</div>' +
+    '<div class="prog-wrap"><i data-prog="' + p.id + '"></i></div>' +
+  '</div>'
+).join('');
+PLANETS.forEach(p => {
+  rowRefs[p.id] = {
+    row:el.compareRows.querySelector('.prow[data-id="' + p.id + '"]'),
+    laps:el.compareRows.querySelector('[data-laps="' + p.id + '"]'),
+    prog:el.compareRows.querySelector('[data-prog="' + p.id + '"]')
+  };
+});
+
+function renderInfo(id){
+  const b = byId(id);
+  let grid, hero, tag;
+  if (b.kind === 'star'){
+    tag = '恒星';
+    grid = [
+      ['直径', (b.diameter/1000).toFixed(0) + ' 万 km'],
+      ['质量', '33.3 万 × 地球'],
+      ['表面温度', b.temp.toLocaleString('en-US') + ' °C'],
+      ['年龄', b.age]
+    ];
+    hero = ['占太阳系总质量', '99.86', '%', '引力决定了所有行星的轨道速度'];
+  } else {
+    tag = b.a < 1.6 ? '类地行星' : (b.a < 10 ? '气态巨行星' : '冰巨星');
+    grid = [
+      ['日距', b.a.toFixed(3) + ' AU'],
+      ['公转周期', b.period.toLocaleString('en-US', {maximumFractionDigits:2}) + ' 日'],
+      ['自转周期', rotationLabel(b)],
+      ['直径', b.diameter.toLocaleString('en-US') + ' km'],
+      ['平均温度', b.temp + ' °C'],
+      ['已确认卫星', b.moons + ' 颗']
+    ];
+    const y = yearsOf(b);
+    hero = ['它的一年等于', fmtYears(y), '地球年', b.period.toFixed(1) + ' 个地球日 · 轨道速度约 ' + (29.8/Math.sqrt(b.a)).toFixed(1) + ' km/s'];
+  }
+  el.infoCard.innerHTML =
+    '<div class="info-head">' +
+      '<div class="orb" style="background:radial-gradient(circle at 32% 30%,' + lighten(b.color,55) + ',' + b.color + ' 48%,' + b.dark + ')"></div>' +
+      '<h2>' + b.name + '<small>' + b.en + '</small></h2>' +
+      '<span class="tag">' + tag + '</span>' +
+    '</div>' +
+    '<div class="info-grid">' + grid.map(g =>
+      '<div><label>' + g[0] + '</label><b>' + g[1] + '</b></div>').join('') + '</div>' +
+    '<div class="year-hero"><label>' + hero[0] + '</label>' +
+      '<div class="v">' + hero[1] + '<em>' + hero[2] + '</em></div>' +
+      '<div class="r">' + hero[3] + '</div></div>' +
+    '<p class="desc">' + b.desc + '</p>' +
+    '<div class="fact"><b>✦ 冷知识 · </b>' + b.fact + '</div>' +
+    '<div class="live"><span>当前进度</span><span><b id="liveFrac">0%</b> · 累计 <b id="liveLaps">0</b> 圈</span></div>';
+}
+
+function select(id){
+  if (!byId(id)) return;
+  state.selected = id;
+  el.chips.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.id === id));
+  Object.keys(rowRefs).forEach(k => rowRefs[k].row.classList.toggle('on', k === id));
+  renderInfo(id);
+  updateHUD();
+}
+
+/* ---------------- 画布尺寸与背景 ---------------- */
+function seededRandom(seed){
+  let s = seed >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+function buildBackground(){
+  bgCanvas = document.createElement('canvas');
+  bgCanvas.width = Math.max(1, Math.round(W * DPR));
+  bgCanvas.height = Math.max(1, Math.round(H * DPR));
+  const g = bgCanvas.getContext('2d');
+  g.setTransform(DPR,0,0,DPR,0,0);
+  const cx = W/2, cy = H/2;
+  const base = g.createRadialGradient(cx,cy,10,cx,cy,Math.max(W,H)*0.78);
+  base.addColorStop(0,'#0b1228'); base.addColorStop(0.55,'#060a18'); base.addColorStop(1,'#02040c');
+  g.fillStyle = base; g.fillRect(0,0,W,H);
+  [[0.18,0.24,'rgba(70,96,180,.13)',0.42],[0.82,0.72,'rgba(122,60,150,.11)',0.36],[0.62,0.14,'rgba(40,120,150,.09)',0.30]]
+    .forEach(n => {
+      const r = Math.max(W,H)*n[3];
+      const ng = g.createRadialGradient(W*n[0],H*n[1],0,W*n[0],H*n[1],r);
+      ng.addColorStop(0,n[2]); ng.addColorStop(1,'rgba(0,0,0,0)');
+      g.fillStyle = ng; g.fillRect(0,0,W,H);
+    });
+  const rnd = seededRandom(20261104);
+  const n = Math.round(W*H/2100);
+  for (let i=0;i<n;i++){
+    const x = rnd()*W, y = rnd()*H, s = rnd();
+    const r = s > 0.975 ? 1.5 : (s > 0.86 ? 1.0 : 0.6);
+    g.globalAlpha = 0.16 + rnd()*0.62;
+    g.fillStyle = s > 0.96 ? '#cfe2ff' : '#ffffff';
+    g.beginPath(); g.arc(x,y,r,0,TWO_PI); g.fill();
+  }
+  g.globalAlpha = 1;
+}
+function resize(){
+  const r = el.stage.getBoundingClientRect();
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  el.canvas.width = Math.round(W*DPR); el.canvas.height = Math.round(H*DPR);
+  const short = Math.min(W,H);
+  const scale = Math.max(0.72, Math.min(1.12, short/620));
+  const cx = W/2, cy = H/2;
+  const rMin = Math.max(40, short*0.088);
+  const rMax = Math.max(rMin+60, short/2 - 24);
+  layout = {cx,cy,rMin,rMax,scale,pos:{}};
+  buildBackground();
+  draw();
+}
+
+/* ---------------- 绘制 ---------------- */
+function drawRing(p,x,y,r,from,to,alpha,lw){
+  ctx.save();
+  ctx.translate(x,y); ctx.rotate(-0.34);
+  ctx.strokeStyle = 'rgba(232,212,166,' + alpha + ')';
+  ctx.lineWidth = Math.max(1.6, r*lw);
+  ctx.beginPath(); ctx.ellipse(0,0,r*1.9,r*0.66,0,from,to); ctx.stroke();
+  ctx.restore();
+}
+function drawBody(b,x,y,r,sel){
+  const glow = (b.kind === 'star') ? 34*r : (sel ? 20 : 9);
+  ctx.save();
+  ctx.shadowColor = b.kind === 'star' ? 'rgba(255,170,60,.95)' : b.color;
+  ctx.shadowBlur = glow;
+  if (b.ring) drawRing(b,x,y,r,0,TWO_PI,0.30,0.30);
+  const g = ctx.createRadialGradient(x-r*0.36,y-r*0.40,r*0.04,x,y,r*1.16);
+  g.addColorStop(0, lighten(b.color, b.kind === 'star' ? 42 : 46));
+  g.addColorStop(0.55, b.color);
+  g.addColorStop(1, b.dark);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x,y,r,0,TWO_PI); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x,y,r,0,TWO_PI); ctx.clip();
+  if (b.stripes){
+    for (let i=-3;i<=3;i++){
+      ctx.fillStyle = i%2 ? 'rgba(255,246,224,.17)' : 'rgba(96,52,30,.22)';
+      ctx.fillRect(x-r, y + i*r*0.30 - r*0.10, r*2, r*0.20);
+    }
+    ctx.fillStyle = 'rgba(190,92,58,.42)';
+    ctx.beginPath(); ctx.ellipse(x+r*0.28,y+r*0.34,r*0.30,r*0.15,0,0,TWO_PI); ctx.fill();
+  } else if (b.id === 'earth'){
+    ctx.fillStyle = 'rgba(88,176,116,.82)';
+    ctx.beginPath(); ctx.ellipse(x-r*0.25,y-r*0.18,r*0.37,r*0.26,0.5,0,TWO_PI); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x+r*0.36,y+r*0.30,r*0.26,r*0.20,-0.4,0,TWO_PI); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.ellipse(x-r*0.10,y-r*0.62,r*0.30,r*0.10,0.2,0,TWO_PI); ctx.fill();
+  } else if (b.id === 'mars'){
+    ctx.fillStyle = 'rgba(255,255,255,.65)';
+    ctx.beginPath(); ctx.ellipse(x,y-r*0.93,r*0.34,r*0.13,0,0,TWO_PI); ctx.fill();
+  } else if (b.id === 'jupiter' || b.id === 'saturn'){
+    ctx.fillStyle = 'rgba(255,255,255,.07)';
+    ctx.fillRect(x-r, y-r*0.12, r*2, r*0.22);
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.24)';
+  ctx.beginPath(); ctx.ellipse(x-r*0.36,y-r*0.42,r*0.26,r*0.17,-0.6,0,TWO_PI); ctx.fill();
+  ctx.restore();
+  if (b.ring) drawRing(b,x,y,r,0,Math.PI,0.85,0.30);
+  if (b.kind === 'star'){
+    ctx.strokeStyle = 'rgba(255,238,190,.30)'; ctx.lineWidth = 1;
+    for (let i=1;i<=2;i++){
+      ctx.beginPath(); ctx.arc(x,y,r*(1+i*0.30),0.4+i,2.1+i); ctx.stroke();
+    }
+  }
+  ctx.restore();
+  if (sel){
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.4;
+    ctx.setLineDash([3,4]);
+    ctx.beginPath(); ctx.arc(x,y,r+8,0,TWO_PI); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+}
+function draw(){
+  if (!layout || !bgCanvas) return;
+  const {cx,cy,rMin,rMax,scale} = layout;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(bgCanvas,0,0,W,H);
+
+  // 太阳光晕先画，避免盖住内圈轨道与 60 天亮弧
+  const sunR = Math.max(15, 25*scale);
+  const halo = ctx.createRadialGradient(cx,cy,sunR*0.6,cx,cy,sunR*3.4);
+  halo.addColorStop(0,'rgba(255,170,60,.28)');
+  halo.addColorStop(0.45,'rgba(255,130,40,.09)');
+  halo.addColorStop(1,'rgba(255,120,30,0)');
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(cx,cy,sunR*3.4,0,TWO_PI); ctx.fill();
+
+  // 轨道 / 起点刻度 / 60 天亮弧
+  PLANETS.forEach(p => {
+    const r = orbitRadius(p,rMin,rMax);
+    const on = state.selected === p.id;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,TWO_PI);
+    ctx.strokeStyle = on ? 'rgba(255,196,107,.48)' : 'rgba(146,176,232,.15)';
+    ctx.lineWidth = on ? 1.6 : 1;
+    ctx.stroke();
+    const sa = startAngleOf(p);
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(sa)*(r-4), cy + Math.sin(sa)*(r-4));
+    ctx.lineTo(cx + Math.cos(sa)*(r+4), cy + Math.sin(sa)*(r+4));
+    ctx.strokeStyle = 'rgba(220,232,255,.30)'; ctx.lineWidth = 1.4; ctx.stroke();
+    const a = angleOf(p,state.days), ta = trailAngle(p);
+    ctx.save();
+    ctx.strokeStyle = lighten(p.color, 26); ctx.globalAlpha = on ? 1 : 0.82;
+    ctx.lineWidth = on ? 4.4 : 3.6; ctx.lineCap = 'round';
+    ctx.shadowColor = p.color; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.arc(cx,cy,r,a-ta,a); ctx.stroke();
+    ctx.restore();
+  });
+
+  drawBody(SUN,cx,cy,sunR,state.selected === 'sun');
+  layout.pos.sun = {x:cx,y:cy,r:sunR};
+
+  // 行星
+  const compact = W < 560;
+  PLANETS.forEach(p => {
+    const r = orbitRadius(p,rMin,rMax);
+    const a = angleOf(p,state.days);
+    const x = cx + Math.cos(a)*r, y = cy + Math.sin(a)*r;
+    const br = bodyRadius(p,scale);
+    const sel = state.selected === p.id;
+    drawBody(p,x,y,br,sel || state.hover === p.id);
+    layout.pos[p.id] = {x,y,r:br};
+    if (!compact || sel || state.hover === p.id){
+      ctx.save();
+      ctx.font = (sel ? '700 12px ' : '500 10.5px ') + '"PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.textBaseline = 'middle';
+      const tw = ctx.measureText(p.name).width;
+      let tx = x + br + 7;
+      if (tx + tw > W - 6) tx = x - br - 7 - tw;
+      ctx.fillStyle = sel ? '#ffffff' : 'rgba(198,214,246,.76)';
+      ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
+      ctx.fillText(p.name,tx,y);
+      ctx.restore();
+    }
+  });
+}
+
+/* ---------------- HUD / 动态文本 ---------------- */
+function updateHUD(){
+  const d = state.days;
+  el.hudDays.innerHTML = fmtBigDays(d) + '<em>地球日</em>';
+  const ey = d / EARTH_YEAR;
+  el.hudYears.textContent = fmtYears(Math.max(0,ey)) + ' 地球年 · 地球转了 ' + fmtLaps(Math.max(0,ey)) + ' 圈';
+  PLANETS.forEach(p => {
+    const f = fracOf(p,d);
+    rowRefs[p.id].prog.style.width = (f*100).toFixed(2) + '%';
+    rowRefs[p.id].laps.textContent = fmtLaps(Math.max(0,d/p.period)) + ' 圈';
+  });
+  const liveF = $('#liveFrac'), liveL = $('#liveLaps');
+  if (liveF && liveL){
+    if (state.selected === 'sun'){
+      liveF.textContent = '—'; liveL.textContent = '—';
+    } else {
+      const p = byId(state.selected);
+      liveF.textContent = (fracOf(p,d)*100).toFixed(1) + '%';
+      liveL.textContent = fmtLaps(Math.max(0,d/p.period));
+    }
+  }
+  const inChallenge = !!state.challenge;
+  el.playBtn.textContent = state.playing ? '⏸ 暂停' : '⏵ 播放';
+  el.pauseBadge.classList.toggle('on', !state.playing && !inChallenge);
+}
+
+/* ---------------- 交互 ---------------- */
+function setSpeed(v){
+  state.speed = speedFromSlider(Number(v));
+  el.speedVal.textContent = (state.speed < 10 ? state.speed.toFixed(2) : state.speed.toFixed(1)) + '×';
+  el.speedHint.textContent = '1 秒 ≈ ' + (BASE_DAYS_PER_SEC*state.speed < 10
+    ? (BASE_DAYS_PER_SEC*state.speed).toFixed(1) : Math.round(BASE_DAYS_PER_SEC*state.speed).toLocaleString('en-US')) + ' 地球日';
+}
+function togglePlay(){
+  if (state.challenge){ state.challenge = null; hideResult(); }
+  state.playing = !state.playing;
+  updateHUD();
+}
+function reset(){
+  if (state.challenge){ state.challenge = null; hideResult(); }
+  state.days = 0; updateHUD(); draw();
+}
+function jump(days){
+  if (state.challenge){ state.challenge = null; hideResult(); }
+  state.playing = false;
+  state.days = Math.max(0, state.days + days);
+  updateHUD(); draw();
+}
+function hideResult(){ el.result.classList.remove('on'); }
+function showResult(){
+  el.resultGrid.innerHTML = PLANETS.map(p =>
+    '<div class="lg"><i style="background:' + p.color + '"></i>' + p.name +
+    '<b>' + fmtLaps(state.days / p.period) + ' 圈</b></div>').join('');
+  const nep = byId('neptune');
+  const deg = 360 * state.days / nep.period;
+  el.resultTitle.textContent = '地球刚好转满 1 圈 · ' + EARTH_YEAR.toFixed(2) + ' 天';
+  el.resultText.textContent = '同样的时间里，水星已跑完 ' + fmtLaps(state.days/byId('mercury').period) +
+    ' 圈，火星才走半圈，海王星只挪了 ' + deg.toFixed(1) + '°。距离越远，一圈路更长、速度还更慢。';
+  el.result.classList.add('on');
+}
+function startChallenge(){
+  state.days = 0; state.playing = false;
+  state.challenge = {t:0,dur:3.4,done:false};
+  hideResult(); updateHUD(); draw();
+}
+
+el.playBtn.addEventListener('click',togglePlay);
+el.resetBtn.addEventListener('click',reset);
+el.speedRange.addEventListener('input',e => setSpeed(e.target.value));
+el.challengeBtn.addEventListener('click',startChallenge);
+el.resultReplay.addEventListener('click',startChallenge);
+el.resultClose.addEventListener('click',hideResult);
+el.chips.addEventListener('click',e => {
+  const c = e.target.closest('.chip'); if (c) select(c.dataset.id);
+});
+el.compareRows.addEventListener('click',e => {
+  const r = e.target.closest('.prow'); if (r) select(r.dataset.id);
+});
+document.querySelectorAll('[data-jump]').forEach(b =>
+  b.addEventListener('click',() => jump(Number(b.dataset.jump))));
+
+function pointerPos(e){
+  const r = el.canvas.getBoundingClientRect();
+  return {x:e.clientX-r.left, y:e.clientY-r.top};
+}
+function hitTest(px,py){
+  if (!layout) return null;
+  const {cx,cy,rMin,rMax} = layout;
+  const dist = Math.hypot(px-cx,py-cy);
+  const sun = layout.pos.sun;
+  if (sun && dist < sun.r + 8) return 'sun';
+  // 优先命中行星球体本身
+  let best = null, bd = Infinity;
+  PLANETS.forEach(p => {
+    const q = layout.pos[p.id]; if (!q) return;
+    const d = Math.hypot(px-q.x,py-q.y);
+    if (d < q.r + 9 && d < bd){ bd = d; best = p.id; }
+  });
+  if (best) return best;
+  // 内圈轨道密集时，允许点击轨道环本身来选中（移动端更易操作）
+  const rs = PLANETS.map(p => orbitRadius(p,rMin,rMax));
+  let bi = -1, br = Infinity;
+  rs.forEach((r,i) => { const d = Math.abs(dist-r); if (d < br){ br = d; bi = i; } });
+  const gap = bi < rs.length-1 ? rs[bi+1]-rs[bi] : (bi > 0 ? rs[bi]-rs[bi-1] : 40);
+  return br <= Math.max(6,Math.min(16,gap*0.55)) ? PLANETS[bi].id : null;
+}
+el.canvas.addEventListener('pointerdown',e => {
+  const q = pointerPos(e);
+  const id = hitTest(q.x,q.y);
+  if (id) select(id);
+});
+el.canvas.addEventListener('pointermove',e => {
+  if (e.pointerType !== 'mouse') return;
+  const q = pointerPos(e);
+  const id = hitTest(q.x,q.y);
+  if (id !== state.hover){
+    state.hover = id;
+    el.canvas.style.cursor = id ? 'pointer' : 'default';
+  }
+});
+el.canvas.addEventListener('pointerleave',() => { state.hover = null; });
+window.addEventListener('keydown',e => {
+  if (e.code === 'Space' && e.target.tagName !== 'INPUT'){
+    e.preventDefault(); togglePlay();
+  } else if (e.key === 'r' || e.key === 'R'){ reset(); }
+  else if (e.key === 'ArrowRight'){ jump(10); }
+  else if (e.key === 'ArrowLeft'){ jump(-10); }
+});
+if (window.ResizeObserver) new ResizeObserver(resize).observe(el.stage);
+else window.addEventListener('resize',resize);
+
+/* ---------------- 主循环 ---------------- */
+let last = 0;
+function frame(ts){
+  const dt = last ? Math.min(0.05,(ts-last)/1000) : 0;
+  last = ts;
+  if (state.challenge && !state.challenge.done){
+    state.challenge.t += dt;
+    const k = Math.min(1, state.challenge.t/state.challenge.dur);
+    state.days = EARTH_YEAR * k;
+    if (k >= 1){
+      state.challenge.done = true;
+      state.playing = false;
+      showResult();
+    }
+  } else if (state.playing){
+    state.days += dt * BASE_DAYS_PER_SEC * state.speed;
+  }
+  draw();
+  updateHUD();
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- 启动 / 测试钩子 ---------------- */
+select('earth');
+setSpeed(el.speedRange.value);
+resize();
+requestAnimationFrame(frame);
+
+window.__solar = {
+  state, PLANETS, SUN, EARTH_YEAR,
+  select, jump, reset, setSpeed, startChallenge, togglePlay,
+  posOf: id => layout ? layout.pos[id] : null,
+  orbitRadius, orbitT, angleOf, lapsOf, fracOf, yearsOf, speedFromSlider, trailAngle,
+  snapshot: () => ({days:state.days, playing:state.playing, speed:state.speed,
+    selected:state.selected, challenge:state.challenge ? {...state.challenge} : null})
+};
+
+</script>
+</body>
+</html>

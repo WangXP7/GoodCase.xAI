@@ -29,6 +29,7 @@
   set('workbuddy/rocket-launch-sim','火箭发射 · 模拟原型','模拟仿真|航天');
   set('workbuddy/rune-frontline','符文战线 · 三路弹幕塔防','游戏|策略博弈|视觉艺术');
   set('workbuddy/snake-survivors','蛇人幸存者 · 黑暗废墟','游戏|动作冒险');
+  set('workbuddy/solar-year-lab','太阳系公转周期 · 一年为什么不一样','科普教育|航天|视觉艺术');
   set('workbuddy/solar-system','太阳系 · 八大行星','科普教育|航天|3D|Three.js');
   set('workbuddy/song-courtyard','宋代庭院 · 五路院落','建模|3D|Blender|国风历史');
   set('workbuddy/temple-of-heaven','天坛祈年殿 · 三重檐琉璃大殿','视觉艺术|3D|国风历史');
@@ -82,6 +83,7 @@
     'workbuddy/qingming-hongqiao':'shots/01-scroll.jpg',
     'workbuddy/lol-idle':'shots/02-mid.jpg',
     'workbuddy/rune-frontline':'shots/03-battle.jpg',
+    'workbuddy/solar-year-lab':'shots/01-overview.jpg',
     'workbuddy/tideline':'tests/_shots-public/04-title-final.png'
   };
   const unknown = '模型未记录';

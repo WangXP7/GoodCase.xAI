@@ -197,6 +197,14 @@
     },
     {
       "ns": "workbuddy",
+      "dir": "solar-year-lab",
+      "entry": "index.html",
+      "title": "太阳系公转周期 · 一年为什么不一样",
+      "desc": "面向大学生的太阳系互动教学页 · 八大行星角速度按真实周期比（T∝a^1.5，误差 0.076%），轨道亮弧显示过去 60 地球日走过的弧长，周期对数条 + 累计圈数，「1 地球年挑战」冻结在 365.256 天给出水星 4.15 圈 vs 海王星 2.2°；单文件 Canvas2D 零外部资源，桌面与移动双端 · 总耗时约 25 分钟",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+    },
+    {
+      "ns": "workbuddy",
       "dir": "solar-system",
       "entry": "index.html",
       "title": "太阳系八大行星 · 3D 交互模型",
