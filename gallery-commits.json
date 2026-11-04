@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "3f2b6fbe5635b4c419545208ede2a68314859456",
+  "snapshot": "ab08ea0895b645530ba128659dcd4a35949f56bf",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -247,6 +247,11 @@
       "committedAt": "2026-10-15T09:22:31Z",
       "commit": "bed668c60eb171bc07a27c643574fae11eb2361b",
       "scope": "workbuddy/solar-system"
+    },
+    "workbuddy/solar-year-lab/index.html": {
+      "committedAt": "2026-11-04T10:08:58Z",
+      "commit": "ab08ea0895b645530ba128659dcd4a35949f56bf",
+      "scope": "workbuddy/solar-year-lab"
     },
     "workbuddy/song-courtyard/index.html": {
       "committedAt": "2026-10-15T17:29:20Z",
