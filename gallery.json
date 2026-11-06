@@ -602,6 +602,18 @@
       "title": "循环动图四例 · 玻璃蝴蝶、SOL 香水、人物与柴犬、峡谷瀑布",
       "desc": "四支循环 GIF 动画，可在线播放及下载 · 总计耗时 34 分 56 秒",
       "agent": "Codex + GPT-6 Astra"
+    },
+    {
+      "ns": "codex",
+      "dir": "nanjing-city-atlas",
+      "entry": "index.html",
+      "title": "金陵山水城 · 南京 3D 地标图鉴",
+      "desc": "35 处南京地标 · 曲檐瓦垄、桥头堡与近景巡游 · 6 种程序化城市预设 · 总耗时约 26 分钟（两轮制作与验收合计）",
+      "agent": "Codex + GPT-6.1-sol",
+      "tags": [
+        "3D / 空间",
+        "交互体验"
+      ]
     }
   ]
 }

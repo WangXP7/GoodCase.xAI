@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="从秦淮灯火到长江天际线，离线探索程序化 3D 南京城市地标。">
+<title>金陵山水城 · 中国 3D 城市图鉴</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="vendor/three.min.js"></script>
+<script defer src="atlas-data.js"></script>
+<script defer src="scene.js"></script>
+<script defer src="app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="seal" aria-hidden="true">宁</span><div><strong>中国 3D 城市图鉴</strong><small>CHINA CITY ATLAS</small></div></div>
+  <div class="status"><i></i> 程序化场景 <span> / </span> <b id="headerCity">南京</b></div>
+</header>
+<nav id="cities" aria-label="城市预设"></nav>
+<main>
+  <section id="stage" aria-label="交互式三维城市">
+    <div id="viewport"></div>
+    <div class="scrim"></div>
+    <div class="title"><div class="eyebrow" id="edition">01 / FEATURED CITY</div><h1 id="cityTitle">金陵山水城</h1><p id="cityIntro">钟山听松 · 秦淮见月 · 长江入城</p></div>
+    <div id="labels" aria-label="场景地标"></div>
+    <div class="views" role="group" aria-label="镜头">
+      <button id="home" title="返回总览">◈ <span>总览</span></button><button id="top" title="切换俯瞰">⊞ <span>俯瞰</span></button>
+      <button id="plus" title="放大" aria-label="放大">＋</button><button id="minus" title="缩小" aria-label="缩小">−</button>
+    </div>
+    <div class="map"><canvas id="mini" width="252" height="150" aria-label="城市位置示意"></canvas><span>↑ N</span></div>
+    <div class="stage-foot"><span>拖拽旋转 · 右键平移 · 滚轮缩放</span><span>地标与地形为示意模型</span></div>
+    <div id="error" role="alert" hidden></div>
+  </section>
+  <aside class="inspector" aria-label="地标与场景编辑器">
+    <div class="panels" role="group" aria-label="侧栏内容"><button id="landTab" aria-pressed="true">地标导览</button><button id="editTab" aria-pressed="false">场景参数</button></div>
+    <section id="landPanel">
+      <div class="feature" id="feature" aria-live="polite"></div>
+      <div class="catalog"><label for="search" class="sr">查找地标</label><input id="search" type="search" placeholder="查找地标，如 中华门"><div id="filters" role="group" aria-label="地标类别"></div></div>
+      <div id="list" aria-label="地标列表"></div>
+      <div class="tour"><button id="previous" aria-label="上一个地标">←</button><button id="tour">开始巡游</button><button id="next" aria-label="下一个地标">→</button></div>
+    </section>
+    <section id="editPanel" hidden>
+      <div class="feature"><div class="eyebrow">CITY GENERATOR</div><h2>生成场景</h2><p>调节街区与光线。标志地标及其相对布局固定。</p></div>
+      <div id="controls"></div>
+    </section>
+  </aside>
+</main>
+<footer><span>山 · 水 · 城 · 林 <b> / </b> 城市地标与程序化街区</span><details><summary>资料与说明</summary><div>城市布局经过压缩，建筑为辨识性模型。<a href="https://www.nanjing.gov.cn/zzb/njgl/csgk/fjms_72676/202609/t20260929_5919779.html" target="_blank" rel="noopener">南京市政府 · 山水格局</a><a href="https://wlj.nanjing.gov.cn/zwfw/bszlxz/202601/t20260121_5773976.html" target="_blank" rel="noopener">南京文旅 · 景区名录</a><a href="https://dag.nanjing.gov.cn/dawh/dags/202404/t20240418_4211846.html" target="_blank" rel="noopener">南京档案馆 · 长江大桥</a><a href="https://zschina.nanjing.gov.cn/zszx/zsdt/202601/t20260127_5779838.html" target="_blank" rel="noopener">中山陵园管理局 · 祭堂建筑</a><a href="https://developers.openai.com/showcase/procedural-city-generator" target="_blank" rel="noopener">OpenAI · 交互设计参考</a></div></details></footer>
+</body>
+</html>
+
