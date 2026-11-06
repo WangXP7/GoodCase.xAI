@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "28dae2315dc5885acc8e9f477fb0d30c8d04e653",
+  "snapshot": "d960d5dc6d0fa625d263e4309445bd6ba81c93f9",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -77,6 +77,11 @@
       "committedAt": "2026-10-15T07:36:01Z",
       "commit": "04b80cdfd8a844f137ae189ce82000a6c602a59c",
       "scope": "codex/moment-instant-camera"
+    },
+    "codex/nanjing-city-atlas/index.html": {
+      "committedAt": "2026-11-06T17:55:30Z",
+      "commit": "d960d5dc6d0fa625d263e4309445bd6ba81c93f9",
+      "scope": "codex/nanjing-city-atlas"
     },
     "codex/night-street/index.html": {
       "committedAt": "2026-10-15T08:55:38Z",
