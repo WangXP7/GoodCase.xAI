@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "ab08ea0895b645530ba128659dcd4a35949f56bf",
+  "snapshot": "28dae2315dc5885acc8e9f477fb0d30c8d04e653",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -32,6 +32,11 @@
       "committedAt": "2026-10-13T08:09:00Z",
       "commit": "27638271341ebab6ff32a8b7539117d832fe9407",
       "scope": "codex/eve-idle"
+    },
+    "codex/gif-motion-studies/index.html": {
+      "committedAt": "2026-11-06T17:53:36Z",
+      "commit": "28dae2315dc5885acc8e9f477fb0d30c8d04e653",
+      "scope": "codex/gif-motion-studies"
     },
     "codex/hanmo-qingyun/index.html": {
       "committedAt": "2026-10-15T08:17:08Z",
