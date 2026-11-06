@@ -594,6 +594,14 @@
       "desc": "提示词分类、LoRA 数据构造与 TodoMVC 作业安排 · 含交互演示、可打印教案、Python 速学、提交文件与可复现验证",
       "title": "LMCC 三题学习站 · 题解、教案与编程速学",
       "agent": "Codex + GPT-6"
+    },
+    {
+      "ns": "codex",
+      "dir": "gif-motion-studies",
+      "entry": "index.html",
+      "title": "循环动图四例 · 玻璃蝴蝶、SOL 香水、人物与柴犬、峡谷瀑布",
+      "desc": "四支循环 GIF 动画，可在线播放及下载 · 总计耗时 34 分 56 秒",
+      "agent": "Codex + GPT-6 Astra"
     }
   ]
 }
