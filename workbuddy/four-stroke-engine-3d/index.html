@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>四冲程直列四缸发动机 · 交互教学演示</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23141c2a'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='20' fill='%23ffc25a'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== 顶栏 ===== -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">⚙</div>
+      <div class="brand-text">
+        <h1>四冲程发动机 · 交互教学演示</h1>
+        <p>直列四缸 · 点火顺序 1-3-4-2 · 曲轴转两圈完成一个工作循环</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span class="status-chip" id="runStatus"><i></i><span>已暂停</span></span>
+      <button class="btn ghost" id="btnHelp" type="button">教学说明</button>
+      <button class="btn ghost" id="btnResetView" type="button">复位视角</button>
+    </div>
+  </header>
+
+  <!-- ===== 3D 视口 ===== -->
+  <main class="viewport" id="viewport">
+    <canvas id="gl"></canvas>
+    <div class="cyl-labels" id="cylLabels"></div>
+
+    <div class="vp-tip">
+      <b>观察提示</b>
+      <span>左键拖动旋转 · 滚轮缩放 · 右键平移 · 点击部件查看说明</span>
+    </div>
+
+    <div class="vp-legend">
+      <span><i style="background:#4ea8ff"></i>进气 / 新鲜混合气</span>
+      <span><i style="background:#ffc25a"></i>压缩</span>
+      <span><i style="background:#ff5f2e"></i>燃烧 / 点火</span>
+      <span><i style="background:#9aa6b4"></i>排气 / 废气</span>
+    </div>
+
+    <div class="vp-cutbadge" id="cutBadge">剖视模式 · 前半外壳已移除</div>
+  </main>
+
+  <!-- ===== 右侧信息栏 ===== -->
+  <aside class="sidebar">
+
+    <section class="card">
+      <div class="card-head"><h2>实时状态</h2><span class="tag" id="revText">第 1 圈</span></div>
+      <div class="angle-readout">
+        <div class="angle-num"><span id="angleBig">0</span><small>°</small></div>
+        <div class="angle-meta">
+          <span>曲轴转角 / 720° 循环</span>
+          <span id="cycleName">气缸 1 处于做功冲程</span>
+        </div>
+      </div>
+      <div class="cycle-track"><div class="cycle-fill" id="cycleFill"></div></div>
+      <div class="cycle-scale"><span>0°</span><span>180°</span><span>360°</span><span>540°</span><span>720°</span></div>
+
+      <div class="table-title">各气缸当前状态</div>
+      <table class="cyl-table">
+        <thead><tr><th>缸</th><th>冲程</th><th>活塞</th><th>进气门</th><th>排气门</th><th>火花塞</th></tr></thead>
+        <tbody id="cylTableBody"></tbody>
+      </table>
+      <div class="firing-note">
+        <b>点火顺序 1 → 3 → 4 → 2</b>
+        <span>每 180° 有一缸做功；1、4 缸同相，2、3 缸同相（相差 180°），输出更平稳。</span>
+      </div>
+    </section>
+
+    <section class="card" id="partCard">
+      <div class="card-head"><h2>部件说明</h2><span class="tag dim" id="partTag">点击模型中的部件</span></div>
+      <div class="part-empty" id="partEmpty">用鼠标点击活塞、连杆、曲轴、气门、火花塞或缸体，这里会显示名称与作用说明。</div>
+      <div class="part-info" id="partInfo" hidden>
+        <h3 id="partName"></h3>
+        <p id="partDesc"></p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>四冲程示意（气缸 1）</h2><span class="tag dim" id="schemStroke">做功</span></div>
+      <div class="schematic-wrap">
+        <svg id="schematic" viewBox="0 0 320 190" preserveAspectRatio="xMidYMid meet" aria-label="四冲程工作示意图">
+          <defs>
+            <linearGradient id="gasGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ff8a3c" stop-opacity="0.85"/>
+              <stop offset="100%" stop-color="#ff3d1f" stop-opacity="0.25"/>
+            </linearGradient>
+            <marker id="arrBlue" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#4ea8ff"/>
+            </marker>
+            <marker id="arrGray" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#a9b4c2"/>
+            </marker>
+          </defs>
+
+          <!-- 缸壁 -->
+          <rect x="86" y="24" width="148" height="140" rx="5" fill="#151d29" stroke="#66788f" stroke-width="3"/>
+          <rect x="92" y="30" width="136" height="128" fill="#0d141e"/>
+
+          <!-- 气体 -->
+          <rect id="schemGas" x="93" y="31" width="134" height="60" fill="url(#gasGrad)" opacity="0.75"/>
+
+          <!-- 活塞 -->
+          <g id="schemPiston">
+            <rect x="94" y="90" width="132" height="30" rx="2" fill="#c9d3df" stroke="#7d8da1" stroke-width="1.5"/>
+            <line x1="99" y1="97" x2="221" y2="97" stroke="#68788c" stroke-width="2"/>
+            <line x1="99" y1="103" x2="221" y2="103" stroke="#68788c" stroke-width="2"/>
+          </g>
+          <!-- 连杆 + 曲柄销 -->
+          <line id="schemRod" x1="160" y1="120" x2="160" y2="156" stroke="#e0b46a" stroke-width="7" stroke-linecap="round"/>
+          <circle id="schemPin" cx="160" cy="158" r="9" fill="#ffb347" stroke="#8a5a12" stroke-width="2"/>
+          <circle cx="160" cy="170" r="14" fill="none" stroke="#52627a" stroke-width="2" stroke-dasharray="3 3"/>
+
+          <!-- 气门 -->
+          <g id="schemIntake">
+            <line x1="112" y1="10" x2="112" y2="30" stroke="#4ea8ff" stroke-width="4"/>
+            <path d="M100,30 L124,30 L120,24 L104,24 Z" fill="#4ea8ff"/>
+          </g>
+          <g id="schemExhaust">
+            <line x1="208" y1="10" x2="208" y2="30" stroke="#ff8a5c" stroke-width="4"/>
+            <path d="M196,30 L220,30 L216,24 L200,24 Z" fill="#ff8a5c"/>
+          </g>
+
+          <!-- 火花塞 -->
+          <rect x="154" y="10" width="12" height="16" rx="2" fill="#e6e0cf"/>
+          <g id="schemSpark">
+            <path d="M160,26 l6,9 -6,6 -6,-6 Z" fill="#ffd76a"/>
+            <circle cx="160" cy="34" r="14" fill="#ff8a3c" opacity="0.35"/>
+          </g>
+
+          <!-- 流线 -->
+          <g id="schemInFlow" class="flow">
+            <path d="M60,10 Q62,26 118,40" fill="none" stroke="#4ea8ff" stroke-width="2.5" stroke-dasharray="6 6" marker-end="url(#arrBlue)"/>
+            <path d="M46,4 Q48,30 112,54" fill="none" stroke="#4ea8ff" stroke-width="2" stroke-dasharray="5 7" opacity="0.65" marker-end="url(#arrBlue)"/>
+          </g>
+          <g id="schemOutFlow" class="flow">
+            <path d="M202,40 Q258,26 260,10" fill="none" stroke="#a9b4c2" stroke-width="2.5" stroke-dasharray="6 6" marker-end="url(#arrGray)"/>
+            <path d="M208,54 Q272,30 274,4" fill="none" stroke="#a9b4c2" stroke-width="2" stroke-dasharray="5 7" opacity="0.65" marker-end="url(#arrGray)"/>
+          </g>
+
+          <text x="86" y="180" class="s-label">进气门</text>
+          <text x="196" y="180" class="s-label">排气门</text>
+          <text x="144" y="180" class="s-label">火花塞</text>
+        </svg>
+      </div>
+      <div class="schem-cap" id="schemCap">燃烧产生高温高压气体，推动活塞下行。</div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>教学要点</h2></div>
+      <p class="teach-lead">燃料燃烧 → 高温高压气体 → <em>推动活塞</em> → 连杆带动<em>曲轴旋转</em>；四冲程需曲轴转 <em>2 圈 / 720°</em>，只有做功冲程对外输出动力。</p>
+      <details class="teach-details">
+        <summary>展开完整讲解要点</summary>
+        <ol class="teach-list">
+          <li><b>能量转换</b>：汽油与空气混合气被点燃，<em>化学能 → 内能</em>；高温高压气体膨胀，<em>推动活塞做直线运动</em>；连杆把直线力传给曲轴，变成<em>旋转的机械功</em>。</li>
+          <li><b>四个冲程</b>：进气（吸混合气）→ 压缩（升温升压）→ 做功（点火膨胀，唯一对外做功）→ 排气（排出废气）。</li>
+          <li><b>曲轴转两圈</b>：一个完整循环 = 4 个冲程 = 活塞往复 4 次 = 曲轴转 <em>2 圈 / 720°</em>。其余三个冲程靠飞轮惯性和其他气缸带动。</li>
+          <li><b>气门配合</b>：进气冲程只开进气门，排气冲程只开排气门，压缩与做功冲程两门都关闭以保证密封。</li>
+        </ol>
+      </details>
+    </section>
+  </aside>
+
+  <!-- ===== 底部控制条 ===== -->
+  <footer class="toolbar">
+    <div class="tb-group primary">
+      <button class="btn primary-btn" id="btnPlay" type="button"><span class="ico" id="playIco">▶</span><span id="playTxt">自动播放</span></button>
+      <button class="btn" id="btnReset" type="button">↺ 重置</button>
+    </div>
+
+    <div class="tb-sep"></div>
+
+    <div class="tb-group">
+      <span class="tb-label">曲轴角度</span>
+      <input type="range" id="angleSlider" class="range wide" min="0" max="720" step="1" value="0">
+      <output class="num" id="angleOut">0°</output>
+      <button class="btn small" id="btnStepBack" type="button" title="后退 15°（←）">−15°</button>
+      <button class="btn small" id="btnStepFwd" type="button" title="前进 15°（→）">+15°</button>
+      <button class="btn small" id="btnNextStroke" type="button">下一冲程</button>
+    </div>
+
+    <div class="tb-sep"></div>
+
+    <div class="tb-group">
+      <span class="tb-label">速度</span>
+      <input type="range" id="speedSlider" class="range" min="0.25" max="3" step="0.05" value="1">
+      <output class="num" id="speedOut">1.00×</output>
+    </div>
+
+    <div class="tb-sep"></div>
+
+    <div class="tb-group">
+      <span class="tb-label">定位冲程</span>
+      <div class="seg">
+        <button class="seg-btn" data-goto="0" type="button">进气</button>
+        <button class="seg-btn" data-goto="1" type="button">压缩</button>
+        <button class="seg-btn" data-goto="2" type="button">做功</button>
+        <button class="seg-btn" data-goto="3" type="button">排气</button>
+      </div>
+    </div>
+
+    <div class="tb-sep"></div>
+
+    <div class="tb-group checks">
+      <label class="chk"><input type="checkbox" id="chkShell" checked><span>显示外壳</span></label>
+      <label class="chk"><input type="checkbox" id="chkCut" checked><span>剖视</span></label>
+      <label class="chk"><input type="checkbox" id="chkLabels" checked><span>缸号标签</span></label>
+    </div>
+  </footer>
+</div>
+
+<!-- ===== 教学说明弹层 ===== -->
+<div class="modal" id="helpModal" hidden>
+  <div class="modal-mask" data-close="1"></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>四冲程发动机 · 课堂讲解要点</h2>
+      <button class="btn ghost" id="btnCloseHelp" type="button">关闭 ✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="help-grid">
+        <div class="help-card">
+          <h3>01 · 为什么能转起来</h3>
+          <p>火花塞点燃气缸内的汽油—空气混合气，燃料的<b>化学能</b>在极短时间内转化为<b>高温高压气体的内能</b>。气体膨胀向下<b>推动活塞</b>，连杆把这个直线力传给曲轴上的曲柄销，形成力矩，使<b>曲轴旋转</b>输出动力。</p>
+          <p class="formula">化学能 → 内能（高温高压气体）→ 活塞直线动能 → 曲轴旋转机械能</p>
+        </div>
+        <div class="help-card">
+          <h3>02 · 四个冲程，曲轴两圈</h3>
+          <p>进气（活塞下行、进气门开）→ 压缩（活塞上行、两门关闭）→ 做功（点火膨胀、活塞下行）→ 排气（活塞上行、排气门开）。每个冲程曲轴转 <b>180°</b>，四个冲程共 <b>720°，即两整圈</b>；活塞上下往复 4 次，但<b>只有做功冲程对外输出动力</b>，其余三程靠飞轮惯性与其它气缸带动。</p>
+        </div>
+        <div class="help-card">
+          <h3>03 · 四缸怎样配合</h3>
+          <p>本模型点火顺序为 <b>1 → 3 → 4 → 2</b>：曲轴每转 180° 就有一个气缸点火做功，动力衔接均匀。直列四缸的曲拐布置使 <b>1、4 缸同相</b>、<b>2、3 缸同相</b>（彼此相差 180°），这样往复惯性力可以互相抵消，运转更平稳。</p>
+        </div>
+        <div class="help-card">
+          <h3>04 · 课堂操作建议</h3>
+          <p>先用「定位冲程」四个按钮逐个停在进气 / 压缩 / 做功 / 排气，对照右侧状态表讲气门开闭；再把速度调到 0.25× 自动播放，观察 720° 内点火顺序；打开「剖视」或隐藏「外壳」看活塞、连杆、曲轴的联动；点击任意部件查看名称与作用。空格键播放/暂停，← → 单步 15°，R 重置。</p>
+        </div>
+      </div>
+      <p class="help-foot">说明：本演示为教学示意模型。气体流动、燃烧火焰采用示意动画；气门正时做了简化（仅在对应冲程内开启），真实发动机存在气门早开晚关与重叠角。</p>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

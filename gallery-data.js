@@ -11,6 +11,7 @@
   set('workbuddy/eaves','檐下 · UNDER THE EAVES','游戏|经营养成|3D','以微缩小屋和猫咪日常为主题的三维陪伴游戏。等距视角、暖色家居氛围与猫咪角色，配套完整的玩法、美术及技术设计资料。');
   set('workbuddy/diorama-winter','冬日微缩 · 折纸暖屋','建模|3D|Blender|视觉艺术');
   set('workbuddy/emberfall-rpg','余烬深渊 · 球形开放世界','游戏|动作冒险|3D|Three.js');
+  set('workbuddy/four-stroke-engine-3d','四冲程直列四缸发动机 · 3D 交互教学','科普教育|模拟仿真|3D|交互体验');
   set('workbuddy/gummy-bears','软糖熊 · 可抓起软体糖果','游戏|物理实验|3D|Three.js');
   set('workbuddy/hy4-mcp-shooter','裂隙突围 · MCP 射击场','游戏|动作冒险|3D|Three.js');
   set('workbuddy/jarvis-dashboard','贾维斯 · 赛博主控台','工具面板|视觉艺术');
