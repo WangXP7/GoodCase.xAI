@@ -4,14 +4,23 @@ const scene=new T.Scene();
 const camera=new T.OrthographicCamera(-1,1,1,-1,1,5200);
 const fill=new T.HemisphereLight(0xf7f6df,0x5e6959,2.05);
 const sun=new T.DirectionalLight(0xffe2af,2.35);
-sun.position.set(-360,640,270);
-scene.add(fill,sun);
+sun.position.set(-495,685,310);
+sun.target.position.set(-100,0,0);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-970,right:970,top:800,bottom:-800,near:10,far:1950});
+sun.shadow.bias=-.00028;
+sun.shadow.normalBias=.42;
+scene.add(fill,sun,sun.target);
 
 let renderer;
 try{
   renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
   renderer.toneMapping=T.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=T.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate=false;
   viewport.append(renderer.domElement);
   renderer.domElement.setAttribute('aria-label','可旋转缩放的三维城市模型');
 }catch(error){
@@ -28,7 +37,7 @@ function setLight(){
   const theme={
     day:[2.1,2.38,0xffe4b6,0xf1f4df,city.sky,1.05],
     dusk:[1.05,2.95,0xffb07c,0xffd5bd,0x534443,.92],
-    night:[.62,1.12,0x92b9ff,0xa3baf2,0x182737,.92]
+    night:[1.02,1.48,0x92b9ff,0xa3baf2,0x182737,1.02]
   }[settings.light];
   fill.intensity=theme[0];sun.intensity=theme[1];
   sun.color.set(theme[2]);fill.color.set(theme[3]);scene.background=new T.Color(theme[4]);
@@ -50,6 +59,7 @@ function rebuild(){
     }
     model=createCityScene(city,settings);
     scene.add(model);
+    renderer.shadowMap.needsUpdate=true;
   }
   drawMap();
   requestFrame();
@@ -304,6 +314,8 @@ if(renderer){
     canvas.addEventListener(type,event=>pointers.delete(event.pointerId));
 }
 switchCity(cities[0]);
+
+
 
 
 

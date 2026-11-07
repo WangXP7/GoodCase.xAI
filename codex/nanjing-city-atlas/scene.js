@@ -11,6 +11,9 @@ const grey=0x77796f, stone=0xc5b69b, pale=0xe2d5b5, red=0xa84732, gold=0xb98242;
 const ink=0x303e42, jade=0x49756a, glass=0x587f8b, blue=0x345d90;
 const geos = {
   box:new T.BoxGeometry(1,1,1),
+  canopy:new T.IcosahedronGeometry(.53,1),
+  facade:new T.BoxGeometry(1,1,1),
+  shadow:new T.PlaneGeometry(1,1).rotateX(-pi/2),
   sphere:new T.SphereGeometry(.5,12,8),
   oct:new T.IcosahedronGeometry(.54,0),
   cone:new T.ConeGeometry(.5,1,8),
@@ -21,11 +24,37 @@ const geos = {
   arch:new T.TorusGeometry(.5,.055,6,24,pi),
   ring:new T.TorusGeometry(.5,.075,8,32)
 };
+function proceduralTexture(size,paint){
+  const canvas=document.createElement('canvas');
+  canvas.width=canvas.height=size;
+  paint(canvas.getContext('2d'),size);
+  const texture=new T.CanvasTexture(canvas);
+  texture.colorSpace=T.SRGBColorSpace;
+  texture.anisotropy=4;
+  return texture;
+}
+const windows=proceduralTexture(128,(ctx,size)=>{
+  const random=seedRandom(287);
+  ctx.fillStyle='#c1c3c1';ctx.fillRect(0,0,size,size);
+  for(let y=0;y<12;y++)for(let x=0;x<8;x++){
+    const value=72+Math.floor(random()*83);
+    ctx.fillStyle='rgb('+value+','+(value+11)+','+(value+17)+')';
+    ctx.fillRect(x*16+1,y*10.67+1,14,8.5);
+    ctx.fillStyle='#9faeb0';ctx.fillRect(x*16+2,y*10.67+1,1,8.5);
+  }
+});
+const contactMap=proceduralTexture(64,(ctx,size)=>{
+  const g=ctx.createRadialGradient(size/2,size/2,2,size/2,size/2,size/2);
+  g.addColorStop(0,'rgba(16,28,24,.46)');g.addColorStop(.54,'rgba(16,28,24,.26)');
+  g.addColorStop(1,'rgba(16,28,24,0)');ctx.fillStyle=g;ctx.fillRect(0,0,size,size);
+});
 function batcher(root) {
   const batches = new Map();
   const obj = new T.Object3D(), col = new T.Color();
   const material = new T.MeshStandardMaterial({roughness:.86});
   const luminous = new T.MeshBasicMaterial();
+  const facade = new T.MeshStandardMaterial({map:windows,roughness:.36,metalness:.22});
+  const shadow = new T.MeshBasicMaterial({map:contactMap,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1});
   function add(kind,x,y,z,w,h,d,color,ry=0,rx=0,rz=0,lit=false) {
     const key=kind+(lit?'+':'');
     if(!batches.has(key)) batches.set(key,{kind,lit,items:[]});
@@ -35,7 +64,13 @@ function batcher(root) {
   }
   function finish() {
     for(const {kind,lit,items} of batches.values()) {
-      const mesh = new T.InstancedMesh(geos[kind],lit?luminous:material,items.length);
+      const surface=kind==='facade'?facade:kind==='shadow'?shadow:lit?luminous:material;
+      const mesh = new T.InstancedMesh(geos[kind],surface,items.length);
+      if(kind==='shadow')mesh.renderOrder=2;
+      else if(!lit){
+        mesh.castShadow=true;
+        mesh.receiveShadow=true;
+      }
       items.forEach(([m,c],i)=>{mesh.setMatrixAt(i,m);mesh.setColorAt(i,col.set(c));});
       mesh.computeBoundingSphere();
       root.add(mesh);
@@ -85,15 +120,20 @@ function createCityScene(city, settings) {
   const night=city.key==='sz';
   const positions=[], colors=[];
   const color=new T.Color();
-  const terrainRandom=seedRandom(907);
+  const terrainTint=new T.Color(city.hill);
+  function patch(x,y,z,w,d){
+    if(H(x,z)>=0)add('shadow',x,y+.08,z,w,1,d,0xffffff);
+  }
   function terrainTriangle(points){
     const heights=points.map(([x,z])=>H(x,z));
     const average=heights.reduce((a,b)=>a+b,0)/3;
     const low=heights.some(h=>h<0);
-    color.set(low?city.bank:average>13?city.hill:city.ground);
-    color.multiplyScalar((average>13?1.04:1)*(0.92+terrainRandom()*.14));
     for(let i=0;i<3;i++){
-      positions.push(points[i][0],heights[i],points[i][1]);
+      const [x,z]=points[i];
+      const grain=.91+.066*Math.sin(x*.036+Math.cos(z*.039)*2)+.048*Math.sin(z*.087-x*.067);
+      color.set(low?city.bank:city.ground).lerp(terrainTint,low?.08:clamp((average-6)/23,0,1));
+      color.multiplyScalar(grain);
+      positions.push(x,heights[i],z);
       colors.push(color.r,color.g,color.b);
     }
   }
@@ -105,9 +145,29 @@ function createCityScene(city, settings) {
   geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));
   geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));
   geo.computeVertexNormals();
-  root.add(new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1})));
+  const ground=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));
+  ground.receiveShadow=true;
+  root.add(ground);
   add('box',-125,-14.5,0,1450,13,1110,0x52604e);
-  add('box',-125,-5.5,0,1449,5,1109,city.water);
+  add('box',-125,-5.6,0,1449,4.9,1109,city.water);
+  const waterMaterial=new T.MeshStandardMaterial({color:city.water,roughness:.32,metalness:.24});
+  waterMaterial.onBeforeCompile=shader=>{
+    shader.vertexShader='varying vec3 surfacePoint;\n'+shader.vertexShader;
+    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\nsurfacePoint=(modelMatrix*vec4(position,1.)).xyz;');
+    shader.fragmentShader='varying vec3 surfacePoint;\n'+shader.fragmentShader;
+    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`
+      #include <color_fragment>
+      vec2 p=surfacePoint.xz;
+      float swell=sin(p.y*.26+p.x*.075+sin(p.x*.067)*2.4);
+      float current=sin(p.y*.99-p.x*.23+sin(p.x*.49)*1.7);
+      float glint=pow(max(0.,swell*.55+current*.45),7.)*(.52+.48*sin(p.x*.087+p.y*.137));
+      diffuseColor.rgb*=.94+.037*swell+.024*current;
+      diffuseColor.rgb+=glint*vec3(.105,.13,.12);
+    `);
+  };
+  const water=new T.Mesh(new T.PlaneGeometry(1449,1109).rotateX(-pi/2),waterMaterial);
+  water.position.set(-125,-3,0);root.add(water);
   const roadColor=city.roads;
   function beam(a,b,width,color,lit=false){
     const u=new T.Vector3(...a), v=new T.Vector3(...b);
@@ -125,7 +185,20 @@ function createCityScene(city, settings) {
       const slope=Math.atan2(q[1]-p[1],dist/n);
       const cx=(p[0]+q[0])/2,cy=(p[1]+q[1])/2,cz=(p[2]+q[2])/2;
       if(grid&&city.key==='nj'&&(cy>18||city.landmarks.some(m=>Math.hypot(cx-m.x,cz-m.z)<m.span*.33)))continue;
-      add('box',cx,cy,cz,width,.48,dist/n+.35,roadColor,Math.atan2(xx-x,zz-z),-slope);
+      const turn=Math.atan2(xx-x,zz-z);
+      add('box',cx,cy-.24,cz,width+1.9,.35,dist/n+.45,0xa7a69a,turn,-slope);
+      add('box',cx,cy,cz,width,.48,dist/n+.35,roadColor,turn,-slope);
+      if(lines&&i%9===3&&width>7){
+        for(let j=-3;j<=3;j++){
+          const offset=j*.81;
+          add('box',cx+Math.cos(turn)*offset,cy+.26,cz-Math.sin(turn)*offset,.38,.06,2.2,0xcec9b6,turn,-slope);
+        }
+        if(grid&&i%18===3){
+          const vx=cx+Math.cos(turn)*width*.26,vz=cz-Math.sin(turn)*width*.26;
+          add('box',vx,cy+.76,vz,1.35,.84,2.95,[0x426c7b,0xd1c9aa,0xa65340][i%3],turn);
+          add('box',vx,cy+1.28,vz,1.18,.35,1.35,0x626d71,turn);
+        }
+      }
       if(lines&&i%2===0)add('box',cx,cy+.3,cz,.66,.12,4,night?0x73aaf1:0xbab28c,Math.atan2(xx-x,zz-z),-slope,0,night);
     }
   }
@@ -135,6 +208,7 @@ function createCityScene(city, settings) {
     add('roof',x,y+h*.53,z,w,h*.88,d,c,ry);
     box(x,y+h*.9,z,w*.35,1.1,1.1,c,ry);
   }
+  const roofSurfaces=new Map();
   function tiledRoof(x,y,z,w,d,h,c){
     const eave = (u,t) => [x+u*w*.5*(1-t*.64),y+h*(.26*t+.74*t*t)+.75*Math.abs(u)**7*(1-t)**3,z];
     const vertices=[];
@@ -171,10 +245,8 @@ function createCityScene(city, settings) {
         vertices.push(...hip(u,a),...hip(v,a),...hip(v,b),...hip(u,a),...hip(v,b),...hip(u,b));
       }
     }
-    const surface=new T.BufferGeometry();
-    surface.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
-    surface.computeVertexNormals();
-    root.add(new T.Mesh(surface,new T.MeshStandardMaterial({color:c,side:T.DoubleSide,roughness:.58})));
+    if(!roofSurfaces.has(c))roofSurfaces.set(c,[]);
+    roofSurfaces.get(c).push(vertices);
     box(x,y+h-.1,z,w*.39,.64,.53,c);
     for(const side of [-1,1])add('cone',x+side*w*.19,y+h+.73,z,.8,1.45,.51,c,0,0,-side*.47);
   }
@@ -204,6 +276,7 @@ function createCityScene(city, settings) {
       box(mix(x,xx,a),y,mix(z,zz,a),.32,1.5,.34,c);
     }
   }
+  let landmarkPass=false;
   function hall(x,y,z,w,d,h,r=ink,wall=red,detail=false){
     box(x,y,z,w+5,2,d+5,stone);
     box(x,y+2,z,w*.87,h,d*.79,wall);
@@ -211,7 +284,7 @@ function createCityScene(city, settings) {
       box(x+i*w*.18,y+2,z+d*.409,1.12,h+1,1.25,wall===red?0x782e23:ink);
       if(i<2)box(x+(i+.5)*w*.18,y+3,z+d*.412,w*.11,h*.62,.35,0x312b24);
     }
-    if(detail){
+    if(detail||landmarkPass){
       tiledRoof(x,y+h+2,z,w*1.06,d*1.12,h*.58,r);
       for(let i=-4;i<=4;i++){
         const xx=x+i*w*.105;
@@ -226,10 +299,23 @@ function createCityScene(city, settings) {
     if(y<0)return;
     const c=[0x406948,0x507d4c,0x658652,0x758f5c,0x355e45,0x9b613f,0xac7345];
     box(x,y,z,h*.12,h*.61,h*.12,0x65513b);
-    add(type===2?'cone':'oct',x,y+h*.72,z,h*(type===2?.61:.92),h*.87,h*.83,c[Math.floor(rng()*(type===1?2:5))+(type===1?5:0)],rng()*pi);
+    const foliage=c[Math.floor(rng()*(type===1?2:5))+(type===1?5:0)];
+    const angle=rng()*pi;
+    patch(x+.6,y,z+.25,h*1.25,h*1.13);
+    if(type===2){
+      for(let i=0;i<3;i++)add('cone',x,y+h*(.53+i*.16),z,h*(.7-i*.17),h*.47,h*(.7-i*.17),foliage,angle);
+    }else{
+      add('canopy',x,y+h*.72,z,h*.88,h*.83,h*.78,foliage,angle);
+      for(let i=0;i<3;i++)add('oct',x+Math.cos(angle+i*2.09)*h*.28,y+h*.67,z+Math.sin(angle+i*2.09)*h*.27,h*.49,h*.58,h*.49,
+        color.set(foliage).multiplyScalar(.82+i*.17).getHex(),angle+i);
+    }
   }
   function courtyard(x,y,z,w,d,c=0xa19b81){
     box(x,y-.35,z,w,.58,d,c);
+    if(landmarkPass)for(let i=-3;i<=3;i++){
+      box(x+i*w/8,y+.23,z,.12,.025,d*.92,0x898679);
+      box(x,y+.23,z+i*d/8,w*.95,.026,.12,0x898679);
+    }
     for(const zz of [-1,1])box(x,y+.25,z+zz*d/2,w,1.2,1.35,stone);
   }
   function stair(x,y,z,w,count,step=3,rise=.6){
@@ -242,13 +328,24 @@ function createCityScene(city, settings) {
       add(oct?'cyl':'box',x,base+h/2,z,size*.77,h,size*.77,wc);
       if(oct)add('octRoof',x,base+h+1.25,z,size,2.5,size,rc);
       else roof(x,base+h,z,size,size,2.65,rc);
-      box(x,base+.6,z+size*.34,1.6,h*.64,.45,ink);
+      for(let side=0;side<4;side++){
+        const a=side*pi/2;
+        add('box',x+Math.sin(a)*size*.39,base+h*.37,z+Math.cos(a)*size*.39,1.5,h*.53,.31,ink,a);
+        add('box',x+Math.sin(a)*size*.42,base+h*.09,z+Math.cos(a)*size*.42,2.25,.24,.32,stone,a);
+      }
+      if(!oct)for(let row=1;row<h/.62;row++)box(x,base+row*.61,z,size*.784,.12,size*.784,0x907d65);
     }
     add('cone',x,y+2+n*(h+2.3)+2,z,2.4,7,2.4,gold);
   }
   function tower(x,y,z,w,d,h,c,style='glass'){
     box(x,y,z,w*1.11,2,d*1.11,0xa5a58f);
-    box(x,y+2,z,w,h,d,c);
+    patch(x,y,z,w*1.74,d*1.78);
+    if(h>=16)add('facade',x,y+2+h/2,z,w,h,d,c);
+    else box(x,y+2,z,w,h,d,c);
+    if(h>22){
+      box(x,y+h+3,z-d*.14,w*.27,1.45,d*.28,0x777e79);
+      box(x+w*.21,y+h+3,z+d*.13,w*.16,1.1,d*.19,0xb1b0a1);
+    }
     box(x,y+h+2,z,w*.63,2,d*.63,style==='glass'?0x9aaca4:stone);
     const line=style==='glass'?0xa2b1a6:0x707a6f;
     const bands=Math.ceil(h/8);
@@ -348,6 +445,45 @@ function createCityScene(city, settings) {
       if(mid[1]-ground>6)box(mid[0],ground,mid[2],3.1,mid[1]-ground,4,stone);
     }
   }
+  function promenade(points,alongX){
+    for(let i=1;i<points.length;i++){
+      const [x,z]=points[i-1],[xx,zz]=points[i];
+      const y=H(x,z),yy=H(xx,zz);
+      if(y<0||yy<0||Math.abs(y-yy)>7)continue;
+      road(x,z,xx,zz,4.3,false);
+      if(i%3===1)tree(x+(alongX?0:3),z+(alongX?-3:0),6,y);
+      if(i%4===0){
+        box(x,y,z,.26,4.4,.26,0x576269);
+        add('sphere',x,y+4.48,z,.72,.62,.72,night?0x80d2ed:pale,0,0,0,night);
+      }
+    }
+  }
+  if(city.key==='sh'){
+    const curve=z=>-40+.46*z-125*Math.cos(z/159);
+    for(const side of [-1,1])promenade(Array.from({length:58},(_,i)=>{
+      const z=-495+i*17;return [curve(z)+side*86,z];
+    }),false);
+    for(let i=0;i<6;i++){const z=-425+i*157;boat(curve(z),z,-.23,1.2);}
+  }
+  if(city.key==='sz'){
+    promenade(Array.from({length:75},(_,i)=>{const x=-760+i*17;return [x,280+82*Math.cos(x/178)];}),true);
+    for(let i=0;i<7;i++){
+      const x=-540+i*158,z=324+82*Math.cos(x/178);
+      if(H(x,z)<0)boat(x,z,pi/2,.67);
+    }
+  }
+  if(city.key==='jn'){
+    for(let i=0;i<7;i++){const x=-545+i*143,z=58+18*Math.sin(x/85);boat(x,z,pi/2,.52,true);}
+    for(const side of [-1,1])promenade(Array.from({length:75},(_,i)=>{
+      const x=-760+i*17;return [x,58+18*Math.sin(x/85)+side*22];
+    }),true);
+  }
+  if(city.key==='xa'){
+    road(-211,0,214,0,11,true);road(0,-152,0,139,11,true);
+    for(let i=-5;i<=5;i++){
+      for(const side of [-1,1])tree(i*16,side*11,6);
+    }
+  }
   const step=settings.block;
   for(let x=-810;x<552;x+=step){
     road(x,-501,x,526,step*.15,Math.round((x+810)/step)%4===0,true);
@@ -381,7 +517,19 @@ function createCityScene(city, settings) {
       const h=old?5+settings.height*.16*k:4+settings.height*core*(.17+k*k*1.6);
       const w=step*(.21+rng()*.12),d=step*(.21+rng()*.12);
       const c=city.build[Math.floor(rng()*city.build.length)];
-      if(old){box(X,Y,Z,w,h,d,c);roof(X,Y+h,Z,w*1.11,d*1.1,2.6,city.key==='xa'?0x6d5650:ink);}
+      if(old){
+        patch(X,Y,Z,w*1.64,d*1.67);
+        box(X,Y,Z,w,h,d,c);
+        roof(X,Y+h,Z,w*1.11,d*1.1,2.2+k,city.key==='xa'?0x6d5650:ink);
+        for(let j=-1;j<=1;j++){
+          box(X+j*w*.26,Y+h*.28,Z+d*.5,w*.15,h*.42,.23,0x55524a);
+          if(city.key==='jn')box(X+j*w*.26,Y+h*.25,Z+d*.516,w*.18,.21,.46,0xa8a096);
+        }
+        if(city.key==='jn'&&k>.45){
+          box(X+w*.45,Y,Z,1,h+1.28,d*1.03,pale);
+          box(X+w*.45,Y+h+1.28,Z,1.16,.27,d*.71,ink);
+        }
+      }
       else tower(X,Y,Z,w,d,h,c,h>19?'glass':'stone');
     }
   }
@@ -396,6 +544,7 @@ function createCityScene(city, settings) {
     }
   }
 
+  landmarkPass=true;
   for(const m of city.landmarks){
     const {x,z,id}=m;
     const y=land(x,z)+.7;
@@ -415,6 +564,11 @@ function createCityScene(city, settings) {
         hall(x,y+24,z,15,13,5,0x426d70);stair(x,y-5,z+29,11,7,2,.69);
         anchor=y+35;break;
       case 'green':
+        for(let i=0;i<3;i++){
+          const Z=z-25+i*17,X=x+70+Math.sin(i)*6,Y=land(X,Z);
+          courtyard(X,Y,Z,12,10,0x9da284);
+          rail(X-6,Y+.25,Z+5,X+6,Z+5,7,stone);
+        }
         for(let i=0;i<13;i++)tree(x-19+rng()*38,z-31+i*5,10);
         for(let i=0;i<8;i++)tree(x+80,z-30+i*8,8);
         hall(x+75,land(x+75,z),z,14,10,4,jade,pale);anchor=8;break;
@@ -473,6 +627,11 @@ function createCityScene(city, settings) {
           const a=i/17*2*pi,tx=x+24*Math.cos(a),tz=z+26*Math.sin(a);
           tree(tx,tz,7.5);
         }
+        for(let i=-3;i<=3;i++){
+          const X=x+i*3;
+          box(X,y+2.8,z+8.7,1.45,1.8,.31,0x607e76);
+          box(X,y+2.56,z+8.84,1.9,.26,.47,pale);
+        }
         anchor=y+16;break;
       case 'temple':
         for(let i=0;i<3;i++)hall(x-15+i*11,y-3+i*3,z+16-i*7,16,10,6,ink,0xc5a153);
@@ -494,11 +653,18 @@ function createCityScene(city, settings) {
         }
         beam([22,1.5,-285],[94,1.5,-265],3,stone);
         beam([94,1.5,-265],[116,1.5,-225],3,stone);
+        for(const side of [-1,1]){
+          rail(22,1.6,-285+side*1.5,94,-265+side*1.5,23,stone);
+          rail(94+side*1.3,1.6,-265,116+side*1.3,-225,15,stone);
+        }
         for(let i=0;i<3;i++)boat(50+i*26,-311+i*4,.75,.55);
         anchor=7;break;
       case 'wall':
         walls([[77,-179],[113,-177],[146,-175],[173,-185],[194,-207],[205,-234]],7);
-        hall(x,land(x,-175)+7,-175,17,12,5,ink,red);anchor=land(x,-175)+16;break;
+        const gateY=land(x,-175);
+        masonry(x,gateY,-175,20,7,7,grey);
+        archedPortal(x,gateY,-171.3,4.1,5.4,stone,0x31372f);
+        hall(x,gateY+7,-175,17,12,5,ink,red);anchor=land(x,-175)+16;break;
       case 'confucius': {
         const waterZ=164+32*Math.sin(x/139)+13*Math.sin(x/57);
         courtyard(x,y,z-6,44,34);hall(x,y,z-8,25,15,8,ink,red,true);
@@ -550,6 +716,10 @@ function createCityScene(city, settings) {
           box(X+2.9,y,Z,.8,5.9,9.1,pale);
           box(X+2.9,y+5.9,Z-1,.85,1.2,6.1,pale);
         }
+        for(let i=-3;i<=3;i++){
+          box(x+i*5,y+.12,z+6,4.8,.14,1.8,0x928e80);
+          box(x+i*5,y+.12,z-6,4.8,.14,1.8,0x928e80);
+        }
         anchor=y+12;break;
       case 'pagoda': {
         const towerGlass = new T.MeshPhysicalMaterial({color:0x75c8c6,metalness:.25,roughness:.17,transparent:true,opacity:.59,side:T.DoubleSide});
@@ -572,13 +742,16 @@ function createCityScene(city, settings) {
         for(let i=-2;i<=2;i++)box(x+i*5,y,z+21,1,5,1,red);
         roof(x,y+5,z+21,25,4,2.4,gold);anchor=y+23;break;
       case 'gulous':
-        box(x,y,z,29,8,21,red);arcSpan(x,y,z+10.5,9,6,19,stone);
+        masonry(x,y,z,29,8,21,0x945243);
+        archedPortal(x,y,z+10.6,8.3,6.2,stone,0x42352e);
         hall(x,y+8,z,24,16,7,gold,red);
         hall(x,y+18,z,16,11,4,gold,red);anchor=y+27;break;
       case 'president':
         courtyard(x,y,z,41,49);
         box(x,y,z+16,28,8,8,0xe0d4bd);box(x,y+8,z+16,30,1.2,8.7,stone);
-        box(x,y+.1,z+20.1,9,6,1,ink);box(x,y+6.8,z+20.4,11,1.4,.7,0x6c7370);
+        archedPortal(x,y+.1,z+20.1,7.1,6.4,0xc3b59c,ink);
+        for(let i=-3;i<=3;i++)box(x+i*.83,y+.31,z+20.42,.13,3.9,.2,0x8b8270);
+        box(x,y+4.2,z+20.43,6.1,.19,.22,0x8b8270);box(x,y+6.8,z+20.4,11,1.4,.7,0x6c7370);
         for(const s of [-1,1]){
           for(let i=0;i<3;i++)box(x+s*(6+i*3),y+.5,z+21,.8,6,1.4,pale);
           hall(x+s*12,y,z-7,9,24,5,ink,pale);
@@ -591,12 +764,14 @@ function createCityScene(city, settings) {
         courtyard(x,y,z,49,39,0x7f817a);
         add('roof',x-6,y+5,z-7,30,10,16,0x5e6362,.46);
         box(x+12,y+.15,z+9,15,.36,18,0x426567);
+        for(let i=-5;i<=5;i++)box(x+12+i*1.2,y+.526,z+8+(i%3)*2,.07,.02,4.2,0x6d8680);
         for(let i=0;i<4;i++)box(x-18+i*9,y+.4,z+21,6,.8,.7,0x92958b);
         anchor=y+13;break;
       case 'yuhuatai':
         courtyard(x,y,z,44,38);stair(x,y-3,z+24,17,11,2,.55);
         box(x,y+2,z-5,16,3,13,stone);box(x,y+5,z-5,9,4,8,grey);
         add('foot',x,y+20,z-5,4,22,4,0xa7a59a);
+        rail(x-17,y+.24,z-17,x+17,z-17,19,stone);
         box(x,y+30,z-5,4.1,1.1,4.1,stone);anchor=y+33;break;
       case 'zifeng':
         tower(x-6,y,z+1,33,26,42,glass);
@@ -623,6 +798,16 @@ function createCityScene(city, settings) {
       case 'olympic':
         add('cyl',x,y+3,z,67,6,40,0xb5b3a4);
         add('cyl',x,y+6.4,z,49,1.2,28,0x6f894f);
+        for(const side of [-1,1]){
+          box(x,y+7.012,z+side*7.4,30,.05,.19,pale);
+          box(x+side*15,y+7.012,z,.19,.05,15,pale);
+          box(x+side*11.9,y+7.014,z,.2,.05,6.1,pale);
+        }
+        box(x,y+7.03,z,.17,.04,14.9,pale);
+        for(let i=0;i<64;i++){
+          const a=i*pi/32;
+          box(x+Math.cos(a)*27,y+6.55,z+Math.sin(a)*15,1.2,.65,.9,i%8<4?0x8b998f:0xa96b57,-a);
+        }
         add('ring',x,y+8,z,62,34,33,0xbfc2b4,0,pi/2);
         for(const s of [-1,1]){
           arcSpan(x,y+7,z+s*10,57,29,46,0xb94332,s*.08);
@@ -640,6 +825,10 @@ function createCityScene(city, settings) {
         }
         box(x,y,z+6,70,10,24,glass);roof(x,y+10,z+6,75,29,8,0xb4b9b5);
         for(let i=-5;i<=5;i++)box(x+i*6,y,z+20,.8,10,.8,pale);
+        for(let i=-7;i<=7;i++){
+          box(x+i*4.5,y+4.6,z+18.13,.2,4.5,.35,0xa1b4b9);
+          box(x+i*4.5,y+11,z+17,.26,.55,4,0xd4d2c8);
+        }
         anchor=y+22;break;
       case 'niushou':
         add('cyl',x,y+4,z,47,8,31,0xb8a581);
@@ -649,14 +838,19 @@ function createCityScene(city, settings) {
           const a=i*pi*2/10;
           box(x+Math.cos(a)*18,y+4,z+Math.sin(a)*12,1.25,8,1.25,0xe0c994);
         }
+        for(let i=0;i<40;i++){
+          const a=i*pi/20;
+          beam([x+Math.cos(a)*21,y+7,z+Math.sin(a)*13],[x+Math.cos(a)*11,y+16,z+Math.sin(a)*6.8],.25,0xd7bd88);
+        }
         pagoda(x+30,land(x+30,z-9),z-9,11,8,gold,stone,2.4);anchor=y+22;break;
       case 'tv':
         add('cyl',x,y+32,z,4.3,64,4.3,pale);
         add('sphere',x,y+63,z,13,8,13,0x769597);
+        for(let i=0;i<3;i++)add('cyl',x,y+61+i*1.8,z,12.1+i*.25,.32,12.1+i*.25,0xa7b7b4);
         add('cyl',x,y+72,z,1.45,15,1.45,stone);add('cone',x,y+82,z,2,8,2,red);
         anchor=y+88;break;
       case 'gate':
-        box(x-10,y,z,15,8,6,grey);box(x+10,y,z,15,8,6,grey);
+        masonry(x-10,y,z,15,8,6,grey);masonry(x+10,y,z,15,8,6,grey);
         box(x,y+6,z,12,2.5,6,grey);arcSpan(x,y,z+3.1,9,6,35,stone);
         hall(x,y+8,z,20,12,4,ink,red);anchor=y+17;break;
       case 'qixia':
@@ -666,7 +860,7 @@ function createCityScene(city, settings) {
         for(const [dx,dz,height] of [[-10,4,114],[14,-10,88]]){
           for(let i=0;i<16;i++){
             const a=i/15,w=16+5*Math.sin(a*pi)-4*a;
-            box(x+dx+a*4,y+a*height,z+dz-a*3,w,height/15+.3,w*.82,i%2?0xa3c0c3:0x84a9b0,-a*.20);
+            add('facade',x+dx+a*4,y+a*height+(height/15+.3)/2,z+dz-a*3,w,height/15+.3,w*.82,i%2?0xb5c8cb:0x94adb8,-a*.20);
           }
         }
         add('sphere',x-1,y+5,z+16,42,14,22,0xd1d8c9,.26,0,.12);
@@ -674,8 +868,10 @@ function createCityScene(city, settings) {
         anchor=y+124;break;
       case 'grand':
         add('cyl',x,y+1,z,57,2,38,0xa8b0a0);
-        for(const [dx,dz,w,h] of [[-12,-8,19,15],[10,-9,16,12],[-11,9,15,11],[10,8,20,17]])
+        for(const [dx,dz,w,h] of [[-12,-8,19,15],[10,-9,16,12],[-11,9,15,11],[10,8,20,17]]){
           add('sphere',x+dx,y+3+h*.17,z+dz,w,h,w*.77,0x9cbbc1,-.3,0,-.21);
+          for(let i=-2;i<=2;i++)add('cyl',x+dx,y+3+h*.17+i*h*.105,z+dz,w*.92,.14,w*.70,0xa9c3c4,-.3,0,-.21);
+        }
         anchor=y+18;break;
       case 'station':
         courtyard(x,y,z,57,39);
@@ -688,67 +884,203 @@ function createCityScene(city, settings) {
         anchor=y+17;break;
       case 'purple':
         box(x,y,z,16,6,15,stone);add('sphere',x,y+6,z,13,10,13,pale);
-        box(x,y+8.5,z+3,1,1.3,7,grey);anchor=y+14;break;
+        box(x,y+8.5,z+3,1,1.3,7,grey);
+        archedPortal(x,y+.1,z+7.55,2.4,3.8,stone,ink);
+        for(let i=-2;i<=2;i++)box(x+i*2.5,y+3.4,z+7.55,.71,1.46,.21,0x698385);
+        anchor=y+14;break;
       case 'liziba': {
-        tower(x,y,z,29,28,44,0xbba182);
         const Y=y+16;
-        beam([x-98,Y,z],[x+81,Y,z],3.2,grey);
+        tower(x,y,z,29,18,14,0xbba182);
+        tower(x,y+23,z,29,18,23,0xc6ad8b);
+        for(const side of [-1,1]){
+          box(x,y+15,z+side*8.6,28,8,.75,stone);
+          for(let j=-4;j<=4;j++)box(x+j*3,y+17,z+side*9.1,2.5,3,.35,0x4f6e77);
+          box(x+side*10,y+23,z+8,1,24,2.3,0x877360);
+        }
+        beam([x-98,Y,z],[x+81,Y,z],2.25,0x929991);
         for(let i=-4;i<4;i++)box(x+i*21,land(x+i*21,z),z,3,Math.max(.5,Y-land(x+i*21,z)),4,stone);
-        box(x+31,Y+1,z,24,5,5,pale);box(x+31,Y+3,z+2.6,23,1,.15,0x487d97);
-        box(x,Y-.2,z+14.3,9,7,1.3,0x28343b);anchor=y+49;break;}
-      case 'hongya':
-        for(let i=0;i<5;i++)for(let j=-1;j<=1;j++)hall(x+j*19,y+i*6,z-i*6,20,13,5,0x533b35,0xb67e46);
-        anchor=y+40;break;
-      case 'cqbridge': bridge(x,z,171,y+13,'cable');anchor=y+54;break;
+        for(let i=0;i<3;i++){
+          const X=x+24+i*8.2;
+          box(X,Y+1.1,z,7.8,2.95,3.4,0xdcd9cd);
+          box(X,Y+2.94,z+1.72,7.3,1,.12,0x3d6d83);
+          box(X,Y+1.32,z+1.73,7.7,.25,.13,0x609142);
+          for(let j=-1;j<=1;j++)box(X+j*2.21,Y+2.1,z+1.76,.21,1.9,.11,0xb8bdb5);
+        }
+        anchor=y+49;break;}
+      case 'hongya': for(let i=0;i<5;i++){
+          const Y=y+i*6.6,Z=z-i*6.2;
+          masonry(x,Y-.6,Z-3,58-i*3,2.4,7,0x827769);
+          for(let j=-1;j<=1;j++){
+            const X=x+j*18;
+            hall(X,Y+1,Z,17,11,4.8,0x5b3931,0xb67e46);
+            rail(X-7,Y+1,Z+6.8,X+7,Z+6.8,10,0x694331);
+            for(let k=-2;k<=2;k++){
+              box(X+k*2.9,Y-2.2,Z+5.9,.52,7,.61,0x573b2e);
+              add('sphere',X+k*2.9,Y+4.4,Z+6.4,.49,.66,.49,0xff9b50,0,0,0,true);
+            }
+          }
+        }
+        anchor=y+42;break;
+      case 'cqbridge': {
+        const Y=y+12,length=155;
+        const deck=z+15;
+        box(x,Y,deck,10,2.7,length,0x7d807b);
+        box(x,Y+2.8,deck,9.8,.45,length,0x9d9789);
+        for(const side of [-1,1]){
+          rail(x+side*5,Y+3.2,deck-length/2,x+side*5,deck+length/2,59,0xbeb5a6);
+          beam([x+side*5,Y-12,deck],[x+side*2.5,Y+31,deck],2.3,0xb8b4a7);
+          beam([x+side*2.5,Y+31,deck],[x,Y+54,deck],1.8,0xc3bdb0);
+          for(let j=0;j<13;j++)beam([x,Y+34+j*1.3,deck],[x,Y+3.15,deck+side*(8+j*4.8)],.25,0xd2c7b0);
+        }
+        box(x,Y-5,deck,12,4,7,stone);
+        anchor=Y+56;break;}
       case 'pearl':
         for(const a of [0,2*pi/3,4*pi/3])beam([x+13*Math.cos(a),y,z+13*Math.sin(a)],[x,y+64,z],3.2,pale);
         add('cyl',x,y+46,z,5,92,5,pale);
         for(const [h,w] of [[41,25],[85,19],[103,8]])add('sphere',x,y+h,z,w,w,w,0xad6c7d);
+        for(const [h,w] of [[41,25],[85,19],[103,8]]){
+          for(let j=-2;j<=2;j++){
+            const W=w*Math.sqrt(1-(j*.22)**2);
+            add('cyl',x,y+h+j*w*.1,z,W+.13,.28,W+.13,j===0?0xa7bac2:0xcda4aa);
+          }
+        }
         add('cone',x,y+115,z,2,24,2,pale);anchor=y+129;break;
-      case 'shanghai':
-        for(let i=0;i<30;i++)box(x,y+i*5.2,z,32-i*.6,5.3,26-i*.45,glass,i*.041);
-        anchor=y+161;break;
+      case 'shanghai': {
+        const floors=72,panels=42,vertices=[],tones=[];
+        function point(i,j){
+          const t=i/floors,a=j*pi*2/panels;
+          const radius=(19-9.5*t)*(1+.102*Math.cos(a*3));
+          return [x+Math.cos(a+t*pi*2/3)*radius,y+t*162,z+Math.sin(a+t*pi*2/3)*radius*.88];
+        }
+        for(let i=0;i<floors;i++)for(let j=0;j<panels;j++){
+          const a=point(i,j),b=point(i,j+1),c=point(i+1,j+1),d=point(i+1,j);
+          vertices.push(...a,...c,...b,...a,...d,...c);
+          color.set([0x517c89,0x6a93a0,0x7f9eaa,0x8baab1][(j*11+i*19)%4]);
+          if(i%8===0)color.multiplyScalar(.79);
+          for(let k=0;k<6;k++)tones.push(color.r,color.g,color.b);
+          if(j%3===0)beam(a,d,.18,0xb0c4c6);
+          if(i%3===0)beam(a,b,.15,0x9bb3b7);
+        }
+        const surface=new T.BufferGeometry();
+        surface.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
+        surface.setAttribute('color',new T.Float32BufferAttribute(tones,3));
+        surface.computeVertexNormals();
+        const curtainWall=new T.Mesh(surface,new T.MeshStandardMaterial({vertexColors:true,roughness:.42,metalness:.2,side:T.DoubleSide}));
+        curtainWall.castShadow=true;
+        curtainWall.receiveShadow=true;
+        root.add(curtainWall);
+        add('cyl',x,y+162,z,18.6,1.2,16,0x8fa4a8);
+        courtyard(x,y,z,53,40);
+        anchor=y+164;break;}
       case 'shcbd':
         tower(x-13,y,z,24,20,106,0x7598ad);
         for(const s of [-1,1])box(x-13+s*9,y+108,z,5,19,12,glass);
         box(x-13,y+125,z,23,6,12,glass);
+        for(const side of [-1,1])beam([x-13+side*9,y+108,z+6.2],[x-13+side*11,y+129,z+6.2],.62,0xa1b5bd);
+        for(let i=0;i<15;i++)box(x-13,y+3+i*6.7,z+10.1,24,.24,.33,0x8ea8b3);
         for(let i=0;i<8;i++)tower(x+23,y+i*11,z-13,25-i*2.1,20-i*1.55,10,grey);
         add('cone',x+23,y+92,z-13,4,10,4,pale);anchor=y+137;break;
       case 'bell':
-        box(x,y,z,43,9,43,grey);hall(x,y+9,z,30,28,10,jade,red);
+        masonry(x,y,z,43,9,43,grey);
+        archedPortal(x,y,z+21.5,6.5,7,stone,0x363c36);
+        rail(x-19,y+9,z+20,x+19,z+20,17,stone);
+        hall(x,y+9,z,30,28,10,jade,red);
         hall(x,y+23,z,20,19,6,jade,red);anchor=y+36;break;
       case 'dayan':pagoda(x,y,z,26,7,0x987c59,0xb19467,6,false);anchor=y+65;break;
       case 'xawall':
         walls([[-211,-152],[214,-152],[214,139],[-211,139],[-211,-152]],8);
+        masonry(x-12,y,z,17,8,7,grey);masonry(x+12,y,z,17,8,7,grey);
+        archedPortal(x,y,z+3.7,6.6,7.2,stone,ink);
         hall(x,y+8,z,32,19,9,0x5d6456,red);anchor=y+24;break;
-      case 'pingan':
-        for(let i=0;i<7;i++)tower(x,y+i*21,z,34-i*3,29-i*2.7,19,0x627b9b);
-        add('cone',x,y+151,z,14,19,14,0x9eb1bd);anchor=y+164;break;
-      case 'spring':
-        for(let i=0;i<15;i++){const w=37*Math.sqrt(1-(i/15)**2);add('cyl',x,y+i*7.3+3.5,z,w,7.7,w,0x709eac);}
-        add('cone',x,y+111,z,14,14,14,0x9fbbc3);anchor=y+122;break;
-      case 'szcivic':
-        box(x,y,z,71,13,24,0xa9afb2);
-        for(const s of [-1,1]){
-          add('box',x+s*22,y+17,z,51,3,30,0x8a99be,0,0,s*.17);
-          box(x+s*20,y,z+8,11,17,10,s<0?0xb75e56:0xcaa860);
+      case 'pingan': {
+        const heights=[0,27,56,82,110,137,151,166];
+        const widths=[35,33,30,27,23,19,15,2];
+        for(let i=0;i<heights.length-1;i++){
+          const bottom=widths[i],top=widths[i+1],start=heights[i],height=heights[i+1]-start;
+          for(let j=0;j<6;j++){
+            const t=j/6,w=mix(bottom,top,t);
+            add('facade',x,y+start+(j+.5)*height/6,z,w,height/6+.12,w*.86,0x738f9f);
+          }
+          for(const side of [-1,1])for(const end of [-1,1])
+            beam([x+side*bottom*.49,y+start,z+end*bottom*.423],[x+side*top*.49,y+start+height,z+end*top*.423],.52,0xb0c7ca);
         }
-        anchor=y+25;break;
-      case 'watergate':
-        stoneBridge(x,0,z,45,false);anchor=16;break;
+        anchor=y+169;break;}
+      case 'spring': for(let i=0;i<40;i++){
+          const t=i/40,w=36*Math.pow(1-t*t,.55)*(1-.12*t);
+          add('cyl',x,y+i*3+1.5,z,w,3.07,w*.97,0x709eac,i*.08);
+          add('cyl',x,y+i*3+2.95,z,w+.16,.23,w*.98,0xadc1c8,i*.08);
+          for(let j=0;j<12;j++){
+            const a=(j+.5)*pi/6+i*.08;
+            box(x+Math.cos(a)*w*.481,y+i*3,z+Math.sin(a)*w*.474,.29,2.95,.28,0x9bb5bf);
+          }
+        }
+        add('cone',x,y+122,z,6,8,6,0x9fbbc3);anchor=y+127;break;
+      case 'szcivic': {
+        courtyard(x,y,z,89,48);
+        box(x,y,z,71,12,24,0xa9afb2);
+        for(const side of [-1,1]){
+          box(x+side*19,y,z+8,11,16,10,side<0?0xa85b50:0xc7a05d);
+          for(let j=0;j<16;j++){
+            const t=j/16,u=(j+1)/16;
+            const H=t=>y+17-2.5*Math.sin(t*pi)+7*t*t;
+            add('box',x+side*(j+.5)*2.75,(H(t)+H(u))/2,z,2.92,.72,31-7*t,0x8a99be,0,0,side*Math.atan2(H(u)-H(t),2.75));
+          }
+          for(let j=0;j<6;j++)box(x+side*(9+j*4.8),y+1,z+14,.5,13,.56,pale);
+        }
+        stair(x,y,z+27,39,7,1,.32);
+        anchor=y+26;break;}
+      case 'watergate': {
+        const at=(a,b)=>[x+b,Math.sin(a)*9,z+Math.cos(a)*22];
+        for(let i=0;i<36;i++){
+          const a=i*pi/36,b=(i+1)*pi/36;
+          for(const side of [-1,1]){
+            beam(at(a,side*3.2),at(b,side*3.2),.81,stone);
+            beam(at(a,side*2.6),at(b,side*2.6),.65,0xa69a84);
+          }
+          beam(at(a,0),at(b,0),4.7,stone);
+        }
+        for(let i=-6;i<=6;i++){
+          const Z=z+i*2.7,Y=9*Math.sqrt(1-((Z-z)/22)**2);
+          for(const side of [-1,1])box(x+side*3.2,Y,Z,.42,1.22,.47,pale);
+        }
+        anchor=14;break;}
       case 'garden':
         courtyard(x,y,z,53,44);
         for(const s of [-1,1])hall(x+s*16,y,z-7,14,15,6,ink,pale);
-        box(x,y+.02,z+9,30,.5,16,city.water);anchor=y+21;break;
+        box(x,y+.02,z+9,30,.5,16,city.water);
+        hall(x,y,z-1,9,8,4,ink,pale);
+        rail(x-15,y+.55,z+17,x+15,z+17,16,stone);
+        for(let i=0;i<11;i++){
+          const a=i*pi*2/11,X=x+13*Math.cos(a),Z=z+9+6*Math.sin(a);
+          add('oct',X,y+.91,Z,1.6,2,1.2,0x778679,a);
+        }
+        anchor=y+21;break;
       case 'houses':
-        for(let i=-2;i<=2;i++)hall(x+i*12,y,z+(i%2)*3,11,14,6,ink,pale);
+        for(let i=-2;i<=2;i++){
+          const X=x+i*12,Z=z+(i%2)*3;
+          hall(X,y,Z,11,14,6,ink,pale);
+          for(let j=0;j<3;j++)box(X+5.2,y,Z,1,7+j*.76,13-j*2.8,pale);
+          box(X,y-.3,Z+10,8,.63,6,stone);
+          rail(X-4,y+.35,Z+12,X+4,Z+12,6,0x6c5140);
+        }
         anchor=y+18;break;
     }
     m.anchor = anchor;
   }
+  for(const [color,parts] of roofSurfaces){
+    const surface=new T.BufferGeometry();
+    surface.setAttribute('position',new T.Float32BufferAttribute(parts.flat(),3));
+    surface.computeVertexNormals();
+    const roofMesh=new T.Mesh(surface,new T.MeshStandardMaterial({color,side:T.DoubleSide,roughness:.58}));
+    roofMesh.castShadow=true;
+    roofMesh.receiveShadow=true;
+    root.add(roofMesh);
+  }
   finish();
   return root;
 }
+
+
 
 
 
