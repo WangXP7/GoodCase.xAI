@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "8c4ed6db607f99c78ee446229773a12696d5ce46",
+  "snapshot": "8f8c3637e802ca80196bcfc7a3781917fa085f97",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -212,6 +212,11 @@
       "committedAt": "2026-10-21T07:22:22Z",
       "commit": "e25bfabd8404a6a8562965b1a947edf5e354ceb3",
       "scope": "workbuddy/minimax-m31-flash-promo"
+    },
+    "workbuddy/nvidia-b300-teaching-3d/index.html": {
+      "committedAt": "2026-11-07T14:21:33Z",
+      "commit": "8f8c3637e802ca80196bcfc7a3781917fa085f97",
+      "scope": "workbuddy/nvidia-b300-teaching-3d"
     },
     "workbuddy/pelican-bicycle-3d-standalone.html": {
       "committedAt": "2026-10-11T06:44:36Z",
