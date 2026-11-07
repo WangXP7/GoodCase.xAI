@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NVIDIA DGX B300 · 交互教学演示</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23101418'/%3E%3Crect x='6' y='6' width='20' height='20' rx='2' fill='none' stroke='%23e8b45c' stroke-width='2'/%3E%3Crect x='12' y='12' width='8' height='8' fill='%23e8b45c'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ 顶栏 ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">B300</div>
+      <div class="brand-text">
+        <h1>NVIDIA DGX B300 · 交互教学演示</h1>
+        <p>Blackwell Ultra &nbsp;·&nbsp; 8× B300 GPU &nbsp;·&nbsp; 整机模块化构造讲解</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span class="status-chip" id="runStatus"><i></i><span>自动播放中</span></span>
+      <button class="btn ghost" id="btnHelp" type="button">教学说明</button>
+      <button class="btn ghost" id="btnResetView" type="button">复位视角</button>
+    </div>
+  </header>
+
+  <!-- ============ 三栏工作区 ============ -->
+  <div class="workspace">
+
+    <!-- 左栏 -->
+    <aside class="panel left">
+      <section class="card">
+        <div class="card-head"><h2>部件导航</h2><span class="tag" id="navCount">10 个部件</span></div>
+        <div class="part-list" id="partList"></div>
+      </section>
+
+      <section class="card flex-fill">
+        <div class="card-head"><h2>课堂导览</h2><span class="tag dim">4 步</span></div>
+        <ol class="guide-list">
+          <li><b>整机总览</b><span>先看清外形、上下分层与前后方向</span></li>
+          <li><b>模块分解</b><span>拉开托盘，讲清「可热插拔」构造</span></li>
+          <li><b>散热风道</b><span>追踪冷风进入、热风排出的路径</span></li>
+          <li><b>核心部件</b><span>隐藏外壳，聚焦 GPU、CPU 与主板</span></li>
+        </ol>
+        <p class="guide-note">点击模型或列表可高亮部件并查看说明；拖动「拆解程度」按层拉开整机。服务器没有「冲程」，本演示以四种<b>视图模式</b>替代。</p>
+        <p class="guide-keys">空格 播放/暂停 · R 重置 · 1–4 切模式</p>
+      </section>
+    </aside>
+
+    <!-- 3D 视窗 -->
+    <main class="viewport" id="viewport">
+      <canvas id="gl"></canvas>
+
+      <div class="vp-top">
+        <div class="vp-badge" id="modeBadge">整机总览</div>
+        <div class="view-presets" id="viewPresets">
+          <button type="button" data-view="iso" class="on">等轴</button>
+          <button type="button" data-view="front">正视</button>
+          <button type="button" data-view="top">俯视</button>
+          <button type="button" data-view="bottom">底部</button>
+          <button type="button" data-view="back">背面</button>
+        </div>
+      </div>
+
+      <div class="vp-tip"><b>观察提示</b><span>左键拖动旋转 · 滚轮缩放 · 右键平移 · 点击部件查看说明</span></div>
+      <div class="vp-legend" id="vpLegend">
+        <span><i style="background:#4ea8ff"></i>冷风进入</span>
+        <span><i style="background:#ff8a3c"></i>热风排出</span>
+        <span><i style="background:#d9a441"></i>当前选中部件</span>
+      </div>
+      <div class="vp-cutbadge" id="xrayBadge" hidden>透视模式 · 外壳半透明</div>
+      <div class="vp-partlabel" id="vpPartLabel" hidden></div>
+      <div class="vp-loading" id="vpLoading">正在构建 B300 三维模型…</div>
+    </main>
+
+    <!-- 右栏 -->
+    <aside class="panel right">
+      <section class="card" id="partCard">
+        <div class="card-head"><h2>部件说明</h2><span class="tag dim" id="partTag">点击模型中的部件</span></div>
+        <div class="part-empty" id="partEmpty">用鼠标点击机箱、计算托盘、通风网或主板，这里会显示名称、作用与教学提示。</div>
+        <div class="part-info" id="partInfo" hidden>
+          <div class="part-index" id="partIndex">01</div>
+          <h3 id="partName"></h3>
+          <div class="part-en" id="partEn"></div>
+          <p id="partDesc"></p>
+          <div class="spec-rows" id="partSpec"></div>
+          <div class="teach-tip" id="partTip"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>规格速览</h2><span class="tag dim">DGX B300</span></div>
+        <table class="spec-table">
+          <tr><td>GPU</td><td>8 × NVIDIA B300</td></tr>
+          <tr><td>CPU</td><td>2 × Grace CPU</td></tr>
+          <tr><td>显存</td><td>HBM3e</td></tr>
+          <tr><td>互连</td><td>NVLink 5 / 1.8 TB/s</td></tr>
+          <tr><td>网络</td><td>400G OSFP</td></tr>
+          <tr><td>散热</td><td>液冷冷板 + 风扇墙</td></tr>
+        </table>
+      </section>
+
+      <section class="card flex-fill">
+        <div class="card-head"><h2>实时读数</h2></div>
+        <div class="readout" id="readout"></div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- ============ 底部控制条 ============ -->
+  <footer class="toolbar">
+    <div class="tb-group">
+      <button class="btn primary-btn" id="btnPlay" type="button"><span id="playIco">‖</span><span id="playTxt">暂停演示</span></button>
+      <button class="btn" id="btnReset" type="button">↺ 重置全部</button>
+    </div>
+
+    <div class="tb-sep"></div>
+
+    <div class="tb-group slider-group">
+      <label for="explodeSlider">拆解程度 <b id="explodeVal">0%</b></label>
+      <input type="range" id="explodeSlider" min="0" max="100" step="1" value="0">
+    </div>
+
+    <div class="tb-group slider-group short">
+      <label for="speedSlider">旋转速度 <b id="speedVal">1.0×</b></label>
+      <input type="range" id="speedSlider" min="0" max="200" step="5" value="100">
+    </div>
+
+    <div class="tb-group">
+      <button class="btn toggle" id="btnXray" type="button">透视外壳</button>
+    </div>
+
+    <div class="tb-sep"></div>
+
+    <div class="tb-group mode-group">
+      <span class="tb-label">演示模式</span>
+      <div class="mode-btns" id="modeBtns"></div>
+    </div>
+  </footer>
+</div>
+
+<!-- ============ 教学说明浮层 ============ -->
+<div class="overlay" id="helpOverlay" hidden>
+  <div class="help-card">
+    <div class="help-head">
+      <h2>教学说明 · 四步讲清一台 B300</h2>
+      <button id="btnHelpClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="help-body">
+      <div class="help-grid">
+        <div class="help-step"><span>01</span><h3>看外形</h3><p>整机是近似立方体的黑色机箱，分上下两层计算托盘；顶面一排米色拉手标签，每一个对应一个可独立插拔的模块。前面是大面积穿孔通风网，底部露出主板与接口。</p></div>
+        <div class="help-step"><span>02</span><h3>拆模块</h3><p>拖动「拆解程度」，顶板、上层托盘、下层托盘、前面板与主板会按层分离。教师可逐层指出：算力在哪、供电在哪、互连在哪。这比静态剖面图更容易建立空间关系。</p></div>
+        <div class="help-step"><span>03</span><h3>追风道</h3><p>切到「散热风道」，外壳半透，蓝色气流从前部穿孔面板进入，穿过 GPU 冷板后由后部排出（橙色）。播放/暂停可控制气流动画，便于边讲边停。</p></div>
+        <div class="help-step"><span>04</span><h3>看核心</h3><p>切到「核心部件」隐藏外壳，只剩 8 组 GPU 模组、Grace CPU 与内存、NVLink 交换芯片和主板，用来讲清「一台 AI 服务器本质上是把 8 张 GPU 高速连成一台机器」。</p></div>
+      </div>
+      <div class="help-note">
+        <b>三条核心知识点</b>
+        <ul>
+          <li><em>算力单元</em>：8 张 B300 GPU 通过 NVLink 5 互连，显存带宽与卡间带宽是大模型训练的关键。</li>
+          <li><em>模块化</em>：计算托盘、电源、风扇均可热插拔，故障件可在不断电整机的情况下更换。</li>
+          <li><em>散热优先</em>：单机功耗极高，液冷冷板负责带走 GPU 热量，风扇墙负责机箱内气流，二者配合。</li>
+        </ul>
+      </div>
+      <div class="help-foot">快捷键：空格 播放/暂停 &nbsp;·&nbsp; R 重置 &nbsp;·&nbsp; 1–4 切换视图模式 &nbsp;·&nbsp; Esc 关闭本说明</div>
+    </div>
+  </div>
+</div>
+
+<!-- 全局脚本：无需联网、无需本地服务器，双击 index.html 即可运行 -->
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script src="js/data.js"></script>
+<script src="js/model.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
