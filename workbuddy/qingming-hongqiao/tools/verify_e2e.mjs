@@ -44,7 +44,6 @@ page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if(m.type()==='error') errors.push('console: ' + m.text()); });
 page.on('requestfailed', r => errors.push('requestfailed: ' + r.url()));
 
-const shot = (n) => page.screenshot({ path: path.join(shots, n), type:'jpeg', quality:90 });
 
 await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil:'load' });
 await page.waitForFunction(()=>window.__qm && window.__qm.ready, null, { timeout:60000 });
@@ -87,15 +86,15 @@ check('过桥前桅杆放倒', mastAngle[1] > mastAngle[0] + 0.5, `远 ${mastAng
 
 /* ---------- 3 行人 ---------- */
 const walk = await page.evaluate(async ()=>{
-  const q=window.__qm;
-  const g=q.scene.children.filter(o=>o.type==='Group');
+  const g=[];
+  window.__qm.scene.traverse(o=>{ if(o.type==='Group') g.push(o); });
   const p0=g.map(o=>o.position.clone());
   await new Promise(r=>setTimeout(r,1200));
   let moved=0;
   g.forEach((o,i)=>{ if(o.position.distanceTo(p0[i])>0.03) moved++; });
   return [moved, g.length];
 });
-check('桥面/街道行人移动', walk[0] >= 6, `${walk[0]}/${walk[1]} 个角色在移动`);
+check('全卷六段行人移动', walk[0] >= 6, `${walk[0]}/${walk[1]} 个角色在移动`);
 
 /* ---------- 4 视角切换 ---------- */
 await page.click('#btnRoam');
@@ -133,7 +132,6 @@ const t2 = await page.evaluate(()=>window.__qm.ctrl.goalTgt.toArray());
 check('右键平移', Math.hypot(t1[0]-t2[0], t1[2]-t2[2]) > 0.8,
   `tgt ${t1.map(v=>v.toFixed(1))} → ${t2.map(v=>v.toFixed(1))}`);
 
-await shot('02-roam.jpg');
 
 await page.click('#btnScroll');
 await page.waitForTimeout(4200);
@@ -141,9 +139,31 @@ const back = await page.evaluate(()=>({ mode:window.__qm.mode(), fov:window.__qm
 check('切回画卷视角并归位', back.mode==='scroll' && Math.abs(back.fov-31.5)<1.2 && Math.abs(back.pos[2]-57)<2,
   `fov=${back.fov.toFixed(1)} pos=${back.pos}`);
 
-/* ---------- 5 20 秒自动运镜 ---------- */
+/* ---------- 4.5 全卷六段 ---------- */
+const nCh = await page.evaluate(()=>window.__qm.chapters());
+check('全卷共 6 段', nCh===6, `chapters=${nCh}`);
+await page.evaluate(()=>window.__qm.goChapter(4,true));
+await page.waitForTimeout(2600);
+const ch4 = await page.evaluate(()=>({ c:window.__qm.chapter(), pos:window.__qm.pos(), vis:window.__qm.visibleChapters() }));
+check('展卷切到上善门', ch4.c===4 && Math.abs(ch4.pos[2]+285)<3, `ch=${ch4.c} pos=${ch4.pos} vis=${ch4.vis}`);
+await page.keyboard.press('ArrowRight');
+await page.waitForTimeout(1000);
+check('→ 展卷到城内段', (await page.evaluate(()=>window.__qm.chapter()))===5);
+await page.keyboard.press('ArrowLeft');
+await page.waitForTimeout(1000);
+check('← 退回城门段', (await page.evaluate(()=>window.__qm.chapter()))===4);
+await page.evaluate(()=>window.__qm.goChapter(2,true));
+await page.waitForTimeout(2600);
+check('回卷到虹桥默认机位', (await page.evaluate(()=>window.__qm.chapter()))===2 && Math.abs((await page.evaluate(()=>window.__qm.pos()))[2]-57)<2);
+
+/* ---------- 5 20 秒自动运镜（全卷巡览） ---------- */
 const t0 = Date.now();
 await page.click('#btnTour');
+// 页面内全程采样相机 z（定时器不受渲染帧率影响）
+await page.evaluate(()=>{
+  window.__zs=[];
+  window.__zTimer=setInterval(()=>{ if(window.__qm.TOUR.active) window.__zs.push(window.__qm.pos()[2]); },120);
+});
 await page.waitForTimeout(400);
 const tourOn = await page.evaluate(()=>({
   active: window.__qm.TOUR.active,
@@ -153,12 +173,10 @@ const tourOn = await page.evaluate(()=>({
 check('运镜启动 + 遮幅落下', tourOn.active && tourOn.on, `bar=${tourOn.bar}`);
 
 await page.waitForTimeout(5200);
-await shot('03-tour-a.jpg');
 const progMid = await page.evaluate(()=>document.querySelector('#prog i').style.width);
 check('运镜进度推进', parseFloat(progMid) > 15 && parseFloat(progMid) < 70, `progress=${progMid}`);
 
 await page.waitForTimeout(4200);
-await shot('03-tour-b.jpg');
 
 let tourEnded=false;
 for(let i=0;i<120;i++){
@@ -166,6 +184,9 @@ for(let i=0;i<120;i++){
   if(!st.a){ tourEnded=true; break; }
   await page.waitForTimeout(500);
 }
+const zs=await page.evaluate(()=>{ clearInterval(window.__zTimer); return window.__zs; });
+const zmin=Math.min(...zs), zmax=Math.max(...zs);
+check('运镜掠过全卷首尾（郊野 → 城内）', zmax>300 && zmin<-300, `z ∈ [${zmin.toFixed(0)}, ${zmax.toFixed(0)}]`);
 const tourT = await page.evaluate(()=>window.__qm.TOUR.t);
 const tourDur = await page.evaluate(()=>window.__qm.TOUR.dur);
 const elapsed = (Date.now()-t0)/1000;
@@ -185,19 +206,15 @@ check('键 1 回到画卷', (await page.evaluate(()=>window.__qm.mode()))==='scr
 /* ---------- 7 视觉留档 ---------- */
 await page.evaluate(()=>{ window.__qm.boat.z = 3; });
 await page.waitForTimeout(1200);
-await shot('01-scroll.jpg');
 
 await page.evaluate(()=>{ const q=window.__qm; q.ctrl.goalPos.set(9.5,4.6,17); q.ctrl.goalTgt.set(-5,1.6,2); q.ctrl.goalFov=42; });
 await page.waitForTimeout(1500);
-await shot('04-boat.jpg');
 
 await page.evaluate(()=>{ const q=window.__qm; q.ctrl.goalPos.set(0,13.5,15); q.ctrl.goalTgt.set(0,7.0,0); q.ctrl.goalFov=46; });
 await page.waitForTimeout(1500);
-await shot('05-bridge.jpg');
 
 await page.evaluate(()=>{ const q=window.__qm; q.ctrl.goalPos.set(34,30,52); q.ctrl.goalTgt.set(-2,3,4); q.ctrl.goalFov=46; });
 await page.waitForTimeout(1500);
-await shot('06-wide.jpg');
 
 /* ---------- 汇总 ---------- */
 check('零 JS 报错 / 零资源失败', errors.length===0, errors.slice(0,3).join(' | '));

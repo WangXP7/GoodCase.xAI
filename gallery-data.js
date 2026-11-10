@@ -26,7 +26,7 @@
   set('workbuddy/pelican-bicycle-3d','鹈鹕骑行 · 三维版','视觉艺术|3D');
   set('workbuddy/pelican-bicycle-3d-standalone.html','鹈鹕骑行 · 三维独立版','视觉艺术|3D');
   set('workbuddy/procedural-city-cn','3D 程序化城市生成器 · 中国版','工具面板|3D|Three.js|视觉艺术');
-  set('workbuddy/qingming-hongqiao','清明上河图 · 虹桥活画卷','视觉艺术|3D|国风历史|Three.js');
+  set('workbuddy/qingming-hongqiao','清明上河图 · 全卷长卷','视觉艺术|3D|国风历史|Three.js');
   set('workbuddy/penguin-survival','企鹅生存 · 冰原漂流','游戏|动作冒险|3D|Three.js');
   set('workbuddy/rocket-launch-sim','火箭发射 · 模拟原型','模拟仿真|航天');
   set('workbuddy/rune-frontline','符文战线 · 三路弹幕塔防','游戏|策略博弈|视觉艺术');
@@ -82,7 +82,7 @@
     'workbuddy/gummy-bears':'shots/01-pile.jpg',
     'workbuddy/song-courtyard':'shots/iter-13-final.png',
     'workbuddy/minimax-m31-flash-promo':'shots/02-identity.jpg',
-    'workbuddy/qingming-hongqiao':'shots/01-scroll.jpg',
+    'workbuddy/qingming-hongqiao':'shots/03-ch2-hongqiao.jpg',
     'workbuddy/lol-idle':'shots/02-mid.jpg',
     'workbuddy/rune-frontline':'shots/03-battle.jpg',
     'workbuddy/solar-year-lab':'shots/01-overview.jpg',

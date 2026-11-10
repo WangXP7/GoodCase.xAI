@@ -72,7 +72,7 @@
   #hint{position:absolute;left:40px;bottom:32px;font-size:11.5px;letter-spacing:1.6px;color:rgba(238,229,206,.6);
     text-shadow:0 1px 4px rgba(0,0,0,.5);pointer-events:none;transition:opacity .5s}
   #hint b{font-weight:400;color:rgba(238,229,206,.85)}
-  #cap{position:absolute;left:50%;bottom:110px;transform:translateX(-50%);text-align:center;pointer-events:none;
+  #cap{position:absolute;left:50%;bottom:156px;transform:translateX(-50%);text-align:center;pointer-events:none;
     opacity:0;transition:opacity .9s ease;white-space:nowrap}
   #cap.show{opacity:1}
   body.touring #cap{opacity:0 !important}
@@ -97,6 +97,39 @@
   #dock .tour.on .dot{background:#8d2417;box-shadow:none}
   #dock .tour em{font-style:normal;font-size:10px;letter-spacing:0;font-family:Consolas,monospace;opacity:.55;min-width:34px;text-align:right}
   #dock .tour.on em{opacity:.75}
+
+  /* ---------- 长卷导航 ---------- */
+  #scrollNav{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);
+    width:min(920px,90vw);display:flex;align-items:center;gap:12px;pointer-events:auto;
+    padding:7px 12px;background:rgba(26,22,16,.72);border:1px solid rgba(232,222,198,.18);
+    backdrop-filter:blur(12px);box-shadow:0 8px 26px rgba(0,0,0,.32);opacity:0;animation:fadeIn 1.6s 1s ease forwards}
+  #scrollNav .sn-label{font-size:11px;letter-spacing:3px;color:rgba(236,226,202,.55);white-space:nowrap;
+    writing-mode:vertical-rl;line-height:1;padding:2px 0}
+  #snTrack{position:relative;flex:1;display:flex;gap:1px;height:36px}
+  #snTrack .sn-item{flex:1;appearance:none;border:0;background:rgba(232,222,198,.05);color:rgba(236,226,202,.62);
+    font-family:inherit;font-size:11.5px;letter-spacing:1.5px;cursor:pointer;display:flex;align-items:center;
+    justify-content:center;gap:6px;transition:background .3s,color .3s;white-space:nowrap}
+  #snTrack .sn-item i{font-style:normal;font-size:9.5px;color:#c08a68;opacity:.8}
+  #snTrack .sn-item:hover{background:rgba(232,222,198,.13);color:#f4ecd8}
+  #snTrack .sn-item.on{background:var(--tbar);color:#201c15}
+  #snTrack .sn-item.on i{color:#8d3421;opacity:1}
+  #snCursor{position:absolute;top:-5px;width:0;height:0;border-left:5px solid transparent;
+    border-right:5px solid transparent;border-top:6px solid #c0503a;transform:translateX(-50%);
+    transition:left .7s cubic-bezier(.6,0,.2,1);pointer-events:none}
+  #snPos{font-size:10px;letter-spacing:1px;color:rgba(236,226,202,.6);white-space:nowrap;min-width:150px;text-align:right}
+  #chapTag{position:absolute;left:50%;top:22%;transform:translate(-50%,-8px);text-align:center;pointer-events:none;
+    opacity:0;transition:opacity .8s ease,transform .8s ease}
+  #chapTag.show{opacity:1;transform:translate(-50%,0)}
+  #chapTag .n{font-size:21px;letter-spacing:6px;color:#f4ecd6;text-shadow:0 2px 14px rgba(0,0,0,.75)}
+  #chapTag .s{margin-top:7px;font-size:10.5px;letter-spacing:4px;color:rgba(240,226,198,.78);text-shadow:0 1px 8px rgba(0,0,0,.7)}
+  @media(max-width:900px){
+    #scrollNav{bottom:72px;width:94vw;gap:6px;padding:5px 7px}
+    #snTrack{height:30px}
+    #snTrack .sn-item{font-size:9px;letter-spacing:0;gap:3px}
+    #snTrack .sn-item i{display:none}
+    #snPos{display:none}
+    #scrollNav .sn-label{display:none}
+  }
 
   /* ---------- 自动运镜 ---------- */
   #tourUI{position:fixed;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .8s ease}
@@ -168,6 +201,13 @@
   </div>
 
   <div id="cap"><div class="t"></div><div class="s"></div></div>
+  <div id="chapTag"><div class="n"></div><div class="s"></div></div>
+
+  <div id="scrollNav">
+    <div class="sn-label">長卷</div>
+    <div id="snTrack"></div>
+    <div id="snPos"></div>
+  </div>
 
   <nav id="dock">
     <button id="btnScroll" class="on" data-act="scroll" title="画卷视角 (1)">
@@ -186,7 +226,7 @@
     </button>
   </nav>
 
-  <div id="hint">拖动 <b>环视</b> · 滚轮 <b>远近</b> · 右键 <b>平移</b> · <b>1</b>/<b>2</b> 切换视角 · <b>空格</b> 运镜</div>
+  <div id="hint">拖动 <b>环视</b> · 滚轮 <b>远近</b> · 右键 <b>沿卷平移</b> · <b>←</b>/<b>→</b> 展卷 · <b>1</b>/<b>2</b> 视角 · <b>空格</b> 全卷运镜</div>
 </div>
 
 <div id="tourUI">
@@ -435,6 +475,10 @@ function ridgeTexture(col, amp, base, seedv, alpha){
   return t;
 }
 
+const ridgeGroup=new THREE.Group();
+scene.add(ridgeGroup);
+const RIDGE_ALPHA=[1,0.92,1,0.5,0.12,0];
+
 function buildRidges(){
   const specs = [
     { r:820, h:240, y:45, col:'#c0b28e', amp:160, base:212, alpha:0.72, rep:4 },
@@ -449,7 +493,8 @@ function buildRidges(){
     const m = new THREE.Mesh(geo, mat);
     m.position.y = s.y;
     m.renderOrder = -9 + i;
-    scene.add(m);
+    m.userData.baseOpacity = s.alpha;
+    ridgeGroup.add(m);
   });
 }
 
@@ -475,6 +520,18 @@ function rippleTexture(seedv, n, size=1024){
       g.quadraticCurveTo(x+w*0.5, y-dir*h*0.55, x+w*0.92, y+dir*2.0);
       g.strokeStyle='rgba(255,255,255,'+(0.10+rand()*0.22).toFixed(3)+')';
       g.lineWidth=0.6+rand()*0.9;
+      g.stroke();
+    }
+  }
+  // 张本汴水「虎眼文」：湍流处的小漩涡，作两三层同心短弧
+  for(let i=0;i<Math.round(n*0.42);i++){
+    const x=rand()*size, y=rand()*size;
+    const rx=5+rand()*13, ry=rx*(0.34+rand()*0.22);
+    for(let k=0;k<3;k++){
+      g.beginPath();
+      g.ellipse(x, y, rx*(1-k*0.26), ry*(1-k*0.26), 0, 0.25, Math.PI*1.62);
+      g.strokeStyle='rgba(255,255,255,'+(0.30-k*0.08).toFixed(3)+')';
+      g.lineWidth=0.8+rand()*0.8;
       g.stroke();
     }
   }
@@ -545,10 +602,10 @@ function buildWater(){
         gl_FragColor = vec4(col, 1.0);
       }`
   });
-  const geo = new THREE.PlaneGeometry(36.4, 1760, 1, 1);
+  const geo = new THREE.PlaneGeometry(36.4, 376, 1, 1);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI/2;
-  mesh.position.set(0, 0, -400);
+  mesh.position.set(0, 0, 78);
   mesh.renderOrder = 2;
   scene.add(mesh);
   return mesh;
@@ -580,7 +637,7 @@ const DECK_RISE = 5.4;
 const DECK_W = 9.2;
 
 const deckY = x => BANK_Y + DECK_RISE*(1 - Math.pow(x/DECK_HALF,2));
-const archY = x => deckY(x) - 1.05;
+const archY = x => deckY(x) - 1.35;   // 拱骨中心线下移，使桥下净空落在史载 5.5–6 m
 const walkY = x => Math.abs(x)<=DECK_HALF ? deckY(x) : BANK_Y;
 
 function earthTexture(){
@@ -613,9 +670,9 @@ function buildBanks(){
   const b=new Builder();
   const earth=new THREE.MeshLambertMaterial({ map:earthTexture() });
   for(const s of [-1,1]){
-    const gp=new THREE.Mesh(new THREE.PlaneGeometry(400,1500), earth);
+    const gp=new THREE.Mesh(new THREE.PlaneGeometry(400,1700), earth);
     gp.rotation.x=-Math.PI/2;
-    gp.position.set(s*(BANK_X+200), BANK_Y+0.005, -300);
+    gp.position.set(s*(BANK_X+200), BANK_Y+0.005, -250);
     gp.receiveShadow=true;
     scene.add(gp);
   }
@@ -662,7 +719,44 @@ function buildBanks(){
   }
 
   // 河道底（水下压深，防漏底）
-  b.box(37, 0.4, 260, '#3d534b', [0, -1.1, 0], null, {jitter:0.02});
+  b.box(37, 0.4, 376, '#3d534b', [0, -1.1, 78], null, {jitter:0.02});
+
+  /* 河道两端收束：z<-110 为城内石板街，z>300 为郊野田畴 */
+  const fill=(z0,z1,color,repX,repY)=>{
+    const len=z1-z0, zc=(z0+z1)/2;
+    b.box(36.4, 2.4, len, color, [0, BANK_Y-1.2, zc], null, {jitter:0.02});
+    const mt=earth.clone();
+    mt.map=earth.map.clone(); mt.map.repeat.set(repX,repY); mt.map.needsUpdate=true;
+    const gp=new THREE.Mesh(new THREE.PlaneGeometry(36.4, len), mt);
+    gp.rotation.x=-Math.PI/2; gp.position.set(0, BANK_Y+0.008, zc);
+    gp.receiveShadow=true; scene.add(gp);
+  };
+  fill(-1010, -110, '#c3b696', 5, 150);   // 城内 / 城门 / 桥头街市
+  fill( 266,  500, '#b6aa86', 5, 40);     // 郊野田畴
+
+  // 街面石板缝与车辙（只铺城内半段，避免几何爆炸）
+  for(let z=-640; z<-112; z+=7.5){
+    b.box(36.2, 0.02, 0.05, '#b4a88d', [0, BANK_Y+0.022, z], null, {jitter:0.07});
+  }
+  for(const x of [-6.5, 6.5]){
+    b.box(0.12, 0.02, 530, '#a4967b', [x, BANK_Y+0.024, -375], null, {jitter:0.06});
+  }
+  // 河道两端的「水门 / 石闸」与郊野小桥，遮住水面断口
+  for(const zz of [-110, 266]){
+    b.box(3.0, 3.4, 1.6, PAL.stone, [ 16.4, BANK_Y+1.7, zz], null, {jitter:0.06});
+    b.box(3.0, 3.4, 1.6, PAL.stone, [-16.4, BANK_Y+1.7, zz], null, {jitter:0.06});
+    b.box(36.4, 0.7, 1.5, PAL.stone2, [0, 0.55, zz], null, {jitter:0.06});
+    for(let i=0;i<9;i++){
+      const x=-16+i*4;
+      b.cyl(0.09,0.11,1.5,5,PAL.woodD,[x,0.8,zz],null,{jitter:0.1});
+    }
+  }
+  // 田畦：几块短垄，不作满屏条纹
+  for(let i=0;i<5;i++){
+    const x=-12+i*6;
+    b.box(3.2, 0.10, 26, '#b0a17d', [x, BANK_Y+0.05, 408+i*7], null, {jitter:0.07});
+    b.box(0.20, 0.12, 26, '#9f906e', [x+1.7, BANK_Y+0.06, 408+i*7], null, {jitter:0.08});
+  }
 
   const mesh=new THREE.Mesh(b.build(), M.vc);
   mesh.receiveShadow=true;
@@ -701,44 +795,65 @@ function buildBridge(){
     }
   }
 
-  /* 编木拱：下弦（拱骨）+ 上弦（贴桥面）+ 剪刀撑，形成交错的木拱桁架 */
-  const RIBS = 11, SEG = 11;
+  /* 贯木拱：按唐寰澄复原，两套系统交错叠置——
+     第二系统「四节苗」11 组 + 第一系统「三节苗」10 组 = 21 排拱骨，
+     由 5 道横木贯穿联合；横梁上承纵梁，纵梁上铺板枋为桥面。 */
+  const RIBS = 21, SEG = 11;
   const zOf = r => -W/2 + 0.30 + r*((W-0.60)/(RIBS-1));
   for(let r=0;r<RIBS;r++){
     const z=zOf(r);
+    const four = (r%2===0);                 // 偶数榀四节苗，奇数榀三节苗
+    const n = four? 4 : 3;
+    for(let i=0;i<n;i++){
+      const xa=-DECK_HALF + 2*DECK_HALF*i/n, xb=-DECK_HALF + 2*DECK_HALF*(i+1)/n;
+      // 每苗两小段沿拱线贴合，节点处显出榫卯与捆扎
+      for(let j=0;j<2;j++){
+        const x0=lerp(xa,xb,j/2), x1=lerp(xa,xb,(j+1)/2);
+        beam(b, x0, archY(x0), x1, archY(x1), 0.30, 0.30, z,
+             four? PAL.woodR : PAL.woodL, 0.05);
+      }
+      b.box(0.34,0.34,0.34,PAL.woodD,[xa, archY(xa), z],null,{jitter:0.08});
+      b.box(0.34,0.34,0.34,PAL.woodD,[xb, archY(xb), z],null,{jitter:0.08});
+    }
+    // 拱上纵梁（承桥面板枋）
     for(let i=0;i<SEG;i++){
       const x0=-DECK_HALF + 2*DECK_HALF*i/SEG, x1=-DECK_HALF + 2*DECK_HALF*(i+1)/SEG;
-      beam(b, x0, archY(x0), x1, archY(x1), 0.28, 0.22, z, r%3===0? PAL.woodR : PAL.woodL, 0.045);
-      beam(b, x0, deckY(x0)-0.34, x1, deckY(x1)-0.34, 0.17, 0.17, z, PAL.woodR, 0.05);
+      beam(b, x0, deckY(x0)-0.34, x1, deckY(x1)-0.34, 0.16, 0.16, z, PAL.woodR, 0.05);
     }
   }
-  // 横木（节点处贯通全宽，拱骨交错锁固）
-  for(let i=0;i<=SEG;i++){
-    const t=i/SEG, x=-DECK_HALF + 2*DECK_HALF*t;
-    b.box(0.17, 0.17, W-0.35, PAL.woodD, [x, archY(x), 0], null, {jitter:0.07});
-    b.box(0.14, 0.14, W-0.35, PAL.woodD, [x, deckY(x)-0.34, 0], null, {jitter:0.07});
+  // 5 道横木贯穿联合；横骨端部「戏水兽面」板，桥檐封以飞边
+  for(let k=0;k<5;k++){
+    const t=(k+0.5)/5, x=-DECK_HALF + 2*DECK_HALF*t;
+    // 横木端头微出挑，作「戏水兽面」板的含蓄示意；不做孤立大方块
+    b.box(0.22, 0.22, W-0.16, PAL.woodD, [x, archY(x), 0], null, {jitter:0.07});
+    b.box(0.17, 0.17, W-0.16, PAL.woodD, [x, deckY(x)-0.34, 0], null, {jitter:0.07});
+    for(const ss of [-1,1]){
+      b.box(0.14,0.14,0.05,'#c6a373',[x, archY(x), ss*(W/2-0.055)],null,{jitter:0.06});
+    }
   }
-  // 剪刀撑（隔一榀，形成编木的交错感）
-  for(let r=0;r<RIBS-1;r+=2){
+  // 横向联系木：替代现代桁架 X 撑，仅作拱架间联结
+  for(let r=0;r<RIBS-1;r+=4){
     const z0=zOf(r), z1=zOf(r+1);
-    for(let i=0;i<SEG;i++){
-      const x0=-DECK_HALF + 2*DECK_HALF*i/SEG, x1=-DECK_HALF + 2*DECK_HALF*(i+1)/SEG;
-      const up0=deckY(x0)-0.36, lo1=archY(x1), lo0=archY(x0), up1=deckY(x1)-0.36;
-      const len1=Math.hypot(x1-x0, lo1-up0), a1=Math.atan2(lo1-up0, x1-x0);
-      b.box(len1, 0.09, 0.09, PAL.woodD, [(x0+x1)/2, (up0+lo1)/2, (z0+z1)/2], [0,0,a1], {jitter:0.08});
-      const len2=Math.hypot(x1-x0, up1-lo0), a2=Math.atan2(up1-lo0, x1-x0);
-      b.box(len2, 0.09, 0.09, PAL.woodD, [(x0+x1)/2, (lo0+up1)/2, (z0+z1)/2], [0,0,a2], {jitter:0.08});
+    for(let k=0;k<5;k++){
+      const x=-DECK_HALF + 2*DECK_HALF*(k+0.5)/5;
+      b.box(0.10,0.10,z1-z0+0.10,PAL.woodD,[x, archY(x)+0.12, (z0+z1)/2],null,{jitter:0.08});
     }
   }
-  // 两侧封边（挡住拱骨端头，形成干净的桥腹轮廓）
+  // 两侧博风板 / 飞边（挡住拱骨端头）
   for(const s of [-1,1]){
     for(let i=0;i<SEG;i++){
       const x0=-DECK_HALF + 2*DECK_HALF*i/SEG, x1=-DECK_HALF + 2*DECK_HALF*(i+1)/SEG;
       beam(b, x0, archY(x0)-0.16, x1, archY(x1)-0.16, 0.14, 0.10, s*(W/2-0.02), PAL.woodR, 0.04);
     }
+    // 桥面两端的竖弯板（博风）
+    for(const sx of [-1,1]){
+      const xx=sx*DECK_HALF;
+      b.box(0.16, 0.62, W-0.4, PAL.woodR, [xx, deckY(xx)-0.30, 0], null, {jitter:0.06});
+    }
   }
 
-  /* 栏杆 */
+  /* 宋式勾栏：通长寻杖 + 盆唇 + 束腰两横木 + 蜀柱 + 地栿；
+     仅桥头两端立望柱（八字折柱），其余柱头作覆斗瘿项，盆唇底以斜木撑住。 */
   const POSTS=26;
   for(const s of [-1,1]){
     const z=s*(W/2-0.16);
@@ -746,14 +861,27 @@ function buildBridge(){
     for(let i=0;i<=POSTS;i++){
       const x=-DECK_HALF+2*DECK_HALF*i/POSTS;
       const y=deckY(x);
-      b.box(0.15, 1.06, 0.15, PAL.woodR, [x, y+0.53, z], null, {jitter:0.06});
-      b.box(0.21, 0.10, 0.21, PAL.woodL, [x, y+1.10, z], null, {jitter:0.08});
+      const isWang=(i<=1 || i>=POSTS-1);
+      const h=isWang? 1.28 : 1.02;
+      b.box(0.15, h, 0.15, PAL.woodR, [x, y+h/2, z], null, {jitter:0.06});
+      if(isWang){
+        b.box(0.24,0.12,0.24,PAL.woodL,[x, y+h+0.06, z],null,{jitter:0.07});
+        b.add(new THREE.ConeGeometry(0.13,0.14,4,1), PAL.woodL, {pos:[x, y+h+0.19, z], jitter:0.07});
+      }else{
+        b.box(0.11,0.07,0.11,PAL.woodL,[x, y+h+0.02, z],null,{jitter:0.07});
+        b.box(0.17,0.06,0.17,PAL.woodD,[x, y+h-0.04, z],null,{jitter:0.07});
+      }
       if(px!==null){
-        beam(b, px, py+1.00, x, y+1.00, 0.10, 0.13, z, PAL.woodR, 0.055);
-        beam(b, px, py+0.44, x, y+0.44, 0.07, 0.10, z, PAL.woodD, 0.06);
-        for(let k=1;k<=3;k++){
-          const t=k/4, cx=lerp(px,x,t), cy=lerp(py,y,t);
-          b.box(0.055, 0.50, 0.06, PAL.woodD, [cx, cy+0.72, z], [0,0,Math.atan((y-py)/(x-px))], {jitter:0.09});
+        const slope=Math.atan((y-py)/(x-px));
+        beam(b, px, py+1.00, x, y+1.00, 0.12, 0.15, z, PAL.woodR, 0.05);   // 寻杖
+        beam(b, px, py+0.84, x, y+0.84, 0.07, 0.11, z, PAL.woodD, 0.06);   // 盆唇
+        beam(b, px, py+0.52, x, y+0.52, 0.055,0.09, z, PAL.woodD, 0.06);   // 束腰
+        beam(b, px, py+0.40, x, y+0.40, 0.055,0.09, z, PAL.woodD, 0.06);
+        beam(b, px, py+0.10, x, y+0.10, 0.11, 0.13, z, PAL.woodR, 0.05);   // 地栿
+        for(let k=1;k<=2;k++){
+          const t=k/3, cx=lerp(px,x,t), cy=lerp(py,y,t);
+          b.box(0.055,0.46,0.06,PAL.woodD,[cx, cy+0.66, z], [0,0,slope], {jitter:0.09});
+          b.box(0.06,0.24,0.05,PAL.woodD,[cx-0.10, cy+0.72, z], [0,0,slope+0.5], {jitter:0.09});
         }
       }
       px=x; py=y;
@@ -767,20 +895,39 @@ function buildBridge(){
     for(let i=0;i<6;i++){
       b.cyl(0.1,0.12, 1.5, 5, PAL.woodD, [s*(DECK_HALF-0.4), 0.72, -W/2+0.8+i*(W-1.6)/5], null, {jitter:0.14});
     }
-    // 桥头石阶（引道`
+    // 桥头石阶（引道）
     for(let i=0;i<3;i++){
       b.box(1.3, 0.16, W-0.6, PAL.stone3, [s*(DECK_HALF+3.1+i*1.05), BANK_Y+0.05-i*0.01, 0], null, {jitter:0.05});
     }
+    // 纤工过道栏枋（史载「四柱十二间隔，固定于拱骨」）：桥台临水一侧
+    const fx=s*(DECK_HALF-0.95);
+    for(let i=0;i<=4;i++){
+      const fz=-W/2 + i*(W/4);
+      b.box(0.11,0.95,0.11,PAL.woodD,[fx,0.95,fz],null,{jitter:0.08});
+    }
+    for(let j=0;j<2;j++) b.box(0.08,0.08,W,PAL.woodD,[fx,1.32-j*0.38,0],null,{jitter:0.08});
+    for(let i=0;i<=12;i++){
+      const fz=-W/2 + i*(W/12);
+      b.box(0.045,0.52,0.045,PAL.woodR,[fx,0.82,fz],null,{jitter:0.09});
+    }
   }
 
-  /* 表木四根：桥头高杆，横木为记（画中标志物） */
+  /* 华表（表木）：《古今注》「以横木交柱头，状若花也」；
+     故宫博物院据画定为桥两端各两根、顶端立白鹤。 */
   for(const sx of [-1,1]) for(const sz of [-1,1]){
-    const px = sx*(DECK_HALF+3.6), pz = sz*(W/2+0.55);
-    b.cyl(0.10, 0.15, 12.2, 6, PAL.woodD, [px, BANK_Y+6.1, pz], null, {jitter:0.06});
-    b.box(2.7, 0.15, 0.15, PAL.woodD, [px, BANK_Y+9.85, pz], null, {jitter:0.05});
-    b.box(0.30, 0.55, 0.30, PAL.woodR, [px, BANK_Y+10.25, pz], null, {jitter:0.06});
-    b.box(0.9, 0.5, 0.08, PAL.cloth, [px, BANK_Y+8.9, pz], null, {jitter:0.10});   // 小幡
-    b.box(0.16, 0.7, 0.16, PAL.woodR, [px, BANK_Y+8.35, pz], null, {jitter:0.08});
+    const px=sx*(DECK_HALF+3.6), pz=sz*(W/2+0.55), base=BANK_Y;
+    b.cyl(0.10,0.16,12.2,6,PAL.woodD,[px, base+6.1, pz],null,{jitter:0.06});
+    b.box(2.7,0.15,0.15,PAL.woodD,[px, base+9.85, pz],[0,0.55,0],{jitter:0.05});
+    b.box(2.7,0.15,0.15,PAL.woodD,[px, base+9.85, pz],[0,-0.55,0],{jitter:0.05});
+    b.box(0.30,0.30,0.30,PAL.woodR,[px, base+9.85, pz],null,{jitter:0.06});
+    // 白鹤：身、曲颈、首、喙、尾、足
+    const hy=base+12.35;
+    b.add(new THREE.SphereGeometry(0.31,8,6),'#e6dfca',{pos:[px,hy,pz],scale:[1.28,0.76,0.88],jitter:0.03});
+    b.cyl(0.06,0.08,0.76,5,'#e6dfca',[px+0.25,hy+0.44,pz],[0,0,-0.28],{jitter:0.04});
+    b.add(new THREE.SphereGeometry(0.11,6,5),'#e6dfca',{pos:[px+0.36,hy+0.82,pz],jitter:0.03});
+    b.add(new THREE.ConeGeometry(0.065,0.28,4,1),'#c9a25e',{pos:[px+0.52,hy+0.82,pz],rot:[0,0,-Math.PI/2],jitter:0.04});
+    b.add(new THREE.ConeGeometry(0.21,0.68,5,1),'#e6dfca',{pos:[px-0.38,hy+0.02,pz],rot:[0,0,Math.PI/2.4],jitter:0.04});
+    b.cyl(0.02,0.03,0.34,4,'#8a7c66',[px+0.02,hy-0.30,pz],null,{jitter:0.05});
   }
 
   const mesh=new THREE.Mesh(b.build(), M.vc);
@@ -847,13 +994,13 @@ function addStall(b, x,y,z, rot, w, d, color){
 function buildBridgeFurniture(){
   const b=new Builder();
   // 桥上摊贩：伞与棚
-  addParasol(b, -8.2, deckY(-8.2), 2.6, 1.55, PAL.cloth);
+  addParasol(b, -11.4, deckY(-11.4), 2.6, 1.55, PAL.cloth);
   addParasol(b, 1.6, deckY(1.6), -2.9, 1.7, '#cbb894');
-  addParasol(b, 9.4, deckY(9.4), 2.2, 1.5, PAL.cloth);
+  addParasol(b, 12.4, deckY(12.4), 2.4, 1.5, PAL.cloth);
   addParasol(b, -3.4, deckY(-3.4), -3.1, 1.35, '#cbb894');
 
   addStall(b, -6.4, deckY(-6.4), 3.3, 0.06, 3.4, 1.7, '#b8a482');
-  addStall(b, 7.2, deckY(7.2), -3.25, Math.PI+0.05, 3.0, 1.6, '#ab9d7c');
+  addStall(b, 7.2, deckY(7.2), 3.25, 0.02, 3.0, 1.6, '#ab9d7c');
   addStall(b, 2.6, deckY(2.6), 3.35, 0.02, 2.4, 1.4, '#bcab88');
 
   // 桥面货物：麻袋 / 木箱 / 酒坛 / 草垛
@@ -1019,18 +1166,19 @@ function makeBannerTex(text, bg, fg){
 }
 
 const BANNERS=[];
-function addBanner(x,y,z,rotY,text,opts={}){
+function addBanner(x,y,z,rotY,text,opts={},parent=null){
+  const par=parent||scene;
   const w=opts.w||0.62, h=opts.h||1.95;
   const tex=makeBannerTex(text, opts.bg||'#ddd0ad', opts.fg||'#2b2620');
   const mat=new THREE.MeshLambertMaterial({ map:tex, side:THREE.DoubleSide, alphaTest:0.03 });
   const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h), mat);
   m.position.set(x,y,z); m.rotation.y=rotY;
   m.castShadow=false;
-  scene.add(m);
+  par.add(m);
   // 挑杆
   const bg=new Builder();
   bg.box(0.05,0.05,0.9,PAL.woodD,[x - Math.sin(rotY)*0, y+h/2+0.06, z],[0,rotY,0],{jitter:0.05});
-  const bm=new THREE.Mesh(bg.build(), M.vc); scene.add(bm);
+  const bm=new THREE.Mesh(bg.build(), M.vc); par.add(bm);
   BANNERS.push(m);
   return m;
 }
@@ -1705,7 +1853,7 @@ let boatCrew=[];
 function addWalker(o){
   const p=makePerson(o);
   p.group.scale.setScalar(o.scale||rr(0.95,1.06));
-  scene.add(p.group);
+  (o.parent||scene).add(p.group);
   const w=Object.assign({
     s:o.s0, dir:o.dir||1, axis:o.axis, lane:o.lane, min:o.min, max:o.max,
     speed:o.speed||rr(0.55,0.95), phase:rr(0,6.28), pause:0
@@ -1784,13 +1932,449 @@ function buildCrowd(){
   });
 }
 
+/* ---------------------------------------------------------------- 11.5 全卷六段 */
+/* 《清明上河图》按散点透视铺成一条连续长卷：沿 Z 轴自右端郊野展开至左端城内。
+   虹桥段（章 2）为上一阶段成果，原样并入；其余五段沿用同一 Builder / 色调 / 构件粒度。 */
+const CHAPTERS=[
+  { id:0, name:'郊野晨霧', sub:'疏林茅舍 · 馱隊踏青',   z: 390, z0: 300, z1: 480, pos:[2,11,452],    tgt:[-1,3.5,388], fov:40 },
+  { id:1, name:'汴河漕運', sub:'糧艘泊岸 · 縴夫曳舟',   z: 210, z0: 120, z1: 300, pos:[2,11,268],    tgt:[0,3.5,205],  fov:38 },
+  { id:2, name:'虹橋市肆', sub:'編木成拱 · 舟過橋下',   z:   0, z0:-110, z1: 120, pos:[5.6,10.6,57], tgt:[0,4.5,0.5],  fov:31.5 },
+  { id:3, name:'橋頭街市', sub:'正店彩樓 · 車馬喧闐',   z:-195, z0:-280, z1:-110, pos:[1,11,-132],   tgt:[0,4,-196],   fov:40 },
+  { id:4, name:'上善門',   sub:'城樓巍峨 · 駝隊出城',   z:-350, z0:-420, z1:-280, pos:[4,9,-285],    tgt:[0,6,-350],   fov:38 },
+  { id:5, name:'城內繁華', sub:'百肆駢列 · 行人如織',   z:-520, z0:-620, z1:-420, pos:[1,11,-452],   tgt:[0,4.5,-520], fov:40 },
+];
+CHAPTERS.forEach(c=>{ c.group=new THREE.Group(); scene.add(c.group); });
+
+/* 通用构件：茅舍 / 驮兽 / 轿子 / 泊船 */
+function cottageGeo(w,d,h){
+  const b=new Builder();
+  b.box(w,h,0.22,'#c8b99a',[0,h/2,-d/2+0.11],null,{jitter:0.05});
+  b.box(0.22,h,d,'#c8b99a',[-w/2+0.11,h/2,0],null,{jitter:0.05});
+  b.box(0.22,h,d,'#c8b99a',[ w/2-0.11,h/2,0],null,{jitter:0.05});
+  for(const s of [-1,1]) b.box(w*0.33,h,0.18,'#c8b99a',[s*w*0.335,h/2,d/2-0.09],null,{jitter:0.05});
+  b.box(w*0.34,h*0.72,0.06,'#342c23',[0,h*0.36,d/2-0.02],null,{jitter:0.04});
+  for(const s of [-1,1]) b.box(0.16,h,0.16,PAL.woodD,[s*w*0.34,h/2,d/2-0.08],null,{jitter:0.06});
+  for(const s of [-1,1]){
+    b.box(w+0.95,0.30,d*0.80,'#b8a473',[0,h+0.44,s*d*0.30],[s*0.42,0,0],{jitter:0.08});
+    b.box(w+0.8,0.16,0.10,'#9c8a62',[0,h+0.12,s*d*0.63],null,{jitter:0.07});
+  }
+  b.box(w+1.05,0.22,0.34,'#a08d64',[0,h+0.82,0],null,{jitter:0.06});
+  // 柴垛与篱
+  for(let i=0;i<5;i++) b.cyl(0.10,0.12,1.1,4,'#7e6a48',[-w/2-0.9+i*0.42,h*0.42,d/2+0.5],[1.4,0,0],{jitter:0.1});
+  return b.build();
+}
+
+function quadrupedGeo(kind){
+  const b=new Builder();
+  const camel=kind==='camel';
+  const by=camel?1.55:1.05;
+  const coat=camel?'#a98b5f':'#776a58';
+  b.add(new THREE.SphereGeometry(0.55,8,6),coat,{pos:[0,by,0],scale:[camel?1.35:1.2,0.72,0.62],jitter:0.06});
+  if(camel){
+    for(const x of [-0.35,0.38]) b.add(new THREE.SphereGeometry(0.34,7,6),coat,{pos:[x,by+0.50,0],scale:[1,1.05,0.85],jitter:0.05});
+    b.cyl(0.13,0.20,1.5,6,coat,[0.86,by+0.72,0],[0,0,-0.35],{jitter:0.05});
+    b.add(new THREE.SphereGeometry(0.19,6,5),coat,{pos:[1.16,by+1.38,0],scale:[1.2,0.8,0.85],jitter:0.05});
+  }else{
+    b.cyl(0.11,0.16,0.85,5,coat,[0.66,by+0.40,0],[0,0,-0.42],{jitter:0.05});
+    b.add(new THREE.SphereGeometry(0.17,6,5),coat,{pos:[0.92,by+0.76,0],scale:[1.25,0.8,0.85],jitter:0.05});
+    for(const s of [-1,1]) b.add(new THREE.ConeGeometry(0.055,0.24,4),'#5f5546',{pos:[0.86,by+0.98,s*0.09],rot:[0,0,-0.15],jitter:0.05});
+  }
+  const lh=by-0.24;
+  for(const sx of [-1,1]) for(const sz of [-1,1])
+    b.box(0.13,lh,0.13,camel?'#947954':'#5f5546',[sx*0.42,lh/2+0.12,sz*0.26],null,{jitter:0.08});
+  b.box(0.08,0.5,0.08,'#5f5546',[-0.78,by-0.05,0],[0,0,0.3],{jitter:0.08});
+  for(const s of [-1,1]) b.box(0.50,0.44,0.34,'#9c8660',[-0.05,by+0.44,s*0.42],[0,0,0.05],{jitter:0.09});
+  return b.build();
+}
+
+function sedanGeo(){
+  const b=new Builder();
+  b.box(1.25,1.25,1.05,'#7b4a35',[0,1.45,0],null,{jitter:0.06});
+  b.box(1.35,0.12,1.15,'#5d3a28',[0,2.10,0],null,{jitter:0.06});
+  b.add(new THREE.ConeGeometry(0.95,0.42,4,1),'#4a4033',{pos:[0,2.32,0],rot:[0,Math.PI/4,0],jitter:0.05});
+  b.box(0.55,0.55,0.05,'#2d2820',[0,1.55,0.54],null,{jitter:0.04});
+  b.box(1.20,0.42,0.03,'#a8553a',[0,1.05,0.55],null,{jitter:0.05});
+  for(const s of [-1,1]){
+    b.box(3.7,0.08,0.08,'#6b4a30',[0,1.05,s*0.62],null,{jitter:0.06});
+    b.box(0.05,0.30,0.05,'#8a3a25',[s*0.64,2.20,0.54],null,{jitter:0.05});
+  }
+  return b.build();
+}
+
+function addMooredBoat(b,x,z,rot,sc){
+  placeGeo(b, hullGeo(16,4.2,1.5).geo, x, 0.14, z, rot, sc);
+  b.add(new THREE.CylinderGeometry(1.55*sc,1.55*sc,5.0*sc,10,1,true,0,Math.PI),'#8a7050',
+    {pos:[x,0.50*sc,z],rot:[-Math.PI/2,0,rot],jitter:0.06});
+  for(let i=0;i<5;i++){
+    const zz=z-4*sc+i*2*sc;
+    b.box(0.85*sc,0.45*sc,0.65*sc,'#a48f68',[x+rr(-0.5,0.5)*sc,0.72*sc,zz],null,{jitter:0.1});
+  }
+  // 跳板
+  b.box(2.6*sc,0.10,0.55*sc,PAL.woodL,[x+2.0*sc,0.62,z],null,{jitter:0.07});
+}
+
+/* 章 0 · 郊野晨雾 */
+function buildCh0(g){
+  const b=new Builder();
+  const rand=mulberry32(7001);
+  // 疏林：早春尚未全绿，枯枝与初柳间杂
+  for(let i=0;i<22;i++){
+    const s=rand()>0.5?1:-1, x=s*(20+rand()*78), z=305+rand()*170;
+    b.push(treeGeo(x,z,{scale:0.7+rand()*0.65,bare:rand()>0.35}));
+  }
+  // 茅舍村落
+  const cot=[[34,340,0.3],[-38,372,-0.2],[52,418,0.1],[-30,446,-0.35],[68,455,0.4],[-62,330,0.25],[26,470,-0.1]];
+  cot.forEach(([x,z,r],i)=>placeGeo(b,cottageGeo(6+rand()*3,5+rand()*2,2.6+rand()*0.6),x,BANK_Y,z,r));
+  // 远村
+  for(let i=0;i<8;i++){
+    const x=(i%2?1:-1)*(75+rand()*45), z=310+i*22;
+    placeGeo(b,cottageGeo(6,5,2.5),x,BANK_Y,z,rand()*0.6-0.3);
+  }
+  // 小木桥（跨田沟）
+  for(let i=0;i<9;i++) b.box(3.2,0.12,0.62,PAL.woodD,[-2+i*0.0,BANK_Y+0.5+Math.sin(i/8*Math.PI)*0.35,388-i*0.72],null,{jitter:0.08});
+  for(const s of [-1,1]){
+    b.box(0.12,0.9,0.12,PAL.woodD,[s*1.5,BANK_Y+0.45,384],null,{jitter:0.08});
+    b.box(0.12,0.9,0.12,PAL.woodD,[s*1.5,BANK_Y+0.45,392],null,{jitter:0.08});
+    b.box(0.06,0.06,8.0,PAL.woodR,[s*1.5,BANK_Y+0.90,388],null,{jitter:0.08});
+  }
+  // 驮队（驴／骡）
+  for(let i=0;i<4;i++) placeGeo(b,quadrupedGeo('donkey'), 9+i*0.4, BANK_Y, 424-i*7.5, Math.PI+0.08, 0.9);
+  // 轿队
+  placeGeo(b,sedanGeo(), -12, BANK_Y, 356, 0.12, 1.0);
+  placeGeo(b,sedanGeo(), -16, BANK_Y, 330, 0.1, 0.92);
+  // 田舍道具：草垛、柴堆、篱笆、井
+  for(let i=0;i<12;i++){
+    const x=(rand()>0.5?1:-1)*(20+rand()*60), z=310+rand()*165, h=0.9+rand()*1.1;
+    b.add(new THREE.ConeGeometry(0.6+rand()*0.4,h,8,1),'#b6a476',{pos:[x,BANK_Y+h/2,z],jitter:0.12});
+  }
+  for(const [x0,z0,len] of [[24,352,16],[-26,428,14],[46,400,12]]){
+    for(let i=0;i<=len;i+=1.4){
+      b.cyl(0.05,0.06,1.05,4,PAL.woodD,[x0,BANK_Y+0.52,z0+i],null,{jitter:0.1});
+    }
+    b.box(0.06,0.06,len,PAL.woodD,[x0,BANK_Y+0.95,z0+len/2],null,{jitter:0.08});
+  }
+  b.cyl(0.75,0.80,0.9,10,PAL.stone2,[30,BANK_Y+0.45,452],null,{jitter:0.07});
+  b.cyl(0.62,0.62,0.08,10,'#3b3a31',[30,BANK_Y+0.92,452],null,{jitter:0.05});
+  // 踏青幡
+  b.cyl(0.05,0.06,4.2,5,PAL.woodD,[-18,BANK_Y+2.1,398],null,{jitter:0.07});
+  b.box(0.06,1.5,0.7,'#b0503a',[-18,BANK_Y+4.0,398.4],null,{jitter:0.06});
+
+  for(let i=0;i<7;i++){
+    const s=i%2?1:-1;
+    placeGeo(b,cottageGeo(5.5+rand()*2,4.6,2.5),s*(8+rand()*7),BANK_Y,352+i*13,rand()*0.5-0.25);
+  }
+  for(let i=0;i<9;i++){
+    const s=i%2?1:-1;
+    b.push(treeGeo(s*(9+rand()*8),338+i*17,{scale:0.75+rand()*0.4,bare:rand()>0.45}));
+  }
+  for(let i=0;i<3;i++) placeGeo(b,quadrupedGeo('donkey'),-6+i*2.8,BANK_Y,398-i*6.5,0.12,0.82);
+
+  for(let i=0;i<4;i++){
+    placeGeo(b,cottageGeo(5.4,4.4,2.4),(i%2?1:-1)*(4+rand()*9),BANK_Y,304+i*7,rand()*0.4-0.2);
+  }
+  for(let i=0;i<3;i++) b.push(treeGeo((i%2?1:-1)*(6+rand()*7),308+i*9,{scale:0.8,bare:true}));
+
+  const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
+
+  // 郊野人物：脚夫、轿夫、踏青者、农人
+  for(let i=0;i<26;i++){
+    const s=rand()>0.5?1:-1, lane=s*(2+rand()*24);
+    addWalker({parent:g,axis:'z',lane,s0:308+rand()*160,dir:rand()>0.5?1:-1,
+      min:305,max:475,speed:0.35+rand()*0.4,robe:ROBES[i%ROBES.length],
+      hat:i%3===0?'douli':'futou',scale:0.94+rand()*0.1});
+  }
+  addBanner(26,BANK_Y+4.1,344,-Math.PI/2,'酒',{bg:'#d9cba6',fg:'#2a251f',w:0.5,h:1.5},g);
+}
+
+/* 章 1 · 汴河漕运 */
+function buildCh1(g){
+  const b=new Builder();
+  const rand=mulberry32(8102);
+  // 泊岸粮船
+  for(let i=0;i<4;i++) addMooredBoat(b, -11+rand()*2, 152+i*36, rand()*0.14-0.07, 0.78+rand()*0.16);
+  // 码头：石阶、系船桩、粮袋
+  for(let i=0;i<5;i++){
+    const z=150+i*36;
+    for(let k=0;k<4;k++) b.box(1.8,0.28,0.9,PAL.stone3,[17.0-k*0.4,BANK_Y-0.15-k*0.28,z],null,{jitter:0.07});
+    for(let k=0;k<3;k++) b.cyl(0.10,0.12,1.4,5,PAL.woodD,[16.6,BANK_Y+0.6,z-1.4+k*1.4],null,{jitter:0.1});
+    for(let k=0;k<6;k++){
+      b.box(0.62,0.34,0.55,'#b09a72',[19.5+rand()*2.2,BANK_Y+0.17,z+rand()*5-2.5],[0,rand()*1.2,0],{jitter:0.1});
+    }
+  }
+  // 成行垂柳
+  for(let i=0;i<10;i++){
+    const s=i%2?1:-1, x=s*(20+rand()*3), z=126+i*18;
+    b.push(treeGeo(x,z,{scale:0.85+rand()*0.4,bare:false}));
+  }
+  // 临河脚店／酒肆渐起
+  for(let i=0;i<10;i++){
+    const s=i%2?1:-1, x=s*(27+rand()*16), z=128+i*18+rand()*6;
+    placeGeo(b,houseGeo({w:8+rand()*4,d:7+rand()*2,h:2.9,floors:rand()>0.65?2:1,
+      shop:rand()>0.4,roofH:1.9,tileA:'#645d4c',tileB:'#4f4a3b'}),x,BANK_Y,z,s>0?-Math.PI/2:Math.PI/2);
+  }
+  // 纤道缆绳与纤夫拉纤的绳
+  for(let i=0;i<3;i++){
+    const z=160+i*62;
+    for(let k=0;k<12;k++) b.box(1.7,0.02,0.02,'#6d5c42',[2+k*1.4,0.9,z+k*0.12],[0,0.1,0],{jitter:0.1});
+  }
+  // 彩楼与酒望
+  placeGeo(b,caiLouGeo(),21.4,BANK_Y+0.2,214,-Math.PI/2+0.04);
+  for(const [x,z] of [[20,158],[-20,230],[21,272]]){
+    b.cyl(0.06,0.08,5.8,5,PAL.woodD,[x,BANK_Y+2.9,z],null,{jitter:0.07});
+    b.box(0.05,1.2,0.55,'#c7b58c',[x+0.3,BANK_Y+5.0,z],null,{jitter:0.06});
+  }
+  // 车马与货
+  for(let i=0;i<5;i++) placeGeo(b,cartGeo(), (i%2?1:-1)*(21+rand()*4), BANK_Y, 140+i*38, rand()*3, 0.95);
+  for(let i=0;i<9;i++){
+    const x=(rand()>0.5?1:-1)*(19+rand()*9), z=125+rand()*170;
+    b.cyl(0.24,0.27,0.55,8,'#8c7960',[x,BANK_Y+0.28,z],null,{jitter:0.12});
+  }
+
+  const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
+
+  // 纤夫（沿岸 south 侧列队）、船工、行人
+  for(let i=0;i<8;i++){
+    addWalker({parent:g,axis:'z',lane:19.2,s0:150+i*17,dir:-1,min:125,max:295,
+      speed:0.30+rand()*0.18,robe:ROBES[(i+3)%ROBES.length],hat:'douli',scale:0.95});
+  }
+  for(let i=0;i<14;i++){
+    const s=rand()>0.5?1:-1;
+    addWalker({parent:g,axis:'z',lane:s*(22+rand()*12),s0:125+rand()*170,dir:rand()>0.5?1:-1,
+      min:122,max:298,speed:0.4+rand()*0.4,robe:ROBES[(i+5)%ROBES.length],hat:i%3?'futou':'douli'});
+  }
+  addBanner(20.4,BANK_Y+4.3,186,-Math.PI/2,'新酒',{bg:'#e2d6b4',fg:'#2a251f'},g);
+  addBanner(-20.6,BANK_Y+4.0,258,Math.PI/2,'腳店',{bg:'#d5c8a5',fg:'#2a251f'},g);
+}
+
+/* 静止人物（围观、店伙、门卒） */
+function staticPerson(parent,x,y,z,ry,robe,hat){
+  const p=makePerson({robe:robe,top:robe,hat:hat||'futou',belt:'#463c2f'});
+  p.group.position.set(x,y,z); p.group.rotation.y=ry;
+  parent.add(p.group);
+  statics.push({obj:p.group,base:y,ph:rr(0,6),amp:0.008});
+}
+
+/* 章 3 · 桥头街市（孙羊正店、车马、说书、算命） */
+function buildCh3(g){
+  const b=new Builder();
+  const rand=mulberry32(9303);
+  // 街两侧密集店铺，正店为 2–3 层高楼
+  for(let i=0;i<16;i++){
+    const s=i%2?1:-1, x=s*(25+rand()*17), z=-120-i*10+rand()*5;
+    const big=(i===3||i===8);
+    placeGeo(b,houseGeo({w:big?14:8+rand()*4,d:big?9:7,h:big?3.4:2.95,
+      floors:big?2:1,shop:rand()>0.35,roofH:big?2.4:1.95,
+      tileA:'#665f4e',tileB:'#504a3b'}),x,BANK_Y,z,s>0?-Math.PI/2:Math.PI/2);
+  }
+  // 孙羊正店：彩楼欢门 + 后院酒坛
+  placeGeo(b,caiLouGeo(),21.2,BANK_Y+0.2,-168,-Math.PI/2+0.03);
+  placeGeo(b,caiLouGeo(),-21.4,BANK_Y+0.2,-232,Math.PI/2-0.03);
+  for(let i=0;i<10;i++){
+    b.cyl(0.26,0.30,0.62,8,'#8c7960',[24+rand()*6,BANK_Y+0.31,-165+rand()*10],null,{jitter:0.12});
+  }
+  // 街心摊贩与伞
+  for(let i=0;i<7;i++){
+    const s=i%2?1:-1, x=s*(8+rand()*7), z=-130-i*22;
+    addStall(b,x,BANK_Y,z,s>0?-Math.PI/2:Math.PI/2,2.4+rand(),1.5,i%2?'#c3b18e':'#b8a482');
+  }
+  for(let i=0;i<6;i++){
+    const s=i%2?1:-1, x=s*(10+rand()*6), z=-140-i*26;
+    addParasol(b,x,BANK_Y,z,1.35+rand()*0.35,i%2?'#cbb894':PAL.cloth);
+  }
+  // 太平车、独轮车、驴车、驮兽、轿子
+  placeGeo(b,cartGeo(), 10,BANK_Y,-146, 0.25, 1.75);
+  placeGeo(b,cartGeo(),-11,BANK_Y,-206,-0.3, 1.05);
+  placeGeo(b,cartGeo(),  9,BANK_Y,-252, 1.1, 1.25);
+  placeGeo(b,quadrupedGeo('donkey'), -9,BANK_Y,-172, 0.15, 1.0);
+  placeGeo(b,quadrupedGeo('donkey'),  8,BANK_Y,-238, Math.PI, 0.95);
+  placeGeo(b,sedanGeo(), -6,BANK_Y,-190, 0.1, 1.0);
+  placeGeo(b,sedanGeo(),  7,BANK_Y,-262, -0.1, 0.94);
+  // 说书圈：中央一人 + 一圈听众
+  for(let i=0;i<11;i++){
+    const a=i/11*Math.PI*2;
+    staticPerson(g, 3.4+Math.cos(a)*2.6, BANK_Y, -222+Math.sin(a)*2.6, a+Math.PI, ROBES[i%ROBES.length], i%3?'futou':'douli');
+  }
+  staticPerson(g,3.4,BANK_Y,-222,0.6,'#8f6a48','jin');
+  // 算命摊与卦幡
+  b.box(1.8,0.10,0.75,PAL.woodL,[-8,BANK_Y+0.85,-158],null,{jitter:0.07});
+  b.cyl(0.05,0.06,3.6,5,PAL.woodD,[-9.2,BANK_Y+1.8,-158],null,{jitter:0.07});
+  b.box(0.06,1.2,0.55,'#c9b58c',[-9.2,BANK_Y+3.4,-157.7],null,{jitter:0.06});
+  // 井台与树
+  b.cyl(0.8,0.85,0.9,10,PAL.stone2,[-15,BANK_Y+0.45,-248],null,{jitter:0.07});
+  for(let i=0;i<7;i++){
+    const s=i%2?1:-1;
+    b.push(treeGeo(s*(21+rand()*4),-128-i*22,{scale:0.85,bare:rand()>0.6}));
+  }
+  const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
+
+  for(let i=0;i<30;i++){
+    const s=rand()>0.5?1:-1;
+    addWalker({parent:g,axis:'z',lane:s*(4+rand()*19),s0:-120-rand()*155,dir:rand()>0.5?1:-1,
+      min:-278,max:-114,speed:0.4+rand()*0.5,robe:ROBES[(i+2)%ROBES.length],
+      hat:i%4===0?'douli':(i%5===0?'jin':'futou'),basket:i===4||i===17});
+  }
+  addBanner(20.6,BANK_Y+5.0,-170,-Math.PI/2,'正店',{bg:'#c9b58c',fg:'#2a251f',w:0.66,h:2.0},g);
+  addBanner(-20.4,BANK_Y+4.4,-226,Math.PI/2,'香藥',{bg:'#ded2b0',fg:'#2a251f'},g);
+  addBanner(21.0,BANK_Y+4.0,-244,-Math.PI/2,'孫羊',{bg:'#e2d6b4',fg:'#2a251f'},g);
+}
+
+/* 上善门：城台、门洞砖券、雉堞、重檐城楼 */
+function cityGateGeo(){
+  const b=new Builder();
+  const W=124, H=9;
+  // 城墙：左右两段 + 门上过梁
+  for(const s of [-1,1]){
+    b.box((W-9)/2,H,4.0,'#b7ac91',[s*((W+9)/4),H/2,0],null,{jitter:0.05});
+    for(let y=1.3;y<H;y+=1.5) b.box((W-9)/2,0.06,4.06,'#9b927c',[s*((W+9)/4),y,2.01],null,{jitter:0.08});
+    for(let x=5.2;x<W/2;x+=2.2) b.box(1.1,0.82,4.2,'#c2b699',[s*x,H+0.41,0],null,{jitter:0.06});
+  }
+  b.box(9,H-6.4,4.0,'#b7ac91',[0,(H+6.4)/2,0],null,{jitter:0.05});
+  for(let k=0;k<5;k++) b.box(9.6-k*0.30,0.22,4.32,'#8f8570',[0,6.35-k*0.20,0],null,{jitter:0.07});
+  for(const s of [-1,1]){
+    b.box(0.55,6.4,4.45,'#8f8570',[s*4.6,3.2,0],null,{jitter:0.06});
+    b.box(0.9,6.4,0.5,PAL.woodR,[s*4.6,3.2,2.25],null,{jitter:0.06});
+  }
+  // 门额石匾
+  b.box(4.2,0.85,0.16,'#6a5f4c',[0,7.55,2.08],null,{jitter:0.05});
+  // 城楼一层
+  b.box(20,4.2,7,'#c8bda0',[0,11.1,0],null,{jitter:0.05});
+  for(let i=-4;i<=4;i++){
+    b.box(0.34,4.2,0.34,PAL.woodR,[i*2.2,11.1,3.55],null,{jitter:0.05});
+    b.box(0.34,4.2,0.34,PAL.woodR,[i*2.2,11.1,-3.55],null,{jitter:0.05});
+  }
+  for(const s of [-1,1]) b.box(1.1,1.3,0.06,'#332c22',[s*6.0,11.4,3.58],null,{jitter:0.04});
+  b.push(roofGeo(24,10.5,13.2,1.7,0.55,'#5e594a','#4a463a'));
+  b.box(24.2,0.24,0.30,PAL.tileD,[0,14.88,0],null,{jitter:0.05});
+  // 二层
+  b.box(15,3.5,6,'#d0c5a8',[0,16.65,0],null,{jitter:0.05});
+  for(let i=-3;i<=3;i++) b.box(0.30,3.5,0.30,PAL.woodR,[i*2.15,16.65,3.05],null,{jitter:0.05});
+  b.push(roofGeo(19,9,18.4,2.15,0.62,'#5a5546','#454136'));
+  b.box(19.2,0.26,0.32,PAL.tileD,[0,20.52,0],null,{jitter:0.05});
+  for(const s of [-1,1]) b.box(0.34,0.52,0.26,PAL.tileD,[s*9.4,20.78,0],[0,0,s*0.2],{jitter:0.05});
+  // 旗杆与幡
+  for(const s of [-1,1]){
+    b.cyl(0.07,0.09,7.0,5,PAL.woodD,[s*11.5,17.5,2.5],null,{jitter:0.07});
+    b.box(0.06,2.2,0.9,'#a8402a',[s*11.5,19.2,2.95],null,{jitter:0.06});
+  }
+  return b.build();
+}
+
+/* 章 4 · 上善门（驼队出城） */
+function buildCh4(g){
+  const b=new Builder();
+  const rand=mulberry32(10404);
+  placeGeo(b,cityGateGeo(),0,BANK_Y,-350,0);
+  // 门洞前石桥栏与护城河石岸
+  for(const s of [-1,1]){
+    for(let i=0;i<9;i++) b.box(0.12,0.85,0.12,PAL.stone3,[s*5.6,BANK_Y+0.42,-332+i*1.9],null,{jitter:0.08});
+    b.box(0.10,0.10,17,PAL.stone3,[s*5.6,BANK_Y+0.82,-323.4],null,{jitter:0.07});
+  }
+  // 门洞内外的车马与驼队
+  for(let i=0;i<4;i++) placeGeo(b,quadrupedGeo('camel'), -2.5+rand()*5, BANK_Y, -322-i*8.5, Math.PI-0.06, 1.0);
+  placeGeo(b,cartGeo(), 9,BANK_Y,-318, 0.2, 1.35);
+  placeGeo(b,sedanGeo(),-9,BANK_Y,-338, 0.08, 1.0);
+  // 门侧店铺与旗杆
+  for(const s of [-1,1]){
+    for(let i=0;i<3;i++){
+      placeGeo(b,houseGeo({w:9,d:7,h:3.0,floors:i===0?2:1,shop:i<2,roofH:2.0,
+        tileA:'#635d4c',tileB:'#4d483a'}),s*(24+i*13),BANK_Y,-330-i*22,s>0?-Math.PI/2:Math.PI/2);
+    }
+  }
+  for(const [x,z] of [[16,-305],[-16,-305],[18,-392]]){
+    b.cyl(0.06,0.08,6.5,5,PAL.woodD,[x,BANK_Y+3.25,z],null,{jitter:0.07});
+    b.box(0.06,1.5,0.8,'#b0503a',[x,BANK_Y+6.0,z+0.4],null,{jitter:0.06});
+  }
+  // 城墙根树与石灯
+  for(let i=0;i<6;i++) b.push(treeGeo((i%2?1:-1)*(30+rand()*10),-292-i*20,{scale:0.9,bare:rand()>0.5}));
+  const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
+
+  for(let i=0;i<18;i++){
+    const s=rand()>0.5?1:-1;
+    addWalker({parent:g,axis:'z',lane:s*(3+rand()*16),s0:-285-rand()*130,dir:rand()>0.5?1:-1,
+      min:-416,max:-284,speed:0.4+rand()*0.45,robe:ROBES[(i+4)%ROBES.length],
+      hat:i%3===0?'douli':'futou'});
+  }
+  staticPerson(g,-4.8,BANK_Y,-344,Math.PI/2,'#6d6350','jin');
+  staticPerson(g, 4.8,BANK_Y,-344,-Math.PI/2,'#6d6350','jin');
+  addBanner(19.5,BANK_Y+4.6,-326,-Math.PI/2,'茶',{bg:'#d9cba6',fg:'#2a251f',w:0.56,h:1.6},g);
+}
+
+/* 章 5 · 城内繁华（百肆骈列，收于赵太丞家） */
+function buildCh5(g){
+  const b=new Builder();
+  const rand=mulberry32(11505);
+  // 两侧密集店肆，间以二层楼阁
+  for(let i=0;i<22;i++){
+    const s=i%2?1:-1, x=s*(24+rand()*16), z=-424-i*9+rand()*4;
+    const big=(i%5===0);
+    placeGeo(b,houseGeo({w:big?13:8+rand()*3,d:big?9:7,h:big?3.3:2.9,
+      floors:big?2:1,shop:rand()>0.25,roofH:big?2.3:1.9,
+      tileA:'#665f4e',tileB:'#504a3b'}),x,BANK_Y,z,s>0?-Math.PI/2:Math.PI/2);
+  }
+  // 两座彩楼欢门
+  placeGeo(b,caiLouGeo(),20.8,BANK_Y+0.2,-462,-Math.PI/2+0.02);
+  placeGeo(b,caiLouGeo(),-21.0,BANK_Y+0.2,-556,Math.PI/2-0.02);
+  // 街心摊、伞、幌子杆
+  for(let i=0;i<9;i++){
+    const s=i%2?1:-1, x=s*(8+rand()*7), z=-434-i*21;
+    addStall(b,x,BANK_Y,z,s>0?-Math.PI/2:Math.PI/2,2.3+rand()*0.8,1.5,i%2?'#c3b18e':'#bcab88');
+  }
+  for(let i=0;i<8;i++){
+    const s=i%2?1:-1, x=s*(9+rand()*6), z=-446-i*22;
+    addParasol(b,x,BANK_Y,z,1.3+rand()*0.35,i%2?'#cbb894':PAL.cloth);
+  }
+  // 车马轿与驮兽
+  placeGeo(b,cartGeo(), 10,BANK_Y,-448, 0.3, 1.5);
+  placeGeo(b,cartGeo(),-10,BANK_Y,-510,-0.2, 1.1);
+  placeGeo(b,cartGeo(),  8,BANK_Y,-578, 1.0, 1.25);
+  placeGeo(b,sedanGeo(), -6,BANK_Y,-478, 0.1, 1.0);
+  placeGeo(b,sedanGeo(),  6,BANK_Y,-548,-0.1, 0.94);
+  placeGeo(b,quadrupedGeo('donkey'), -8,BANK_Y,-592, 0.2, 1.0);
+  // 杂耍围观圈
+  for(let i=0;i<12;i++){
+    const a=i/12*Math.PI*2;
+    staticPerson(g,-3.2+Math.cos(a)*2.7,BANK_Y,-536+Math.sin(a)*2.7,a+Math.PI,ROBES[(i+1)%ROBES.length],i%3?'futou':'douli');
+  }
+  staticPerson(g,-3.2,BANK_Y,-536,0.4,'#9c6b42','jin');
+  // 街树、井、石灯
+  for(let i=0;i<9;i++) b.push(treeGeo((i%2?1:-1)*(21+rand()*3),-430-i*21,{scale:0.8,bare:rand()>0.55}));
+  b.cyl(0.8,0.85,0.9,10,PAL.stone2,[15,BANK_Y+0.45,-600],null,{jitter:0.07});
+  for(let i=0;i<7;i++){
+    const s=i%2?1:-1;
+    addStall(b,s*(3.0+rand()*3.0),BANK_Y,-466-i*24,s>0?-Math.PI/2:Math.PI/2,2.2,1.4,'#bdae8b');
+  }
+  const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
+
+  for(let i=0;i<58;i++){
+    const s=rand()>0.5?1:-1;
+    addWalker({parent:g,axis:'z',lane:s*(2+rand()*19),s0:-424-rand()*190,dir:rand()>0.5?1:-1,
+      min:-616,max:-424,speed:0.4+rand()*0.55,robe:ROBES[(i+7)%ROBES.length],
+      hat:i%4===0?'douli':(i%6===0?'jin':'futou'),basket:i===9||i===28});
+  }
+  const names=['正店','香藥','綢緞','趙太丞家','茶','當','酒','解庫'];
+  names.forEach((n,i)=>{
+    const s=i%2?1:-1;
+    addBanner(s*(20.2+(i%3)*0.6),BANK_Y+4.2+(i%2)*0.5,-440-i*22,
+      s>0?-Math.PI/2:Math.PI/2,n,
+      {bg:i%3===0?'#c9b58c':'#ded2b0',fg:'#2a251f',w:0.6,h:1.9},g);
+  });
+}
+
+/* 按相机位置显隐章节：雾作掩护，任何时刻只绘制附近 2–3 段 */
+function updateChapterVisibility(){
+  const cz=camera.position.z;
+  for(const c of CHAPTERS){
+    c.group.visible = Math.abs(cz-c.z) < 145;
+  }
+}
+
 /* ---------------------------------------------------------------- 12 视角 */
 const SCROLL = { pos:new THREE.Vector3(5.6, 10.6, 57), tgt:new THREE.Vector3(0, 4.5, 0.5), fov:31.5 };
 const MODES = {
-  scroll:{ minR:26, maxR:88, minPhi:1.26, maxPhi:1.50, thetaMin:-0.46, thetaMax:0.46, pan:true, fov:32,
-           tx:[-7,7], ty:[2.0,7.0], tz:[-9,13] },
-  roam:  { minR:7,  maxR:165, minPhi:0.22, maxPhi:1.52, thetaMin:-9, thetaMax:9, pan:true, fov:44,
-           tx:[-52,52], ty:[0.5,15], tz:[-58,58] },
+  scroll:{ minR:26, maxR:88, minPhi:1.22, maxPhi:1.54, thetaMin:-0.46, thetaMax:0.46, pan:true, fov:32,
+           tx:[-40,60], ty:[1,14], tz:[-640,480] },
+  roam:  { minR:7,  maxR:165, minPhi:0.22, maxPhi:1.54, thetaMin:-9, thetaMax:9, pan:true, fov:44,
+           tx:[-120,120], ty:[0.5,20], tz:[-660,500] },
 };
 const ctrl = {
   pos: SCROLL.pos.clone(), tgt: SCROLL.tgt.clone(),
@@ -1799,12 +2383,19 @@ const ctrl = {
 };
 const UP=new THREE.Vector3(0,1,0);
 
+let curChapter=2;
+function chapterBaseTheta(){
+  const c=CHAPTERS[curChapter];
+  return new THREE.Spherical().setFromVector3(
+    new THREE.Vector3(...c.pos).sub(new THREE.Vector3(...c.tgt))).theta;
+}
 function clampGoal(){
   const m=MODES[ctrl.mode];
   const off=new THREE.Vector3().subVectors(ctrl.goalPos, ctrl.goalTgt);
   const sph=new THREE.Spherical().setFromVector3(off);
   sph.phi=clamp(sph.phi, m.minPhi, m.maxPhi);
-  sph.theta=clamp(sph.theta, m.thetaMin, m.thetaMax);
+  const bt=chapterBaseTheta();
+  sph.theta=clamp(sph.theta, m.thetaMin+bt, m.thetaMax+bt);
   sph.radius=clamp(sph.radius, m.minR, m.maxR);
   ctrl.goalPos.copy(ctrl.goalTgt).add(new THREE.Vector3().setFromSpherical(sph));
   ctrl.goalTgt.x=clamp(ctrl.goalTgt.x, m.tx[0], m.tx[1]);
@@ -1846,7 +2437,10 @@ function setMode(m, silent){
   const cfg=MODES[m];
   ctrl.goalFov=cfg.fov;
   if(m==='scroll'){
-    ctrl.goalPos.copy(SCROLL.pos); ctrl.goalTgt.copy(SCROLL.tgt);
+    const c=CHAPTERS[curChapter];
+    ctrl.goalPos.set(c.pos[0],c.pos[1],c.pos[2]);
+    ctrl.goalTgt.set(c.tgt[0],c.tgt[1],c.tgt[2]);
+    ctrl.goalFov=c.fov;
   } else {
     // 从当前视角继续，稍微拉开
     const off=new THREE.Vector3().subVectors(ctrl.goalPos, ctrl.goalTgt);
@@ -1861,17 +2455,56 @@ function setMode(m, silent){
   document.getElementById('btnRoam').classList.toggle('on', m==='roam');
 }
 
+/* 长卷导航 */
+function currentChapterFromTarget(){
+  const z=ctrl.goalTgt.z;
+  let best=0, bd=Infinity;
+  CHAPTERS.forEach(c=>{ const d=Math.abs(z-c.z); if(d<bd){bd=d;best=c.id;} });
+  return best;
+}
+function updateNav(){
+  const track=document.getElementById('snTrack');
+  if(!track) return;
+  [...track.children].forEach((el,i)=>el.classList.toggle('on', i===curChapter));
+  const c=CHAPTERS[curChapter];
+  document.getElementById('snPos').textContent='第 '+(curChapter+1)+' 段 / 共 '+CHAPTERS.length+' 段 · '+c.name;
+  document.getElementById('snCursor').style.left=((curChapter+0.5)/CHAPTERS.length*100).toFixed(2)+'%';
+}
+let tagTimer=0;
+function showChapterTag(c){
+  const el=document.getElementById('chapTag');
+  if(!el) return;
+  el.querySelector('.n').textContent='第'+['一','二','三','四','五','六'][c.id]+'段 · '+c.name;
+  el.querySelector('.s').textContent=c.sub;
+  el.classList.add('show');
+  tagTimer=time+3.2;
+}
+function goChapter(i, quiet){
+  curChapter=clamp(Math.round(i),0,CHAPTERS.length-1);
+  const c=CHAPTERS[curChapter];
+  if(ctrl.mode!=='scroll') setMode('scroll',true);
+  ctrl.goalPos.set(c.pos[0],c.pos[1],c.pos[2]);
+  ctrl.goalTgt.set(c.tgt[0],c.tgt[1],c.tgt[2]);
+  ctrl.goalFov=c.fov;
+  clampGoal();
+  updateNav();
+  if(!quiet) showChapterTag(c);
+}
+
 /* 20 秒自动运镜 */
 const TOUR_KEYS=[
-  { p:[ 46, 30,  66], t:[-4, 7.0,  4], f:47 },
-  { p:[ 27, 15,  44], t:[ 0, 6.2,  0], f:41 },
-  { p:[ 11, 3.7, 28], t:[ 0, 5.0, -2], f:35 },
-  { p:[ 2.2, 2.6,13], t:[ 0, 4.6, -4], f:33 },
-  { p:[ 0.0, 3.0, -4], t:[ 3, 5.4,-14], f:36 },
-  { p:[-9.0, 6.8,-24], t:[ 0, 5.2,  0], f:38 },
-  { p:[-34, 19, -16], t:[ 0, 5.0,  2], f:42 },
-  { p:[-26, 18,  26], t:[ 0, 5.0,  4], f:39 },
-  { p:[5.6, 10.6, 57], t:[0, 4.5, 0.5], f:31.5 },
+  { p:[  4, 20,  474], t:[ -1, 4.0, 400], f:44 },   // 郊野起幅
+  { p:[  2, 11,  452], t:[ -1, 3.5, 388], f:40 },   // 疏林茅舍
+  { p:[  3, 16,  290], t:[  0, 4.0, 216], f:40 },   // 漕运渐近
+  { p:[  2, 11,  268], t:[  0, 3.5, 205], f:38 },   // 糧艘泊岸
+  { p:[ 26, 16,  102], t:[  0, 5.0,  50], f:38 },   // 遥见虹桥
+  { p:[5.6,10.6,  57], t:[  0, 4.5, 0.5], f:31.5 }, // 虹桥画卷机位
+  { p:[ 2.2, 2.6, 13], t:[  0, 4.6,  -4], f:33 },   // 贴水推进
+  { p:[ 0.0, 3.0, -4], t:[  3, 5.4, -14], f:36 },   // 穿桥洞
+  { p:[  1, 11, -132], t:[  0, 4.0,-196], f:40 },   // 桥头街市
+  { p:[  4,  9, -285], t:[  0, 6.0,-350], f:36 },   // 上善门
+  { p:[  1, 11, -452], t:[  0, 4.5,-520], f:40 },   // 城内繁华
+  { p:[5.6,10.6,  57], t:[0, 4.5, 0.5], f:31.5 },   // 卷起收束
 ];
 const TOUR_DUR=20;
 const TOUR={
@@ -1879,10 +2512,12 @@ const TOUR={
   pos:new THREE.CatmullRomCurve3(TOUR_KEYS.map(k=>new THREE.Vector3(...k.p)), false, 'catmullrom', 0.35),
   tgt:new THREE.CatmullRomCurve3(TOUR_KEYS.map(k=>new THREE.Vector3(...k.t)), false, 'catmullrom', 0.35),
   caps:[
-    { t:0.0,  n:'汴河春曉', m:'北宋 · 汴京 · 虹橋' },
-    { t:4.3,  n:'一橋如帶', m:'編木成拱 · 不柱而跨' },
-    { t:8.6,  n:'舟過橋下', m:'桅杆已放 · 艄公齊力' },
-    { t:13.2, n:'畫中遊',   m:'兩岸市聲 · 行人如織' },
+    { t:0.00, n:'郊野晨霧', m:'疏林茅舍 · 馱隊踏青' },
+    { t:0.17, n:'汴河漕運', m:'糧艘泊岸 · 縴夫曳舟' },
+    { t:0.34, n:'虹橋如帶', m:'編木成拱 · 舟過橋下' },
+    { t:0.56, n:'橋頭市肆', m:'正店彩樓 · 車馬喧闐' },
+    { t:0.72, n:'上善門',   m:'城樓巍峨 · 駝隊出城' },
+    { t:0.86, n:'城內繁華', m:'百肆駢列 · 行人如織' },
   ],
   capIdx:-1
 };
@@ -1997,9 +2632,13 @@ window.addEventListener('keydown', e=>{
   else if(e.key==='2'){ if(TOUR.active) stopTour(); setMode('roam'); }
   else if(e.code==='Space'){ e.preventDefault(); TOUR.active? stopTour() : startTour(); }
   else if(e.key==='r'||e.key==='R'){ if(TOUR.active) stopTour(); setMode(ctrl.mode, true); }
+  else if(e.key==='ArrowLeft'){ if(TOUR.active) stopTour(); goChapter(curChapter-1); }
+  else if(e.key==='ArrowRight'){ if(TOUR.active) stopTour(); goChapter(curChapter+1); }
+  else if(e.key==='0'){ if(TOUR.active) stopTour(); goChapter(2); }
 });
 
 /* ---------------------------------------------------------------- 14 主循环 */
+const FOG_BY_CH=[[70,500],[75,470],[54,335],[78,480],[85,500],[95,540]];
 const clock=new THREE.Clock();
 let time=0, frames=0, fpsAcc=0;
 const CAPS=[
@@ -2025,6 +2664,7 @@ function animate(){
   time+=dt;
 
   updateBoat(time, dt);
+  updateChapterVisibility();
 
   // 行人
   for(const w of walkers){
@@ -2079,12 +2719,26 @@ function animate(){
 
   WATER_U.uTime.value=time;
   WATER_U.uCam.value.copy(camera.position);
+  const fg=FOG_BY_CH[curChapter], fk=1-Math.exp(-dt*3);
+  scene.fog.near=lerp(scene.fog.near,fg[0],fk);
+  scene.fog.far=lerp(scene.fog.far,fg[1],fk);
+  const ra=RIDGE_ALPHA[curChapter];
+  ridgeGroup.children.forEach(m=>{
+    m.material.opacity=lerp(m.material.opacity,m.userData.baseOpacity*ra,fk);
+    m.visible=m.material.opacity>0.008;
+  });
+  if(tagTimer && time>tagTimer){ document.getElementById('chapTag').classList.remove('show'); tagTimer=0; }
+  if(!TOUR.active && ctrl.mode==='scroll'){
+    const k=currentChapterFromTarget();
+    if(k!==curChapter){ curChapter=k; updateNav(); }
+  }
   sun.target.position.set(0,2,0);
   sun.position.set(-46,62,34);
 
   // 字幕
   const z=boat.z;
-  if(Math.abs(z-30)<16 && capIdx!==0){ capIdx=0; setCap(0); capUntil=time+4.5; }
+  if(curChapter!==2){ if(capIdx!==-1){ setCap(-1); capIdx=-1; capUntil=0; } }
+  else if(Math.abs(z-30)<16 && capIdx!==0){ capIdx=0; setCap(0); capUntil=time+4.5; }
   else if(Math.abs(z-2)<5 && capIdx!==1){ capIdx=1; setCap(1); capUntil=time+4.0; }
   else if(capIdx<0){ capIdx=2; setCap(2); capUntil=time+6.0; }
   if(capUntil && time>capUntil){ setCap(-1); capUntil=0; capIdx=-2; }
@@ -2113,6 +2767,7 @@ function boot(){
   buildWater();
   boat.shadow=buildWaterDecals();
   buildBanks();
+  const baseCount=scene.children.length;      // 6 个章节 group + 全卷基础层
   buildBridge();
   buildBridgeFurniture();
   buildTown();
@@ -2120,6 +2775,26 @@ function boot(){
   buildStreetProps();
   buildBoat();
   buildCrowd();
+  // 原虹桥段全部对象原样移入章 2（几何 / 材质 / 动画引用均不变）
+  const c2=CHAPTERS[2].group;
+  scene.children.slice(baseCount).filter(o=>o!==c2).forEach(o=>c2.add(o));
+  buildCh0(CHAPTERS[0].group);
+  buildCh1(CHAPTERS[1].group);
+  buildCh3(CHAPTERS[3].group);
+  buildCh4(CHAPTERS[4].group);
+  buildCh5(CHAPTERS[5].group);
+  // 长卷导航条
+  const track=document.getElementById('snTrack');
+  CHAPTERS.forEach((c,i)=>{
+    const btn=document.createElement('button');
+    btn.className='sn-item';
+    btn.innerHTML='<i>'+['一','二','三','四','五','六'][i]+'</i><span>'+c.name+'</span>';
+    btn.title='第 '+(i+1)+' 段 · '+c.name;
+    btn.addEventListener('click',()=>goChapter(i));
+    track.appendChild(btn);
+  });
+  const cursor=document.createElement('div'); cursor.id='snCursor'; track.appendChild(cursor);
+  updateNav();
   onResize();
   ctrl.pos.copy(SCROLL.pos); ctrl.tgt.copy(SCROLL.tgt);
   ctrl.goalPos.copy(SCROLL.pos); ctrl.goalTgt.copy(SCROLL.tgt);
@@ -2134,7 +2809,10 @@ try{
   boot();
   window.__qm={
     ready:true, scene, camera, renderer, boat, ctrl, TOUR,
-    setMode, startTour, stopTour,
+    setMode, startTour, stopTour, goChapter, CHAPTERS,
+    chapter(){ return curChapter; },
+    chapters(){ return CHAPTERS.length; },
+    visibleChapters(){ return CHAPTERS.filter(c=>c.group.visible).map(c=>c.id); },
     info(){ return { calls:renderer.info.render.calls, tris:renderer.info.render.triangles, texture:renderer.info.memory.textures, geo:renderer.info.memory.geometries }; },
     boatZ(){ return boat.z; },
     pos(){ return ctrl.pos.toArray().map(v=>+v.toFixed(2)); },
