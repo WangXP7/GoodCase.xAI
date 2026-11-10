@@ -137,6 +137,19 @@ check('六段内容与分章配置齐全',
   (html.match(/function buildCh[01345]\(/g)||[]).length === 5 &&
   /const FOG_BY_CH=\[\[[^\]]*\],[^;]*\]/.test(html) &&
   (html.match(/RIDGE_ALPHA=\[[^\]]*\]/g)||[]).length === 1);
+check('五段精细度与动态系统齐全',
+  /const ENRICH_CFG=\{/.test(html) && (html.match(/enrichChapter\(\d,g,b\)/g)||[]).length === 5 &&
+  /if\(o\.detail\)\{/.test(html) && /檐下椽子/.test(html) &&
+  ['bird','cloud','cart','boat','flag'].every(k=>html.includes("case '"+k+"':")) &&
+  html.includes('updateMobiles(time, dt);'));
+check('五类动态物体与转圈行人代码齐备',
+  ['addFlock','addClouds','mobileCart','mobileBoat','addFlag'].every(f=>html.includes('function '+f+'(')) &&
+  html.includes("axis:'circle'"));
+check('六种宋式屋舍样式与自动计数齐备',
+  ['pavilionGeo','towerGeo','courtyardGeo','granaryGeo','watersideGeo','gateArchGeo']
+    .every(f=>html.includes('function '+f+'(')) &&
+  /const STYLE_FN=\{/.test(html) && /const STYLE_XR=\{/.test(html) &&
+  /let BUILDINGS=0;/.test(html) && html.split('styles:[').length-1 === 5);
 check('运镜脚本长度 20.0 s / 12 帧全卷', S.TOUR_DUR === 20 && S.TOUR_KEYS.length === 12,
   `dur=${S.TOUR_DUR} keys=${S.TOUR_KEYS.length}`);
 check('运镜跨越全卷首尾', Math.max(...S.TOUR_KEYS.map(k=>k.p[2])) > 400 &&

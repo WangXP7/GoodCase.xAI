@@ -279,6 +279,8 @@ const rr  = (a,b)=>a+(b-a)*RND();
 const rint= (a,b)=>Math.floor(rr(a,b+1));
 
 /* 色调：绢本设色（春日的暖赭 + 灰绿） */
+let BUILDINGS=0;   // 全卷屋舍计数（houseGeo / cottageGeo / 六种新样式自动累加）
+
 const PAL = {
   haze:'#ddd2b6',
   ground:'#b7a888', ground2:'#a99a79', road:'#c8ba97', road2:'#bbac89',
@@ -1067,6 +1069,7 @@ function roofGeo(W, D, eaveY, roofH, up, colA='#5e5d51', colB='#4b4a40'){
 
 /* ---------------------------------------------------------------- 7 屋舍 */
 function houseGeo(o){
+  BUILDINGS++;
   const b=new Builder();
   const w=o.w, d=o.d, h=o.h||3.05, floors=o.floors||1;
   const shop=!!o.shop;
@@ -1145,6 +1148,47 @@ function houseGeo(o){
     for(let i=0;i<12;i++){
       const u=i/12, x=-((w+2)/2)+u*(w+2);
       b.box((w+2)/12, 0.10, 0.12, PAL.woodD, [x, topY-0.02+0.55*Math.pow(Math.abs(u-0.5)*2,3.4), sz*((d+2)/2)], null, {jitter:0.08});
+    }
+  }
+  /* detail：新增五段专用的细部（虹桥段不传此参数，保持画面不变） */
+  if(o.detail){
+    const W=w+2.0, nu=Math.max(10,Math.round(W/0.42));
+    // 檐下椽子
+    for(const sz of [-1,1]) for(let i=0;i<nu;i++){
+      const x=-W/2+(i+0.5)*W/nu;
+      b.box(0.075,0.075,0.62,'#4a3a28',[x,topY+0.10,sz*(d/2+0.52)],null,{jitter:0.08});
+    }
+    // 瓦当
+    for(const sz of [-1,1]) for(let i=0;i<16;i++){
+      const u=(i+0.5)/16, x=-W/2+u*W;
+      b.add(new THREE.SphereGeometry(0.055,5,4),'#8a8269',
+        {pos:[x,topY-0.02+0.55*Math.pow(Math.abs(u-0.5)*2,3.4),sz*((d+2)/2+0.06)],jitter:0.10});
+    }
+    // 正面斗栱加密 + 阑额
+    const nd=Math.max(5,Math.round(w/0.9));
+    b.box(w,0.14,0.26,'#4e3a27',[0,topY-0.22,d/2+0.02],null,{jitter:0.05});
+    for(let i=0;i<=nd;i++){
+      const x=-w/2+i*w/nd;
+      b.box(0.20,0.14,0.30,'#5b4630',[x,topY-0.36,d/2+0.05],null,{jitter:0.07});
+      b.box(0.10,0.20,0.22,'#6a5238',[x,topY-0.52,d/2+0.07],null,{jitter:0.07});
+    }
+    // 门簪 / 门槛 / 台阶
+    b.box(1.7,0.12,0.30,'#4a3624',[0,0.60,d/2+0.06],null,{jitter:0.05});
+    for(const s of [-1,1]) b.add(new THREE.SphereGeometry(0.075,5,4),'#8c6a45',{pos:[s*0.45,1.28,d/2+0.10],jitter:0.05});
+    b.box(w*0.72,0.14,0.55,'#a99b80',[0,0.07,d/2+0.40],null,{jitter:0.06});
+    // 匾额与檐灯
+    b.box(w*0.50,0.40,0.09,'#463626',[0,topY-0.88,d/2+0.16],null,{jitter:0.05});
+    b.box(w*0.44,0.28,0.04,'#c3ad84',[0,topY-0.88,d/2+0.22],null,{jitter:0.04});
+    for(const s of [-1,1]){
+      b.cyl(0.02,0.02,0.46,3,'#4a3a28',[s*w*0.40,topY-0.74,d/2+0.20],null,{jitter:0.05});
+      b.add(new THREE.SphereGeometry(0.15,7,6),'#a8402a',{pos:[s*w*0.40,topY-1.00,d/2+0.20],scale:[1,1.22,1],jitter:0.04});
+      b.cyl(0.09,0.09,0.03,6,'#4a3624',[s*w*0.40,topY-1.16,d/2+0.20],null,{jitter:0.05});
+    }
+    // 侧墙格窗 + 悬鱼
+    for(const s of [-1,1]){
+      b.box(0.06,0.90,1.15,'#332c22',[s*(w/2+0.02),1.55,0],null,{jitter:0.04});
+      for(let k=0;k<4;k++) b.box(0.09,0.86,0.04,PAL.woodL,[s*(w/2+0.05),1.55,-0.45+k*0.30],null,{jitter:0.08});
+      b.box(0.08,0.42,0.24,'#5b4630',[s*(w/2+0.16),topY+0.10,0],[0,0,s*0.3],{jitter:0.06});
     }
   }
   return b.build();
@@ -1857,7 +1901,7 @@ function addWalker(o){
   const w=Object.assign({
     s:o.s0, dir:o.dir||1, axis:o.axis, lane:o.lane, min:o.min, max:o.max,
     speed:o.speed||rr(0.55,0.95), phase:rr(0,6.28), pause:0
-  }, p);
+  }, o, p);
   walkers.push(w);
   return w;
 }
@@ -1947,6 +1991,7 @@ CHAPTERS.forEach(c=>{ c.group=new THREE.Group(); scene.add(c.group); });
 
 /* 通用构件：茅舍 / 驮兽 / 轿子 / 泊船 */
 function cottageGeo(w,d,h){
+  BUILDINGS++;
   const b=new Builder();
   b.box(w,h,0.22,'#c8b99a',[0,h/2,-d/2+0.11],null,{jitter:0.05});
   b.box(0.22,h,d,'#c8b99a',[-w/2+0.11,h/2,0],null,{jitter:0.05});
@@ -1959,8 +2004,28 @@ function cottageGeo(w,d,h){
     b.box(w+0.8,0.16,0.10,'#9c8a62',[0,h+0.12,s*d*0.63],null,{jitter:0.07});
   }
   b.box(w+1.05,0.22,0.34,'#a08d64',[0,h+0.82,0],null,{jitter:0.06});
-  // 柴垛与篱
+  // 檐下椽子、草顶横向草纹、烟囱
+  for(const s of [-1,1]){
+    for(let i=0;i<9;i++){
+      const x=-w/2+(i+0.5)*w/9;
+      b.box(0.07,0.07,0.56,'#6b5638',[x,h+0.22,s*d*0.58],[s*0.42,0,0],{jitter:0.08});
+    }
+    for(let i=0;i<6;i++){
+      const zz=s*(d*0.10+i*d*0.11);
+      b.box(w+0.85,0.035,0.05,'#9c8a62',[0,h+0.46+i*0.012,zz],[s*0.42,0,0],{jitter:0.09});
+    }
+  }
+  b.box(0.38,0.85,0.38,'#8b7a5c',[-w*0.30,h+0.95,-d*0.22],null,{jitter:0.07});
+  // 侧窗与窗棂
+  b.box(0.05,0.72,0.92,'#332c22',[w/2+0.02,h*0.60,0],null,{jitter:0.04});
+  for(let i=0;i<4;i++) b.box(0.09,0.70,0.05,PAL.woodL,[w/2+0.05,h*0.60,-0.36+i*0.24],null,{jitter:0.08});
+  b.box(0.92,0.05,0.05,PAL.woodL,[w/2+0.05,h*0.60,0],null,{jitter:0.08});
+  // 门前石阶、门框、柴垛与篱
+  b.box(w*0.52,0.13,0.52,'#a99b80',[0,0.07,d/2+0.36],null,{jitter:0.07});
+  b.box(w*0.40,0.12,0.14,'#5a422c',[0,h*0.74,d/2-0.01],null,{jitter:0.06});
   for(let i=0;i<5;i++) b.cyl(0.10,0.12,1.1,4,'#7e6a48',[-w/2-0.9+i*0.42,h*0.42,d/2+0.5],[1.4,0,0],{jitter:0.1});
+  for(let i=0;i<4;i++) b.box(0.06,0.75,0.06,'#7e6a48',[w/2+0.8+i*0.55,0.38,d/2-0.4],null,{jitter:0.09});
+  b.box(2.3,0.05,0.05,'#7e6a48',[w/2+1.6,0.70,d/2-0.4],null,{jitter:0.09});
   return b.build();
 }
 
@@ -2013,6 +2078,396 @@ function addMooredBoat(b,x,z,rot,sc){
   b.box(2.6*sc,0.10,0.55*sc,PAL.woodL,[x+2.0*sc,0.62,z],null,{jitter:0.07});
 }
 
+/* ---------------------------------------------------------------- 11.6 精细度与动态增强 */
+/* 除虹桥外的五段共用：静态细部构件 + 统一动态物体系统（车马 / 船 / 飞鸟 / 云 / 旗幡 / 转圈行人） */
+const mobiles=[];
+function addMobile(o){ mobiles.push(o); return o; }
+
+/* 六种宋式屋舍样式：全部返回本地几何，并入各段主 mesh，draw call 不增加 */
+/* ① 四角攒尖亭 / 郊野茅亭 */
+function pavilionGeo(w,d,h){
+  BUILDINGS++;
+  const b=new Builder();
+  b.box(w+0.8,0.32,d+0.8,PAL.stone,[0,0.16,0],null,{jitter:0.05});
+  for(const sx of [-1,1]) for(const sz of [-1,1])
+    b.cyl(0.13,0.15,h,6,PAL.woodR,[sx*w/2,h/2+0.3,sz*d/2],null,{jitter:0.06});
+  for(const sz of [-1,1]) b.box(w,0.14,0.16,PAL.woodD,[0,h+0.30,sz*d/2],null,{jitter:0.06});
+  for(const sx of [-1,1]) b.box(0.14,0.14,d,PAL.woodD,[sx*w/2,h+0.30,0],null,{jitter:0.06});
+  for(const sz of [-1,1]) b.box(w*0.86,0.06,0.10,PAL.woodL,[0,0.72,sz*d/2],null,{jitter:0.07});
+  b.add(new THREE.ConeGeometry(Math.max(w,d)*0.78,1.35,4,1),'#5b5546',
+    {pos:[0,h+1.00,0],rot:[0,Math.PI/4,0],jitter:0.05});
+  b.box(0.18,0.32,0.18,PAL.tileD,[0,h+1.82,0],null,{jitter:0.05});
+  b.add(new THREE.SphereGeometry(0.13,6,5),'#b08a4a',{pos:[0,h+2.02,0],jitter:0.04});
+  return b.build();
+}
+/* ② 重檐楼阁（正店 / 酒楼）：腰檐、平坐勾栏、格窗、匾额、檐灯 */
+function towerGeo(w,d,floors){
+  BUILDINGS++;
+  const b=new Builder(), h=3.15;
+  b.box(w+1.2,0.5,d+1.2,PAL.stone,[0,0.25,0],null,{jitter:0.05});
+  for(let f=0;f<floors;f++){
+    const y0=0.5+f*h;
+    b.box(w,h,0.26,f===0?'#c9bda0':'#d4c8aa',[0,y0+h/2,-d/2+0.13],null,{jitter:0.04});
+    for(const sx of [-1,1]) b.box(0.26,h,d,f===0?'#c9bda0':'#d4c8aa',[sx*(w/2-0.13),y0+h/2,0],null,{jitter:0.04});
+    const n=Math.max(3,Math.round(w/1.8));
+    for(let i=0;i<=n;i++) b.box(0.24,h,0.24,PAL.woodR,[-w/2+i*w/n,y0+h/2,d/2-0.10],null,{jitter:0.05});
+    for(let i=0;i<n;i++){
+      const x=-w/2+(i+0.5)*w/n;
+      b.box(w/n*0.72,1.25,0.07,'#332c22',[x,y0+h*0.58,d/2-0.02],null,{jitter:0.03});
+      for(let k=0;k<4;k++) b.box(0.045,1.20,0.09,PAL.woodL,[x-w/n*0.28+k*w/n*0.19,y0+h*0.58,d/2+0.01],null,{jitter:0.07});
+      b.box(w/n*0.72,0.05,0.09,PAL.woodL,[x,y0+h*0.58,d/2+0.01],null,{jitter:0.07});
+    }
+    const ey=y0+h;
+    b.push(roofGeo(w+3.0,d+3.0,ey+0.05,1.55,0.48,'#5d5848','#494538'));
+    b.box(w+3.2,0.22,0.28,PAL.tileD,[0,ey+1.58,0],null,{jitter:0.05});
+    if(f<floors-1){
+      b.box(w+2.2,0.16,d+2.2,PAL.woodD,[0,ey+1.72,0],null,{jitter:0.05});
+      for(let i=0;i<8;i++)
+        b.box(0.08,0.62,0.08,PAL.woodR,[-w/2-0.9+i*(w+1.8)/7,ey+2.10,d/2+1.0],null,{jitter:0.07});
+      b.box(w+2.0,0.07,0.08,PAL.woodR,[0,ey+2.42,d/2+1.0],null,{jitter:0.06});
+    }
+  }
+  b.box(w*0.46,0.52,0.10,'#463626',[0,2.55,d/2+0.16],null,{jitter:0.05});
+  b.box(w*0.38,0.34,0.04,'#c3ad84',[0,2.55,d/2+0.22],null,{jitter:0.04});
+  for(const s of [-1,1])
+    b.add(new THREE.SphereGeometry(0.19,7,6),'#a8402a',
+      {pos:[s*w*0.40,2.15,d/2+0.22],scale:[1,1.2,1],jitter:0.04});
+  return b.build();
+}
+/* ③ 四合院：院墙、门屋、正房、两厢、天井 */
+function courtyardGeo(w,d){
+  BUILDINGS++;
+  const b=new Builder(), hw=w/2, hd=d/2;
+  b.box(w,1.5,0.28,'#c9bda0',[0,0.75,-hd],null,{jitter:0.05});
+  for(const sx of [-1,1]) b.box(0.28,1.5,d,'#c9bda0',[sx*hw,0.75,0],null,{jitter:0.05});
+  for(const sx of [-1,1]) b.box(w*0.34,1.5,0.28,'#c9bda0',[sx*w*0.33,0.75,hd],null,{jitter:0.05});
+  // 门屋
+  b.box(w*0.32,2.6,0.9,'#8a6a48',[0,1.3,hd],null,{jitter:0.05});
+  const rg0=roofGeo(w*0.32+1.6,2.6,2.6,0.9,0.25,'#5b5546','#494538');
+  rg0.translate(0,0,hd); b.push(rg0);
+  // 正房
+  b.box(w*0.72,3.0,2.2,'#d0c5a8',[0,1.5,-hd+1.1],null,{jitter:0.05});
+  b.box(1.5,2.0,0.07,'#332c22',[0,1.0,-hd+2.22],null,{jitter:0.04});
+  const rg1=roofGeo(w*0.72+2.0,3.4,3.0,1.5,0.45,'#5d5848','#494538');
+  rg1.translate(0,0,-hd+1.1); b.push(rg1);
+  // 两厢
+  for(const sx of [-1,1]){
+    b.box(1.8,2.5,d*0.5,'#cbbfa2',[sx*(hw-0.9),1.25,0],null,{jitter:0.05});
+    b.box(2.4,0.28,d*0.5+0.8,'#5b5546',[sx*(hw-0.9),2.62,0],[0,0,sx*0.22],{jitter:0.05});
+    b.box(0.8,1.3,0.06,'#332c22',[sx*(hw-0.05),1.25,0],null,{jitter:0.04});
+  }
+  b.cyl(0.45,0.5,0.55,8,PAL.stone2,[0,0.28,0],null,{jitter:0.06});
+  return b.build();
+}
+/* ④ 仓廒 / 粮仓：高台基、硬山顶、通风高窗、圆形粮囤 */
+function granaryGeo(w,d,h){
+  BUILDINGS++;
+  const b=new Builder();
+  b.box(w+1.0,0.75,d+1.0,PAL.stone,[0,0.375,0],null,{jitter:0.05});
+  b.box(w,h,d,'#c2b393',[0,0.75+h/2,0],null,{jitter:0.05});
+  for(const s of [-1,1])
+    b.box(w+1.2,0.22,d*0.72,'#5a5546',[0,0.75+h+0.45,s*d*0.30],[s*0.40,0,0],{jitter:0.06});
+  b.box(w+1.3,0.24,0.30,PAL.tileD,[0,0.75+h+1.0,0],null,{jitter:0.05});
+  for(let i=0;i<6;i++){
+    const x=-w/2+(i+0.5)*w/6;
+    b.box(0.42,0.34,0.06,'#332c22',[x,0.75+h*0.72,d/2+0.02],null,{jitter:0.04});
+    for(let k=0;k<3;k++) b.box(0.05,0.32,0.08,PAL.woodL,[x-0.14+k*0.14,0.75+h*0.72,d/2+0.04],null,{jitter:0.07});
+  }
+  b.box(1.8,h*0.72,0.08,'#4a3624',[0,0.75+h*0.36,d/2+0.02],null,{jitter:0.05});
+  for(const s of [-1,1]) for(let i=0;i<2;i++){
+    const z=-d/3+i*d*0.66;
+    b.cyl(0.62,0.68,1.5,9,'#a48f68',[s*(w/2+1.6),1.05,z],null,{jitter:0.08});
+    b.add(new THREE.ConeGeometry(0.78,0.55,9,1),'#8d7c5e',{pos:[s*(w/2+1.6),2.05,z],jitter:0.07});
+  }
+  return b.build();
+}
+/* ⑤ 临水吊脚楼 / 水榭：木桩、挑台、全开格窗、临水勾栏 */
+function watersideGeo(w,d,h){
+  BUILDINGS++;
+  const b=new Builder();
+  for(const sx of [-1,1]) for(let i=0;i<4;i++)
+    b.cyl(0.09,0.11,2.2,5,PAL.woodD,[sx*w/2,-0.75,-d/2+i*d/3],null,{jitter:0.08});
+  b.box(w+1.6,0.20,d+1.6,PAL.woodL,[0,0.10,0.5],null,{jitter:0.06});
+  b.box(w,h,0.22,'#cbbfa2',[0,h/2+0.2,-d/2],null,{jitter:0.05});
+  for(const sx of [-1,1]) b.box(0.22,h,d,'#cbbfa2',[sx*w/2,h/2+0.2,0],null,{jitter:0.05});
+  for(let i=0;i<5;i++){
+    const x=-w/2+(i+0.5)*w/5;
+    b.box(0.26,h,0.26,PAL.woodR,[x,h/2+0.2,d/2],null,{jitter:0.06});
+    b.box(w/5*0.8,h*0.62,0.05,'#3b3327',[x,h*0.58,d/2-0.02],null,{jitter:0.04});
+    for(let k=0;k<3;k++) b.box(w/5*0.8,0.045,0.07,PAL.woodL,[x,h*0.36+k*h*0.22,d/2+0.01],null,{jitter:0.07});
+  }
+  b.push(roofGeo(w+2.0,d+2.0,h+0.2,1.5,0.45,'#5d5848','#494538'));
+  for(let i=0;i<7;i++) b.box(0.08,0.65,0.08,PAL.woodR,[-w/2+i*w/6,0.50,d/2+0.8],null,{jitter:0.07});
+  b.box(w,0.07,0.08,PAL.woodR,[0,0.84,d/2+0.8],null,{jitter:0.06});
+  return b.build();
+}
+/* ⑥ 街口牌坊 / 门楼：双柱、横枋、匾额、小屋顶 */
+function gateArchGeo(w,h){
+  BUILDINGS++;
+  const b=new Builder();
+  for(const s of [-1,1]){
+    b.cyl(0.20,0.26,h,7,PAL.woodR,[s*w/2,h/2,0],null,{jitter:0.06});
+    b.box(0.9,0.30,0.9,PAL.stone,[s*w/2,0.15,0],null,{jitter:0.06});
+    b.box(0.34,0.34,0.34,'#4a3624',[s*w/2,h*0.82,0],null,{jitter:0.06});
+  }
+  b.box(w+1.0,0.34,0.42,PAL.woodD,[0,h*0.82,0],null,{jitter:0.05});
+  b.box(w*0.62,0.68,0.12,'#463626',[0,h*0.66,0.28],null,{jitter:0.05});
+  b.box(w*0.54,0.48,0.05,'#c3ad84',[0,h*0.66,0.35],null,{jitter:0.04});
+  b.push(roofGeo(w+2.2,1.8,h+0.05,0.85,0.30,'#5b5546','#494538'));
+  for(const s of [-1,1]) b.box(0.22,0.34,0.22,PAL.tileD,[s*(w/2+0.9),h+0.95,0],[0,0,s*0.2],{jitter:0.05});
+  return b.build();
+}
+const STYLE_FN={
+  pavilion:  ()=>pavilionGeo(rr(4.2,6.5),rr(3.8,5.5),rr(2.6,3.4)),
+  tower:     ()=>towerGeo(rr(9,13),rr(7,9),rint(2,3)),
+  courtyard: ()=>courtyardGeo(rr(14,20),rr(12,17)),
+  granary:   ()=>granaryGeo(rr(10,16),rr(6,9),rr(3.0,4.2)),
+  waterside: ()=>watersideGeo(rr(7,10),rr(5,7),rr(2.6,3.4)),
+  gateArch:  ()=>gateArchGeo(rr(5,8),rr(4.2,5.6)),
+};
+const STYLE_XR={pavilion:[18,30],gateArch:[22,30],tower:[30,52],courtyard:[48,86],granary:[36,66],waterside:[19,25]};
+
+/* 货堆：麻袋、木箱、酒坛、竹筐、布卷随机组合 */
+function goodsGeo(){
+  const b=new Builder(), n=5+Math.floor(rr(0,6));
+  for(let i=0;i<n;i++){
+    const k=rnd(), x=(rnd()-0.5)*2.4, z=(rnd()-0.5)*1.7;
+    if(k<0.26) b.cyl(0.20,0.24,0.46,8,'#8c7960',[x,0.23,z],[rr(-0.08,0.08),0,rr(-0.08,0.08)],{jitter:0.12});
+    else if(k<0.52) b.box(0.56,0.34,0.50,'#a48f68',[x,0.17,z],[0,rr(0,1.6),0],{jitter:0.10});
+    else if(k<0.72) b.add(new THREE.SphereGeometry(0.28,6,5),'#b5a173',{pos:[x,0.26,z],scale:[1,0.8,1],jitter:0.10});
+    else if(k<0.88) b.cyl(0.16,0.14,0.62,7,'#9a855e',[x,0.31,z],[1.4,0,0],{jitter:0.10});
+    else b.cyl(0.26,0.22,0.28,9,'#7d6a4b',[x,0.14,z],null,{jitter:0.11});
+  }
+  return b.build();
+}
+
+function lanternPoleGeo(){
+  const b=new Builder();
+  b.cyl(0.055,0.075,3.4,5,PAL.woodD,[0,1.7,0],null,{jitter:0.06});
+  b.box(0.75,0.055,0.055,PAL.woodD,[0.35,3.35,0],null,{jitter:0.06});
+  b.cyl(0.018,0.018,0.42,3,'#4a3a28',[0.68,3.10,0],null,{jitter:0.05});
+  b.add(new THREE.SphereGeometry(0.19,8,6),'#a8402a',{pos:[0.68,2.83,0],scale:[1,1.22,1],jitter:0.04});
+  b.cyl(0.10,0.10,0.035,7,'#463626',[0.68,2.60,0],null,{jitter:0.05});
+  return b.build();
+}
+function hitchingPostGeo(){
+  const b=new Builder();
+  b.cyl(0.10,0.13,1.25,6,PAL.stone2,[0,0.62,0],null,{jitter:0.06});
+  b.box(0.42,0.11,0.11,PAL.stone3,[0,1.18,0],null,{jitter:0.06});
+  b.add(new THREE.SphereGeometry(0.13,6,5),PAL.stone3,{pos:[0,1.30,0],jitter:0.05});
+  b.cyl(0.02,0.02,1.6,3,'#6d5c42',[0.2,0.75,0.2],[0.9,0,0],{jitter:0.08});
+  return b.build();
+}
+function stoneLampGeo(){
+  const b=new Builder();
+  b.cyl(0.26,0.34,0.85,8,PAL.stone2,[0,0.42,0],null,{jitter:0.06});
+  b.box(0.52,0.42,0.52,'#c9bda0',[0,1.05,0],null,{jitter:0.06});
+  for(const s of [-1,1]) b.box(0.06,0.36,0.06,'#4a3f30',[s*0.22,1.05,0.27],null,{jitter:0.05});
+  b.box(0.72,0.10,0.72,PAL.stone3,[0,1.31,0],null,{jitter:0.06});
+  b.add(new THREE.ConeGeometry(0.46,0.32,4,1),PAL.tileD,{pos:[0,1.52,0],rot:[0,Math.PI/4,0],jitter:0.05});
+  return b.build();
+}
+/* 店面门脸：柜台、货架、匾额、灯笼、台阶 */
+function shopFrontGeo(w,h){
+  const b=new Builder();
+  b.box(w*0.72,0.86,0.50,'#7b5a3b',[0,0.43,0.55],null,{jitter:0.06});
+  b.box(w*0.76,0.10,0.62,PAL.woodL,[0,0.90,0.55],null,{jitter:0.06});
+  for(let i=0;i<3;i++) b.box(w*0.72,0.065,0.32,'#6a4d33',[0,1.12+i*0.48,-0.18],null,{jitter:0.07});
+  b.box(w*0.56,0.42,0.09,'#463626',[0,h*0.80,0.62],null,{jitter:0.05});
+  b.box(w*0.48,0.28,0.04,'#c3ad84',[0,h*0.80,0.68],null,{jitter:0.04});
+  for(const s of [-1,1]){
+    b.cyl(0.018,0.018,0.44,3,'#4a3a28',[s*w*0.42,h*0.70,0.62],null,{jitter:0.05});
+    b.add(new THREE.SphereGeometry(0.15,7,6),'#a8402a',{pos:[s*w*0.42,h*0.70-0.26,0.62],scale:[1,1.2,1],jitter:0.04});
+  }
+  for(let i=0;i<2;i++) b.box(w*0.78,0.12,0.38+i*0.22,'#a99b80',[0,0.06+i*0.12,0.78+i*0.18],null,{jitter:0.06});
+  return b.build();
+}
+
+/* 飞鸟：身 + 双翼（可扇动） + 尾 */
+function makeBird(){
+  const g=new THREE.Group();
+  const body=new THREE.SphereGeometry(0.13,6,5); body.scale(1.7,0.70,0.70);
+  g.add(new THREE.Mesh(paintGeo(body,'#4a4339',0.05),M.vc));
+  for(const s of [-1,1]){
+    const wg=new THREE.BoxGeometry(0.64,0.025,0.20); wg.translate(s*0.32,0,0);
+    const wm=new THREE.Mesh(paintGeo(wg,'#55503f',0.06),M.vc);
+    g.add(wm);
+    if(s<0) g.userData.wingL=wm; else g.userData.wingR=wm;
+  }
+  const tg=new THREE.BoxGeometry(0.24,0.02,0.10); tg.translate(-0.24,0,0);
+  g.add(new THREE.Mesh(paintGeo(tg,'#4a4339',0.05),M.vc));
+  return g;
+}
+function addFlock(parent,cz,n){
+  for(let i=0;i<n;i++){
+    const bird=makeBird(); bird.scale.setScalar(rr(1.05,1.75)); parent.add(bird);
+    addMobile({kind:'bird',obj:bird,cx:rr(-30,30),cy:rr(11,24),cz:cz+rr(-30,30),
+      rad:rr(9,24),spd:rr(0.15,0.34),ph:rr(0,6.28),tilt:rr(-0.16,0.16)});
+  }
+}
+/* 云：低透明度扁团，缓慢横移 */
+function makeCloud(){
+  const b=new Builder();
+  for(let i=0;i<6;i++){
+    const x=(i-2.5)*3.8+rr(-1,1), y=rr(-0.5,0.9), z=rr(-2.0,2.0), r=rr(3.4,6.0);
+    b.add(new THREE.SphereGeometry(1,8,6), i%2?'#fbf6e8':'#f3ead6',
+      {pos:[x,y,z],scale:[r,r*0.20,r*0.52],jitter:0.03});
+  }
+  const mat=new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:0.34,depthWrite:false,fog:false});
+  const m=new THREE.Mesh(b.build(),mat); m.renderOrder=-6;
+  return m;
+}
+function addClouds(parent,cz,n){
+  for(let i=0;i<n;i++){
+    const c=makeCloud(); parent.add(c);
+    addMobile({kind:'cloud',obj:c,cz:cz+rr(-28,28),y:rr(23,43),spd:rr(0.5,1.3),off:rr(55,165)});
+  }
+}
+function addFlag(obj){ addMobile({kind:'flag',obj,ph:rr(0,6.28),baseY:obj.rotation.y}); }
+
+/* 动态车马 / 轿 */
+function mobileCart(parent,x,z0,z1,speed,kind){
+  const b=new Builder();
+  if(kind==='beast'){
+    placeGeo(b,quadrupedGeo('donkey'),0,0,-2.5,Math.PI,0.95);
+    placeGeo(b,cartGeo(),0,0,1.0,0,1.05);
+  } else if(kind==='sedan') placeGeo(b,sedanGeo(),0,0,0,0,1.0);
+  else placeGeo(b,cartGeo(),0,0,0,0,1.2);
+  const mesh=new THREE.Mesh(b.build(),M.vc2); mesh.castShadow=true;
+  const grp=new THREE.Group(); grp.add(mesh); parent.add(grp);
+  addMobile({kind:'cart',obj:grp,x,z0,z1,speed,s:rr(z0,z1),
+    dir:rnd()>0.5?1:-1,ph:rr(0,6.28),y:BANK_Y});
+}
+/* 动态河船（漕运段） */
+function mobileBoat(parent,x,z0,z1,speed){
+  const b=new Builder();
+  b.push(hullGeo(14,3.6,1.3).geo);
+  b.add(new THREE.CylinderGeometry(1.30,1.30,4.4,10,1,true,0,Math.PI),'#8a7050',
+    {pos:[0,0.46,0],rot:[-Math.PI/2,0,0],jitter:0.06});
+  b.cyl(0.045,0.075,5.2,5,PAL.woodD,[0,2.6,-0.6],null,{jitter:0.06});
+  b.box(0.05,0.9,1.5,'#b0503a',[0,4.6,-0.5],null,{jitter:0.06});
+  for(let i=0;i<4;i++) b.box(0.7,0.38,0.55,'#a48f68',[rr(-0.5,0.5),0.62,-3+i*1.6],null,{jitter:0.10});
+  for(const s of [-1,1]) b.cyl(0.035,0.05,3.8,4,PAL.woodD,[s*1.5,0.55,3.0],[0.9,0,s*0.2],{jitter:0.08});
+  const mesh=new THREE.Mesh(b.build(),M.vc2); mesh.castShadow=true;
+  const grp=new THREE.Group(); grp.add(mesh); parent.add(grp);
+  addMobile({kind:'boat',obj:grp,x,z0,z1,speed,s:rr(z0,z1),dir:rnd()>0.5?1:-1,ph:rr(0,6.28)});
+}
+
+/* 五段统一增强配置 */
+const ENRICH_CFG={
+  0:{goods:20,trees:18,stalls:3,umb:4,lanterns:10,birds:10,clouds:3,carts:3,boats:0,circle:5,posts:8,houses:14,fronts:4,styles:[['pavilion',2],['courtyard',4],['gateArch',1]]},
+  1:{goods:24,trees:16,stalls:4,umb:4,lanterns:12,birds:11,clouds:3,carts:4,boats:3,circle:6,posts:8,houses:16,fronts:6,styles:[['granary',4],['waterside',4],['tower',2]]},
+  3:{goods:30,trees:13,stalls:6,umb:6,lanterns:16,birds:12,clouds:3,carts:5,boats:0,circle:7,posts:10,houses:20,fronts:8,styles:[['tower',4],['courtyard',3],['gateArch',2]]},
+  4:{goods:26,trees:11,stalls:4,umb:4,lanterns:13,birds:12,clouds:4,carts:4,boats:0,circle:6,posts:9,houses:14,fronts:5,styles:[['tower',2],['courtyard',3],['gateArch',2]]},
+  5:{goods:34,trees:14,stalls:7,umb:6,lanterns:20,birds:14,clouds:4,carts:6,boats:0,circle:8,posts:12,houses:24,fronts:10,styles:[['tower',5],['courtyard',5],['pavilion',2],['gateArch',3]]},
+};
+function enrichChapter(id,g,b){
+  const q=ENRICH_CFG[id]; if(!q) return;
+  const c=CHAPTERS[id], rand=mulberry32(31000+id*911);
+  const zA=c.z0+6, zB=c.z1-6, len=zB-zA, zc=(zA+zB)/2, isWater=(id===1);
+  const shoreX=()=> (rand()>0.5?1:-1)*rr(isWater?19:9, isWater?30:32);
+  // 静态：货堆、灯杆、拴马桩与石灯、树木
+  for(let i=0;i<q.goods;i++) placeGeo(b,goodsGeo(),shoreX(),BANK_Y,zA+rand()*len,rand()*3.14,rr(0.65,1.15));
+  for(let i=0;i<q.lanterns;i++) placeGeo(b,lanternPoleGeo(),shoreX(),BANK_Y,zA+rand()*len,rand()*3.14,rr(0.8,1.2));
+  for(let i=0;i<q.posts;i++) placeGeo(b,rand()>0.5?hitchingPostGeo():stoneLampGeo(),shoreX(),BANK_Y,zA+rand()*len,rand()*3.14,rr(0.8,1.15));
+  for(let i=0;i<q.trees;i++) b.push(treeGeo(shoreX(),zA+rand()*len,{scale:rr(0.7,1.15),bare:rand()>0.45}));
+  // 店面门脸与背景第二排屋舍（detail 细部）
+  // 六种新样式：按样式分配到街边 / 河岸 / 背景带，避免彼此穿插
+  for(const [name,n] of q.styles){
+    const xr=STYLE_XR[name];
+    for(let i=0;i<n;i++){
+      const s=(i%2?1:-1), x=s*rr(xr[0],xr[1]);
+      const z=zA+(i+0.5)*len/n+rr(-9,9);
+      placeGeo(b,STYLE_FN[name](),x,BANK_Y,z,s>0?-Math.PI/2:Math.PI/2);
+    }
+  }
+  for(let i=0;i<q.fronts;i++){
+    const s=i%2?1:-1;
+    placeGeo(b,shopFrontGeo(rr(5,8),rr(2.8,3.4)),s*rr(21,26),BANK_Y,zA+rand()*len,s>0?-Math.PI/2:Math.PI/2);
+  }
+  for(let i=0;i<q.houses;i++){
+    const s=i%2?1:-1;
+    placeGeo(b,houseGeo({w:rr(7,11),d:rr(6,9),h:2.9,floors:rand()>0.6?2:1,shop:true,
+      roofH:1.9,detail:true,tileA:'#665f4e',tileB:'#504a3b'}),
+      s*rr(42,70),BANK_Y,zA+rand()*len,s>0?-Math.PI/2:Math.PI/2);
+  }
+  for(let i=0;i<q.stalls;i++){
+    const s=i%2?1:-1;
+    addStall(b,s*rr(4,13),BANK_Y,zA+rand()*len,s>0?-Math.PI/2:Math.PI/2,rr(2.0,2.8),1.4,rand()>0.5?'#c3b18e':'#b8a482');
+  }
+  for(let i=0;i<q.umb;i++){
+    const s=i%2?1:-1;
+    addParasol(b,s*rr(3,12),BANK_Y,zA+rand()*len,rr(1.2,1.6),rand()>0.5?'#cbb894':PAL.cloth);
+  }
+  // 动态：旗幡、飞鸟、云、车马、船、转圈行人
+  const flags=['酒','茶','正店','香藥','當','麵','米','布','藥','客','腳店','孫羊'];
+  for(let i=0;i<6+id;i++){
+    const s=i%2?1:-1;
+    const m=addBanner(s*rr(19,23),BANK_Y+rr(3.8,4.8),zA+rand()*len,
+      s>0?-Math.PI/2:Math.PI/2,flags[i%flags.length],
+      {bg:rand()>0.5?'#ded2b0':'#d5c8a5',fg:'#2a251f',w:0.52,h:1.6},g);
+    addFlag(m);
+  }
+  addFlock(g,zc,q.birds);
+  addClouds(g,zc,q.clouds);
+  for(let i=0;i<q.carts;i++){
+    mobileCart(g,(i%2?1:-1)*rr(3,11),zA+8,zB-8,rr(0.9,1.8),i%3===0?'beast':(i%3===1?'sedan':'cart'));
+  }
+  for(let i=0;i<q.boats;i++) mobileBoat(g,rr(-9,9),134,250,rr(0.7,1.3));
+  for(let i=0;i<q.circle;i++){
+    addWalker({parent:g,axis:'circle',lane:(rand()>0.5?1:-1)*rr(3,12),
+      center:zA+rand()*len,rad:rr(1.6,3.4),s0:0,dir:1,min:0,max:1,
+      speed:rr(0.5,0.9),phase:rand()*6.28,robe:ROBES[Math.floor(rand()*ROBES.length)],
+      hat:rand()>0.6?'douli':'futou',scale:rr(0.93,1.04)});
+  }
+}
+
+function updateMobiles(t,dt){
+  for(const m of mobiles){
+    switch(m.kind){
+      case 'cart':{
+        m.s+=m.dir*m.speed*dt;
+        if(m.s>m.z1){ m.s=m.z1; m.dir=-1; } else if(m.s<m.z0){ m.s=m.z0; m.dir=1; }
+        m.obj.position.set(m.x,m.y+Math.sin(t*6+m.ph)*0.018,m.s);
+        const tg=m.dir>0?0:Math.PI, cur=m.obj.rotation.y;
+        m.obj.rotation.y=cur+(((tg-cur+Math.PI*3)%(Math.PI*2))-Math.PI)*(1-Math.exp(-dt*6));
+        break;
+      }
+      case 'boat':{
+        m.s+=m.dir*m.speed*dt;
+        if(m.s>m.z1){ m.s=m.z1; m.dir=-1; } else if(m.s<m.z0){ m.s=m.z0; m.dir=1; }
+        m.obj.position.set(m.x,0.12+Math.sin(t*0.9+m.ph)*0.05,m.s);
+        m.obj.rotation.z=Math.sin(t*0.6+m.ph)*0.022;
+        m.obj.rotation.x=Math.sin(t*0.45+m.ph)*0.012;
+        const tg=m.dir>0?0:Math.PI, cur=m.obj.rotation.y;
+        m.obj.rotation.y=cur+(((tg-cur+Math.PI*3)%(Math.PI*2))-Math.PI)*(1-Math.exp(-dt*3));
+        break;
+      }
+      case 'bird':{
+        const a=t*m.spd+m.ph;
+        m.obj.position.set(m.cx+Math.cos(a)*m.rad, m.cy+Math.sin(a*1.7)*1.5, m.cz+Math.sin(a)*m.rad*0.62);
+        m.obj.rotation.y=-a+Math.PI/2;
+        m.obj.rotation.z=m.tilt*Math.sin(a*0.7);
+        const f=Math.sin(t*9+m.ph)*0.55;
+        m.obj.userData.wingL.rotation.z=-0.15+f;
+        m.obj.userData.wingR.rotation.z= 0.15-f;
+        break;
+      }
+      case 'cloud':{
+        const x=((t*m.spd*0.55+m.off)%220)-110;
+        m.obj.position.set(x,m.y,m.cz);
+        m.obj.rotation.y=Math.sin(t*0.05+m.off)*0.10;
+        break;
+      }
+      case 'flag':{
+        m.obj.rotation.z=Math.sin(t*1.6+m.ph)*0.09;
+        m.obj.rotation.y=m.baseY+Math.sin(t*1.1+m.ph)*0.10;
+        break;
+      }
+    }
+  }
+}
+
 /* 章 0 · 郊野晨雾 */
 function buildCh0(g){
   const b=new Builder();
@@ -2026,8 +2481,8 @@ function buildCh0(g){
   const cot=[[34,340,0.3],[-38,372,-0.2],[52,418,0.1],[-30,446,-0.35],[68,455,0.4],[-62,330,0.25],[26,470,-0.1]];
   cot.forEach(([x,z,r],i)=>placeGeo(b,cottageGeo(6+rand()*3,5+rand()*2,2.6+rand()*0.6),x,BANK_Y,z,r));
   // 远村
-  for(let i=0;i<8;i++){
-    const x=(i%2?1:-1)*(75+rand()*45), z=310+i*22;
+  for(let i=0;i<16;i++){
+    const x=(i%2?1:-1)*(75+rand()*45), z=305+i*11;
     placeGeo(b,cottageGeo(6,5,2.5),x,BANK_Y,z,rand()*0.6-0.3);
   }
   // 小木桥（跨田沟）
@@ -2074,10 +2529,11 @@ function buildCh0(g){
   }
   for(let i=0;i<3;i++) b.push(treeGeo((i%2?1:-1)*(6+rand()*7),308+i*9,{scale:0.8,bare:true}));
 
+  enrichChapter(0,g,b);
   const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
 
   // 郊野人物：脚夫、轿夫、踏青者、农人
-  for(let i=0;i<26;i++){
+  for(let i=0;i<52;i++){
     const s=rand()>0.5?1:-1, lane=s*(2+rand()*24);
     addWalker({parent:g,axis:'z',lane,s0:308+rand()*160,dir:rand()>0.5?1:-1,
       min:305,max:475,speed:0.35+rand()*0.4,robe:ROBES[i%ROBES.length],
@@ -2107,9 +2563,9 @@ function buildCh1(g){
     b.push(treeGeo(x,z,{scale:0.85+rand()*0.4,bare:false}));
   }
   // 临河脚店／酒肆渐起
-  for(let i=0;i<10;i++){
-    const s=i%2?1:-1, x=s*(27+rand()*16), z=128+i*18+rand()*6;
-    placeGeo(b,houseGeo({w:8+rand()*4,d:7+rand()*2,h:2.9,floors:rand()>0.65?2:1,
+  for(let i=0;i<18;i++){
+    const s=i%2?1:-1, x=s*(27+rand()*16), z=128+i*9.5+rand()*5;
+    placeGeo(b,houseGeo({detail:true,w:8+rand()*4,d:7+rand()*2,h:2.9,floors:rand()>0.65?2:1,
       shop:rand()>0.4,roofH:1.9,tileA:'#645d4c',tileB:'#4f4a3b'}),x,BANK_Y,z,s>0?-Math.PI/2:Math.PI/2);
   }
   // 纤道缆绳与纤夫拉纤的绳
@@ -2130,14 +2586,15 @@ function buildCh1(g){
     b.cyl(0.24,0.27,0.55,8,'#8c7960',[x,BANK_Y+0.28,z],null,{jitter:0.12});
   }
 
+  enrichChapter(1,g,b);
   const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
 
   // 纤夫（沿岸 south 侧列队）、船工、行人
-  for(let i=0;i<8;i++){
+  for(let i=0;i<12;i++){
     addWalker({parent:g,axis:'z',lane:19.2,s0:150+i*17,dir:-1,min:125,max:295,
       speed:0.30+rand()*0.18,robe:ROBES[(i+3)%ROBES.length],hat:'douli',scale:0.95});
   }
-  for(let i=0;i<14;i++){
+  for(let i=0;i<40;i++){
     const s=rand()>0.5?1:-1;
     addWalker({parent:g,axis:'z',lane:s*(22+rand()*12),s0:125+rand()*170,dir:rand()>0.5?1:-1,
       min:122,max:298,speed:0.4+rand()*0.4,robe:ROBES[(i+5)%ROBES.length],hat:i%3?'futou':'douli'});
@@ -2159,10 +2616,10 @@ function buildCh3(g){
   const b=new Builder();
   const rand=mulberry32(9303);
   // 街两侧密集店铺，正店为 2–3 层高楼
-  for(let i=0;i<16;i++){
-    const s=i%2?1:-1, x=s*(25+rand()*17), z=-120-i*10+rand()*5;
+  for(let i=0;i<26;i++){
+    const s=i%2?1:-1, x=s*(25+rand()*17), z=-120-i*6.3+rand()*4;
     const big=(i===3||i===8);
-    placeGeo(b,houseGeo({w:big?14:8+rand()*4,d:big?9:7,h:big?3.4:2.95,
+    placeGeo(b,houseGeo({detail:true,w:big?14:8+rand()*4,d:big?9:7,h:big?3.4:2.95,
       floors:big?2:1,shop:rand()>0.35,roofH:big?2.4:1.95,
       tileA:'#665f4e',tileB:'#504a3b'}),x,BANK_Y,z,s>0?-Math.PI/2:Math.PI/2);
   }
@@ -2205,9 +2662,10 @@ function buildCh3(g){
     const s=i%2?1:-1;
     b.push(treeGeo(s*(21+rand()*4),-128-i*22,{scale:0.85,bare:rand()>0.6}));
   }
+  enrichChapter(3,g,b);
   const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
 
-  for(let i=0;i<30;i++){
+  for(let i=0;i<64;i++){
     const s=rand()>0.5?1:-1;
     addWalker({parent:g,axis:'z',lane:s*(4+rand()*19),s0:-120-rand()*155,dir:rand()>0.5?1:-1,
       min:-278,max:-114,speed:0.4+rand()*0.5,robe:ROBES[(i+2)%ROBES.length],
@@ -2275,9 +2733,9 @@ function buildCh4(g){
   placeGeo(b,sedanGeo(),-9,BANK_Y,-338, 0.08, 1.0);
   // 门侧店铺与旗杆
   for(const s of [-1,1]){
-    for(let i=0;i<3;i++){
-      placeGeo(b,houseGeo({w:9,d:7,h:3.0,floors:i===0?2:1,shop:i<2,roofH:2.0,
-        tileA:'#635d4c',tileB:'#4d483a'}),s*(24+i*13),BANK_Y,-330-i*22,s>0?-Math.PI/2:Math.PI/2);
+    for(let i=0;i<6;i++){
+      placeGeo(b,houseGeo({detail:true,w:9,d:7,h:3.0,floors:i===0?2:1,shop:i<2,roofH:2.0,
+        tileA:'#635d4c',tileB:'#4d483a'}),s*(24+i*8.5),BANK_Y,-330-i*14,s>0?-Math.PI/2:Math.PI/2);
     }
   }
   for(const [x,z] of [[16,-305],[-16,-305],[18,-392]]){
@@ -2286,9 +2744,10 @@ function buildCh4(g){
   }
   // 城墙根树与石灯
   for(let i=0;i<6;i++) b.push(treeGeo((i%2?1:-1)*(30+rand()*10),-292-i*20,{scale:0.9,bare:rand()>0.5}));
+  enrichChapter(4,g,b);
   const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
 
-  for(let i=0;i<18;i++){
+  for(let i=0;i<40;i++){
     const s=rand()>0.5?1:-1;
     addWalker({parent:g,axis:'z',lane:s*(3+rand()*16),s0:-285-rand()*130,dir:rand()>0.5?1:-1,
       min:-416,max:-284,speed:0.4+rand()*0.45,robe:ROBES[(i+4)%ROBES.length],
@@ -2304,10 +2763,10 @@ function buildCh5(g){
   const b=new Builder();
   const rand=mulberry32(11505);
   // 两侧密集店肆，间以二层楼阁
-  for(let i=0;i<22;i++){
-    const s=i%2?1:-1, x=s*(24+rand()*16), z=-424-i*9+rand()*4;
+  for(let i=0;i<34;i++){
+    const s=i%2?1:-1, x=s*(24+rand()*16), z=-424-i*5.8+rand()*3;
     const big=(i%5===0);
-    placeGeo(b,houseGeo({w:big?13:8+rand()*3,d:big?9:7,h:big?3.3:2.9,
+    placeGeo(b,houseGeo({detail:true,w:big?13:8+rand()*3,d:big?9:7,h:big?3.3:2.9,
       floors:big?2:1,shop:rand()>0.25,roofH:big?2.3:1.9,
       tileA:'#665f4e',tileB:'#504a3b'}),x,BANK_Y,z,s>0?-Math.PI/2:Math.PI/2);
   }
@@ -2343,9 +2802,10 @@ function buildCh5(g){
     const s=i%2?1:-1;
     addStall(b,s*(3.0+rand()*3.0),BANK_Y,-466-i*24,s>0?-Math.PI/2:Math.PI/2,2.2,1.4,'#bdae8b');
   }
+  enrichChapter(5,g,b);
   const m=new THREE.Mesh(b.build(),M.vc2); m.castShadow=true; m.receiveShadow=true; g.add(m);
 
-  for(let i=0;i<58;i++){
+  for(let i=0;i<96;i++){
     const s=rand()>0.5?1:-1;
     addWalker({parent:g,axis:'z',lane:s*(2+rand()*19),s0:-424-rand()*190,dir:rand()>0.5?1:-1,
       min:-616,max:-424,speed:0.4+rand()*0.55,robe:ROBES[(i+7)%ROBES.length],
@@ -2665,23 +3125,30 @@ function animate(){
 
   updateBoat(time, dt);
   updateChapterVisibility();
+  updateMobiles(time, dt);
 
   // 行人
   for(const w of walkers){
     const moving = w.pause<=0;
     if(moving){
-      w.s += w.dir*w.speed*dt;
-      if(w.s>w.max){ w.s=w.max; w.dir=-1; w.pause=rr(0.4,1.4); }
-      else if(w.s<w.min){ w.s=w.min; w.dir=1; w.pause=rr(0.4,1.4); }
+      if(w.axis!=='circle'){
+        w.s += w.dir*w.speed*dt;
+        if(w.s>w.max){ w.s=w.max; w.dir=-1; w.pause=rr(0.4,1.4); }
+        else if(w.s<w.min){ w.s=w.min; w.dir=1; w.pause=rr(0.4,1.4); }
+      }
       w.phase += dt*w.speed*5.4;
     } else {
       w.pause-=dt;
     }
     let x,z,y;
-    if(w.axis==='x'){ x=w.s; z=w.lane; y=walkY(x); }
+    if(w.axis==='circle'){
+      const a=w.phase*0.28;
+      x=w.lane+Math.cos(a)*w.rad; z=w.center+Math.sin(a)*w.rad; y=BANK_Y;
+    } else if(w.axis==='x'){ x=w.s; z=w.lane; y=walkY(x); }
     else { x=w.lane; z=w.s; y=BANK_Y; }
     w.group.position.set(x, y + (moving? Math.abs(Math.sin(w.phase))*0.022 : 0), z);
-    const target = w.axis==='x' ? (w.dir>0? Math.PI/2 : -Math.PI/2) : (w.dir>0? 0 : Math.PI);
+    const target = w.axis==='circle' ? (w.phase*0.28 + Math.PI/2)
+      : w.axis==='x' ? (w.dir>0? Math.PI/2 : -Math.PI/2) : (w.dir>0? 0 : Math.PI);
     let cur=w.group.rotation.y;
     let diff=((target-cur+Math.PI*3)%(Math.PI*2))-Math.PI;
     w.group.rotation.y = cur + diff*(1-Math.exp(-dt*7));
@@ -2812,6 +3279,11 @@ try{
     setMode, startTour, stopTour, goChapter, CHAPTERS,
     chapter(){ return curChapter; },
     chapters(){ return CHAPTERS.length; },
+    walkers(){ return walkers.length; },
+    buildings(){ return BUILDINGS; },
+    styles(){ return Object.keys(STYLE_FN); },
+    mobiles(){ const a={}; mobiles.forEach(m=>a[m.kind]=(a[m.kind]||0)+1); return {total:mobiles.length,byKind:a}; },
+    mobilePositions(){ return mobiles.map(m=>[m.obj.position.x,m.obj.position.y,m.obj.position.z]); },
     visibleChapters(){ return CHAPTERS.filter(c=>c.group.visible).map(c=>c.id); },
     info(){ return { calls:renderer.info.render.calls, tris:renderer.info.render.triangles, texture:renderer.info.memory.textures, geo:renderer.info.memory.geometries }; },
     boatZ(){ return boat.z; },

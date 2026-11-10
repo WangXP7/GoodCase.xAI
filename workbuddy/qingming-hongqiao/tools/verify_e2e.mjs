@@ -95,6 +95,22 @@ const walk = await page.evaluate(async ()=>{
   return [moved, g.length];
 });
 check('全卷六段行人移动', walk[0] >= 6, `${walk[0]}/${walk[1]} 个角色在移动`);
+const mob = await page.evaluate(()=>window.__qm.mobiles());
+check('动态物体总量 ≥ 140（飞鸟 / 云 / 车马 / 船 / 旗幡）', mob.total >= 140, JSON.stringify(mob.byKind));
+check('五类动态物体齐备', ['bird','cloud','cart','boat','flag'].every(k=>mob.byKind[k]>0),
+  `bird=${mob.byKind.bird} cloud=${mob.byKind.cloud} cart=${mob.byKind.cart} boat=${mob.byKind.boat} flag=${mob.byKind.flag}`);
+const nw = await page.evaluate(()=>window.__qm.walkers());
+check('角色数量 ≥ 300', nw >= 300, `walkers=${nw}`);
+const dyn = await page.evaluate(async()=>{
+  const a=window.__qm.mobilePositions();
+  await new Promise(r=>setTimeout(r,1200));
+  const b=window.__qm.mobilePositions();
+  let moved=0;
+  for(let i=0;i<a.length;i++)
+    if(Math.hypot(a[i][0]-b[i][0],a[i][1]-b[i][1],a[i][2]-b[i][2])>0.02) moved++;
+  return [moved,a.length];
+});
+check('动态物体持续运动', dyn[0] >= dyn[1]*0.5, `${dyn[0]}/${dyn[1]} 个物体在移动`);
 
 /* ---------- 4 视角切换 ---------- */
 await page.click('#btnRoam');
@@ -142,6 +158,10 @@ check('切回画卷视角并归位', back.mode==='scroll' && Math.abs(back.fov-3
 /* ---------- 4.5 全卷六段 ---------- */
 const nCh = await page.evaluate(()=>window.__qm.chapters());
 check('全卷共 6 段', nCh===6, `chapters=${nCh}`);
+const nb = await page.evaluate(()=>window.__qm.buildings());
+check('全卷屋舍 ≥ 250 栋', nb>=250, `buildings=${nb}`);
+const stn = await page.evaluate(()=>window.__qm.styles());
+check('六种屋舍样式齐备', stn.length===6, stn.join(' / '));
 await page.evaluate(()=>window.__qm.goChapter(4,true));
 await page.waitForTimeout(2600);
 const ch4 = await page.evaluate(()=>({ c:window.__qm.chapter(), pos:window.__qm.pos(), vis:window.__qm.visibleChapters() }));
