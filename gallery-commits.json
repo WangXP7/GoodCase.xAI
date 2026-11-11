@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "48332d3280c585a24b2e7616682be23773cbc0a5",
+  "snapshot": "03c499183bd734ff51b5fc9a4ced83621fd259ec",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -37,6 +37,11 @@
       "committedAt": "2026-11-06T17:53:36Z",
       "commit": "28dae2315dc5885acc8e9f477fb0d30c8d04e653",
       "scope": "codex/gif-motion-studies"
+    },
+    "codex/gunking/index.html": {
+      "committedAt": "2026-11-11T11:34:31Z",
+      "commit": "03c499183bd734ff51b5fc9a4ced83621fd259ec",
+      "scope": "codex/gunking"
     },
     "codex/hanmo-qingyun/index.html": {
       "committedAt": "2026-10-15T08:17:08Z",
