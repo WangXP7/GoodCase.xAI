@@ -10,11 +10,14 @@
   "originalAgent": "未记录",
   "originalModel": "未记录",
   "originalProductionTime": "未记录",
-  "recordedAt": "2026-11-11T11:33:56.536613+00:00",
-  "durationSeconds": 2112,
-  "durationLabel": "约 36 分钟",
-  "durationBasis": "本次任务起始至发布提交准备完成；不含原作制作时间及之后 Pages 后台部署等待",
+  "recordedAt": "2026-11-11T11:43:54.737233+00:00",
+  "durationSeconds": 2710,
+  "durationLabel": "约 46 分钟",
+  "durationBasis": "本次任务起始至本机与线上浏览器验证完成、最终发布登记；含 Pages 部署核验，不含原作制作时间与最终文字登记后的后台等待",
   "publishedPath": "codex/gunking/index.html",
   "originalUnmodified": true,
-  "completedScope": "源码解析、独立可读副本、本机运行工具、桌面与触屏模拟验证、GitHub Pages 案例发布；未优化原作"
+  "completedScope": "源码解析、独立可读副本、本机运行工具、桌面与触屏模拟验证、GitHub Pages 案例发布；未优化原作",
+  "analysisToFirstPublicationSeconds": 2112,
+  "liveVerified": true,
+  "validationChecks": 15
 }
