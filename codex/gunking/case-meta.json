@@ -1,0 +1,20 @@
+{
+  "title": "几猫国产3A大作 V1 · 港区突围",
+  "agent": "Codex",
+  "model": "GPT-6.1 Sol",
+  "scope": "本次源码解析、本机可编辑工程整理、验证与发布；不代表原作生成署名",
+  "startedAt": "2026-11-11T18:58:45+08:00",
+  "originalFile": "几猫国产3A大作_V1.html",
+  "originalSHA256": "9e55b5200b088adaf8e1152da04efc0d3b25e236e6baf2dee96f81e23e084966",
+  "originalBytes": 1425707,
+  "originalAgent": "未记录",
+  "originalModel": "未记录",
+  "originalProductionTime": "未记录",
+  "recordedAt": "2026-11-11T11:33:56.536613+00:00",
+  "durationSeconds": 2112,
+  "durationLabel": "约 36 分钟",
+  "durationBasis": "本次任务起始至发布提交准备完成；不含原作制作时间及之后 Pages 后台部署等待",
+  "publishedPath": "codex/gunking/index.html",
+  "originalUnmodified": true,
+  "completedScope": "源码解析、独立可读副本、本机运行工具、桌面与触屏模拟验证、GitHub Pages 案例发布；未优化原作"
+}

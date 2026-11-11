@@ -78,6 +78,7 @@
   set('codex/wanming-xianzhi','晚明县志 · 叙事治理','游戏|文字叙事|国风历史');
   set('codex/woolly-debts','羊债必须清 · 砸罐还债','游戏|经营养成|3D');
   const covers = {
+    'codex/gunking':'shots/03-gameplay.jpg',
     'workbuddy/diorama-winter':'shots/iter-13-final.png',
     'workbuddy/gummy-bears':'shots/01-pile.jpg',
     'workbuddy/song-courtyard':'shots/iter-13-final.png',
@@ -107,6 +108,12 @@
         {label:'科普解读',path:key+'/01-科普解读.md'},
         {label:'贡献辨析',path:key+'/02-Kagan与Soai贡献辨析.md'},
         {label:'演示提纲',path:key+'/04-演示文稿提纲-五页.md'}
+      ];
+      if(key==='codex/gunking') resources = [
+        {label:'原版游戏',path:key+'/index.html'},
+        {label:'技术解析',path:key+'/技术解析.html'},
+        {label:'运行与修改指南',path:key+'/README.md'},
+        {label:'验证记录',path:key+'/validation.json'}
       ];
       const tags = [...new Set(meta.tags||e.tags||['其他作品'])];
       return {id:path,key,path,title:meta.title||e.title.replace(/\s*\+\d+ 页$/,''),

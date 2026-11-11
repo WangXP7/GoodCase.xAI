@@ -1,0 +1,308 @@
+{
+  "checks": [
+    {
+      "name": "WASD 移动",
+      "passed": true,
+      "startPos": [
+        -32,
+        0,
+        6
+      ],
+      "afterMove": [
+        -29.638323439947854,
+        0,
+        6
+      ]
+    },
+    {
+      "name": "键盘备用开火与弹药消耗",
+      "passed": true,
+      "ammoBefore": 30,
+      "ammoAfter": 24
+    },
+    {
+      "name": "R 换弹",
+      "passed": true
+    },
+    {
+      "name": "P 暂停",
+      "passed": true
+    },
+    {
+      "name": "继续游戏",
+      "passed": true
+    },
+    {
+      "name": "靠近中继并按住 E 交互",
+      "passed": true,
+      "method": "仅传送玩家到交互范围，使用实际 E 输入完成切断"
+    },
+    {
+      "name": "三中继后撤离与完成状态",
+      "passed": true,
+      "method": "使用原作 debugCut 和玩家传送，验证状态机"
+    },
+    {
+      "name": "死亡状态",
+      "passed": true,
+      "method": "调用原作 damage 接口"
+    },
+    {
+      "name": "重试重新开始",
+      "passed": true
+    },
+    {
+      "name": "全流程无脚本或着色器错误",
+      "passed": true
+    },
+    {
+      "name": "移动端模拟首屏",
+      "passed": true,
+      "mobileInfo": {
+        "ready": true,
+        "fatal": null,
+        "errors": [],
+        "touch": false,
+        "overflow": false,
+        "buttons": [
+          {
+            "label": "开始行动",
+            "rect": {
+              "x": 16,
+              "y": 609.3125,
+              "w": 358,
+              "h": 52
+            }
+          },
+          {
+            "label": "设置",
+            "rect": {
+              "x": 16,
+              "y": 669.3125,
+              "w": 114,
+              "h": 46
+            }
+          },
+          {
+            "label": "项目介绍",
+            "rect": {
+              "x": 138,
+              "y": 669.3125,
+              "w": 114,
+              "h": 46
+            }
+          },
+          {
+            "label": "操作说明",
+            "rect": {
+              "x": 260,
+              "y": 669.3125,
+              "w": 114,
+              "h": 46
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "触屏模式启用",
+      "passed": true
+    },
+    {
+      "name": "默认参数和声音模块初始化、画廊 iframe 运行",
+      "passed": true
+    },
+    {
+      "name": "现有画廊详情与技术解析入口",
+      "passed": true
+    },
+    {
+      "name": "独立恢复副本可构建并运行",
+      "passed": true,
+      "recovered": {
+        "ready": true,
+        "fatal": null,
+        "errors": [],
+        "three": "180",
+        "modules": [
+          "THREE",
+          "params",
+          "events",
+          "rng",
+          "time",
+          "quality",
+          "showcase",
+          "render",
+          "renderer",
+          "scene",
+          "camera",
+          "viewCamera",
+          "mats",
+          "physics",
+          "props",
+          "input",
+          "level",
+          "backdrop",
+          "ground",
+          "fx",
+          "audio",
+          "player",
+          "combat",
+          "weapon",
+          "enemies",
+          "hud",
+          "game"
+        ],
+        "objectives": 3,
+        "colliders": 557
+      }
+    }
+  ],
+  "notes": [
+    "桌面使用真实键鼠事件；流程尾段使用原作调试接口验证，非人工通关。",
+    "画面测试禁音；音频播放暂未实听验收。"
+  ],
+  "desktop": {
+    "errors": [],
+    "fatal": null,
+    "stats": {
+      "calls": 212,
+      "tris": 1050102,
+      "geos": 203,
+      "tex": 143,
+      "programs": 113,
+      "res": [
+        605,
+        378
+      ],
+      "scale": 0.6,
+      "advanced": true,
+      "softShadows": true,
+      "fps": 44.2,
+      "state": "playing"
+    },
+    "three": "180",
+    "counts": {
+      "colliders": 557,
+      "objectives": 3,
+      "geometry": {
+        "calls": 212,
+        "tris": 1050102,
+        "geos": 203,
+        "tex": 143,
+        "programs": 113,
+        "res": [
+          605,
+          378
+        ],
+        "scale": 0.6,
+        "advanced": true,
+        "softShadows": true
+      }
+    },
+    "nav": {
+      "w": 142,
+      "h": 124,
+      "cell": 0.5
+    },
+    "quality": {
+      "name": "low",
+      "scale": 0.7,
+      "msaa": 0,
+      "shadow": 2048,
+      "tex": 512,
+      "volSteps": 12,
+      "ao": false,
+      "planar": 0,
+      "bloom": true,
+      "motionBlur": false,
+      "rain": 0.5
+    }
+  },
+  "mobile": {
+    "ready": true,
+    "fatal": null,
+    "errors": [],
+    "touch": false,
+    "overflow": false,
+    "buttons": [
+      {
+        "label": "开始行动",
+        "rect": {
+          "x": 16,
+          "y": 609.3125,
+          "w": 358,
+          "h": 52
+        }
+      },
+      {
+        "label": "设置",
+        "rect": {
+          "x": 16,
+          "y": 669.3125,
+          "w": 114,
+          "h": 46
+        }
+      },
+      {
+        "label": "项目介绍",
+        "rect": {
+          "x": 138,
+          "y": 669.3125,
+          "w": 114,
+          "h": 46
+        }
+      },
+      {
+        "label": "操作说明",
+        "rect": {
+          "x": 260,
+          "y": 669.3125,
+          "w": 114,
+          "h": 46
+        }
+      }
+    ]
+  },
+  "defaultEmbed": {
+    "ready": true,
+    "fatal": null,
+    "errors": [],
+    "quality": "high",
+    "audioStub": false,
+    "audioKeys": [
+      "autoIntensity",
+      "ctx",
+      "resume",
+      "play",
+      "loop",
+      "update",
+      "ready",
+      "selfTest",
+      "setIntensity",
+      "setInterior",
+      "setVolume",
+      "setPaused",
+      "names",
+      "intensity",
+      "interior",
+      "debug"
+    ],
+    "stats": {
+      "calls": 307,
+      "tris": 1872228,
+      "geos": 181,
+      "tex": 137,
+      "programs": 107,
+      "res": [
+        1440,
+        930
+      ],
+      "scale": 1,
+      "advanced": true,
+      "softShadows": true,
+      "fps": 15.3,
+      "state": "title"
+    }
+  }
+}

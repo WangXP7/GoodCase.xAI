@@ -630,6 +630,21 @@
       "title": "NVIDIA DGX B300 · 3D 交互式教学演示",
       "desc": "程序化重建完整 DGX B300（Blackwell Ultra）整机：双层计算托盘、穿孔通风网、8 组 GPU / Grace CPU / NVLink 与液冷管路；支持模块分解、散热风道、透视外壳、11 类部件点选讲解与四种演示模式，Three.js 本地 vendor 零外部资产 · 总耗时约 28 分钟",
       "agent": "WorkBuddy + Hy4"
+    },
+    {
+      "ns": "codex",
+      "dir": "gunking",
+      "entry": "index.html",
+      "title": "几猫国产3A大作 V1 · 港区突围",
+      "desc": "程序化港区第一人称射击 · Three.js r180 / WebGL2；切断三处中继并撤离，含机械敌人、湿面材质与自定义后处理。原作逐字节保留，附技术解析与本机编辑准备 · 总耗时约 36 分钟（仅本次解析、整理、验证与发布）",
+      "agent": "Codex + GPT-6.1 Sol",
+      "tags": [
+        "游戏",
+        "动作冒险",
+        "3D",
+        "Three.js",
+        "WebGL / GLSL"
+      ]
     }
   ]
 }

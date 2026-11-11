@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>几猫 V1 · 技术解析与本机修改指南</title>
+<style>html{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0b0e14;color:#dfe5ee;font:16px/1.85 'Microsoft YaHei',system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:42px 24px 90px}a{color:#a9c1ff}h1,h2,h3{line-height:1.4}h1{font-size:34px}h2{margin-top:46px;border-bottom:1px solid #2c3544;padding-bottom:12px}h3{color:#ffbd62}p,li{color:#bdc7d5}code,pre{font-family:Consolas,monospace}code{overflow-wrap:anywhere;background:#1c2432;padding:2px 5px;border-radius:3px}pre{white-space:pre-wrap;background:#151c28;padding:18px;border:1px solid #2c3544;border-radius:8px;font-size:14px;line-height:1.65}.note{border-left:3px solid #ffb347;background:#151c28;padding:16px 20px}.lead{font-size:19px}.muted{color:#8c9aaf;font-size:14px}.table{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;border:1px solid #2a3445;padding:10px 12px;vertical-align:top}th{background:#182232;color:#edf2ff}img{width:100%;height:auto;border-radius:8px}.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px}.flow div{background:#17202d;border:1px solid #33445b;padding:16px;border-radius:6px}.flow b{color:#ffbd62}nav{display:flex;gap:16px;flex-wrap:wrap;margin:22px 0}@media(max-width:600px){main{padding:24px 16px 60px}h1{font-size:27px}table{min-width:650px}}</style></head>
+<body><main>
+<div class="muted">GunKing / V1 / 2026-11-11 · 本次解析：Codex + GPT-6.1 Sol</div>
+<h1>几猫国产3A大作 V1<br>技术解析与本机修改指南</h1>
+<p class="lead">这是一个把 3D 引擎、程序化资源和 FPS 逻辑全部装进 HTML 的浏览器游戏。现已解析到可定位、运行、修改副本和验证的阶段，本轮没有优化或改写原作。</p>
+<nav><a href="index.html">进入原版游戏 →</a><a href="README.md">运行说明</a><a href="validation.json">验收记录</a><a href="case-meta.json">本次耗时与署名</a></nav>
+<div class="note"><strong>原文件保护：</strong>本地原始 HTML 为 1,425,707 字节，SHA-256：<code>9e55b5200b088adaf8e1152da04efc0d3b25e236e6baf2dee96f81e23e084966</code>。默认入口是逐字节副本。以下代码定位指向独立解析副本，不是对源文件的改动。原作界面提及 Fable5.2，但无法仅靠这段文案确认生成 Agent、模型或历史工时。</div>
+<h2>1. 技术栈与工程判断</h2>
+<div class="table"><table><tr><th>层</th><th>实际实现</th><th>依据与含义</th></tr>
+<tr><td>交付形态</td><td>HTML + CSS + 原生 JavaScript，单个内联脚本，自执行闭包</td><td>原始文件 6,215 行；1 个 style、1 个 script；没有外链 src/href、importmap 或资源下载地址。少量 fetch 代码来自内嵌引擎的通用加载器，不表示游戏在联网下载资源。</td></tr>
+<tr><td>3D 引擎</td><td>Three.js r180 / WebGL2</td><td>包中 <code>M2="180"</code>；运行时 <code>__G.THREE.REVISION === "180"</code>。不存在 Unity、Unreal 或独立客户端工程。</td></tr>
+<tr><td>渲染</td><td>WebGLRenderer、PBR 材质、自定义 ShaderMaterial、离屏 RenderTarget、深度纹理</td><td>有世界相机和武器相机、软阴影、程序化天空、体积光、AO、bloom、曝光与调色、运动模糊、湿地反射等路径。</td></tr>
+<tr><td>资源</td><td>运行时程序化几何、Canvas/数据纹理、文字图集与合批</td><td>港区、集装箱、起重机、枪械、机械敌人都由代码构建；无 GLB/FBX、图片、音频外链。体积小不意味着渲染开销小。</td></tr>
+<tr><td>物理与导航</td><td>自定义 AABB、射线检测、胶囊移动、0.5m 栅格与 A* 寻路</td><td>不是 Ammo/Cannon/Rapier。具备简单台阶、地面/天花板处理、视线与导航遮挡。</td></tr>
+<tr><td>玩法</td><td>事件总线、玩家移动、hitscan、武器动画、敌人行为、任务状态机</td><td>主要状态为 title → intro → playing，以及 paused / dead / complete；三处中继触发敌潮，最后到撤离点。</td></tr>
+<tr><td>音频</td><td>Web Audio API，程序化生成缓冲、音效、环境层与音乐层</td><td>支持空间声源、混响与战斗强度联动；无外部音轨。浏览器用户手势恢复 AudioContext。</td></tr>
+<tr><td>输入与界面</td><td>DOM/CSS HUD，Pointer Lock、键鼠、触屏、Gamepad API</td><td>设置存在 localStorage：<code>saltline.settings.v1</code>；没有账号、服务器存档或网络对战。</td></tr>
+<tr><td>构建线索</td><td>压缩、符号改名后的 bundle；具体构建工具不能确认</td><td>没有 package.json、构建配置或 source map；不能据此断言原作使用了 React、TypeScript、Vite 或 esbuild。</td></tr></table></div>
+<p>“国产3A大作”是原作标题与界面表述。本次技术结论是<strong>程序化浏览器 FPS 开发体验版</strong>，不由标题推导制作规模、商业品质或现代大型引擎特性。</p>
+<h2>2. 启动、依赖和每帧执行</h2>
+<div class="flow"><div><b>① 核心上下文</b><br>THREE / URL 参数 / events / rng / time / quality</div><div><b>② 场景资源</b><br>render → mats → physics / props / input → level → backdrop / ground</div><div><b>③ 玩法模块</b><br>fx / audio → player / combat → weapon / enemies → hud / game</div><div><b>④ 主循环</b><br>input → game → player / weapon / enemies → 场景特效 → audio / hud → render</div></div>
+<p><code>QC()</code> 创建 <code>window.__G</code>，由加载模块填入统一上下文；<code>Dy()</code> 管理事件，模块通过 <code>player:dead</code>、<code>enemy:killed</code>、<code>impact</code> 等事件通信。渲染器和关卡失败属于致命错误，部分可选模块失败会使用 stub，因此“首屏能出现”还需结合 <code>__errors</code> 判断模块是否完整。</p>
+<p>主循环使用 <code>renderer.setAnimationLoop</code>。正常逻辑 dt 被限制到 0.05 秒；游戏暂停时玩家、敌人和部分场景更新停住，渲染和 HUD 仍可运行。武器弹簧另作小步长积分。该实现不是完整固定步长物理框架，卡顿时的体感与时钟一致性值得后续专门测量。</p>
+<h2>3. 渲染为什么能形成这种观感</h2>
+<p>画面的核心是程序化几何和材质细节，加上多层光照与屏幕空间后处理：天空与暖色低角度太阳、环境捕获、定制软阴影、湿面高光与反射、体积空气、镜头泛光、颗粒、暗角、曝光与色调映射。世界相机和武器相机分离，使近处枪械有独立的视野与深度表现。</p>
+<p>后处理由 <code>jy()</code> 手工维护 render target 与全屏 pass，调参对象 <code>TUNE</code> 包括雾散射、AO 半径与强度、bloom、镜头污渍、条纹、曝光上下限、适应速度、调色、颗粒与锐化。渲染器有失败回退路径；质量选项与动态缩放决定实际启用的效果。并非每个画质档都同时启用全部效果。</p>
+<div class="table"><table><tr><th>档位</th><th>初始比例</th><th>MSAA</th><th>阴影</th><th>纹理</th><th>体积采样</th><th>AO / 反射 / 模糊</th></tr>
+<tr><td>low</td><td>0.70</td><td>0</td><td>2048</td><td>512</td><td>12</td><td>关 / 0 / 关</td></tr><tr><td>medium</td><td>0.85</td><td>2</td><td>2048</td><td>1024</td><td>16</td><td>开 / 0.5 / 关</td></tr><tr><td>high</td><td>1</td><td>4</td><td>4096</td><td>1024</td><td>24</td><td>开 / 0.5 / 开</td></tr><tr><td>ultra</td><td>1</td><td>4</td><td>4096</td><td>2048</td><td>40</td><td>开 / 1 / 开</td></tr></table></div>
+<p class="muted">这些是源码初始配置，不是每帧实际分辨率。运行时还会按设备、窗口与负载缩放；实测 low 曾从 1008×630 降至 605×378，因此不能把某次瞬时 FPS 当成固定分辨率基准。</p>
+<h2>4. 关卡、物理与导航</h2>
+<p>世界主要活动范围约 x∈[-40,40]、z∈[-30,30]，地面 y=0，海面 y=-1.6，码头海侧边界 x=30。<code>C1()</code> 建立港区、仓库和任务节点，静态几何按材质合批；动态部件、任务物件与图集文字分别处理。渲染细节与物理碰撞体分开，所以视觉精细并不等于逐三角形碰撞。</p>
+<p><code>d3()</code> 管理碰撞盒。本次场景运行时登记 557 个碰撞体；<code>moveCapsule()</code> 处理水平移动、台阶、落地和头顶约束，台阶高度阈值约 0.42m。<code>raycast()</code> 用于弹道、遮挡、地面与水面检测。</p>
+<p>导航网格为 142×124，共 17,608 格，格宽 0.5m。<code>nav.findPath()</code> 采用八邻域 A*、二叉堆与斜向距离启发，避免穿过被遮挡的对角角落；寻路后用栅格可视直线简化路径。它不是完整 NavMesh，也不支持一般多层寻路。<code>randomPoint()</code> 仍使用 Math.random，因此 seed 不保证所有行为完全确定。</p>
+<h2>5. 玩家、枪械与敌人</h2>
+<div class="table"><table><tr><th>系统</th><th>实际机制与默认值</th><th>后续定位</th></tr>
+<tr><td>移动</td><td>步行 3.8、冲刺 6.4、蹲行 1.9、瞄准移动 2.4；重力 21；跳跃顶点约 1m；coyote 0.12s、跳跃缓存 0.13s。受伤后 4s 开始回血，25/s。</td><td>Mt / x_</td></tr>
+<tr><td>枪械</td><td>弹匣 30，重置后备用弹由实现初始化为 150；射速 720 RPM、单发伤害 26、射线距离 300。武器弹匣、枪机、后坐力、瞄准、湿润度与换弹以程序动画控制。</td><td>Gv、B_、O_、H_、V_ / dm</td></tr>
+<tr><td>弹道与命中</td><td>玩家开火先求世界阻挡距离，再在此距离内求敌人命中；弱点伤害倍率 2.2。可见 tracer/枪口火焰是反馈表现，不表示玩家弹道为刚体子弹。</td><td>zv / combat.playerShot</td></tr>
+<tr><td>机械飞鸥</td><td>45 HP，弹道伤害 7、速度 70、3 发连射；飞行巡逻、发现与预警、攻击及毁坏效果。</td><td>Zv / Q_</td></tr>
+<tr><td>机械猎犬</td><td>140 HP、射击伤害 5、4 发连射、奔跑 4.5；近身冲扑伤害 15、冷却 3.5s；约 0.6s 重规划路径。</td><td>Kv / iM</td></tr>
+<tr><td>敌人协调</td><td>视距 45、视锥角 200°、听觉半径 45；攻击令牌限制同一时段火力；飞鸥池 10、猎犬池 8、残骸与弹体上限。</td><td>Ui / Em</td></tr></table></div>
+<p>敌人具备状态、视线/听觉、移动与攻击调度，但这是代码驱动的游戏 AI；运行时没有接入大模型 API。</p>
+<h2>6. 任务闭环与状态</h2>
+<p>开场 3.5s；初始巡逻为 2 飞鸥 + 1 猎犬。三处中继分别位于堆场 <code>(1.5,0,7.5)</code>、仓库 <code>(-2,0.03,-19.5)</code>、码头 <code>(23,0,0)</code>。需进入 2.2m 交互范围、朝向达标并按住 E 约 2.4s。任务节点、波次与撤离逻辑位于 <code>mM()</code>。</p>
+<p>三阶段波次配置分别是 3+1、3+2、4+3（飞鸥+猎犬）；任务层最多同时存活 9 个，按间隔逐个生成，并尽量选择远离玩家或视线外的出生点。切断全部中继后，目标改为撤离；撤离点 <code>(29,0,20)</code>、半径 2.5m。结算统计时间、命中率、击杀、重试次数并给出评级。暂停、死亡和完成是明确状态，并非仅切换一张 UI。</p>
+<h2>7. 音频、输入与数据</h2>
+<p>音频由 <code>c_()</code> / <code>u_()</code> 创建并挂接事件；脚步和命中按金属、混凝土、水、木材等表面分流，场景还有海浪、雨、风、雷、汽笛、机械声、无线电/任务音与多层配乐。原作提供禁音 stub；本次图形与玩法测试使用禁音，不据此承诺声音混音品质。</p>
+<p><code>v_()</code> 将键盘、鼠标、触屏和手柄映射为统一动作；支持 Pointer Lock 与失败后的备用视角模式。<code>pM()</code> 处理菜单、设置和帮助，<code>hM()</code> 更新 HUD。localStorage 只保存质量、灵敏度、反转、音量与视野等设置，未发现任务进度存档或后端服务。</p>
+<h2>8. 已恢复的代码地图</h2>
+<p>下表行号针对本次格式化副本 <code>src/game.js</code>。变量名保持原包状态；未虚构还原原始模块和命名。原作游戏代码约 688k 字符，Three.js 包约 702k 字符；展开后游戏副本约 3.7 万行，GLSL 模板保留在原位置。</p>
+<div class="table"><table><tr><th>副本位置</th><th>锚点</th><th>负责内容</th></tr>
+<tr><td>2 / 97 / 127</td><td>oi / zy / Dy</td><td>场景配置、画质选择、事件总线</td></tr><tr><td>683 / 899 / 1388 / 2005</td><td>Oy / qy / jy / Hg</td><td>天空、软阴影、后处理、渲染器</td></tr><tr><td>4429 / 4828</td><td>c3 / Gg</td><td>材质配置与工厂</td></tr><tr><td>5217 / 5466</td><td>d3 / nav.findPath</td><td>碰撞与导航</td></tr><tr><td>5683 / 5725</td><td>Gi / Yg</td><td>程序化道具登记与工厂</td></tr><tr><td>13177 / 15445</td><td>ob / C1</td><td>关卡构建辅助与主场景</td></tr><tr><td>18792 / 20087 / 22127</td><td>pv / O1 / Cf</td><td>远景、地面、特效</td></tr><tr><td>26451 / 27720</td><td>c_ / v_</td><td>音频与输入</td></tr><tr><td>28154 / 28193 / 28610</td><td>Mt / x_ / zv</td><td>移动参数、玩家、战斗命中</td></tr><tr><td>28931 / 31226 / 31249</td><td>mi / Gv 等 / dm</td><td>枪械模型配置、武器数值与控制</td></tr><tr><td>33123 / 33668 / 34638 / 34667</td><td>Zv / Kv / Ui / Em</td><td>两类敌人、调度参数与管理器</td></tr><tr><td>35238 / 35811</td><td>hM / pM</td><td>HUD、菜单与设置</td></tr><tr><td>36147 / 36181 / 36932</td><td>Yi / mM / QC</td><td>任务参数、状态机、启动与循环</td></tr></table></div>
+<h2>9. 本机运行与后续改动方式</h2>
+<p>直接双击 <code>启动.cmd</code>，或运行下面命令。工具只依赖本机已有 Node.js，无需 npm install。服务器只绑定 127.0.0.1，默认 8765 端口；如被占用，可先设环境变量 PORT。</p>
+<pre>node tools/build.mjs
+node tools/serve.mjs --open
+
+# 只检查哈希、语法与默认发布入口
+node tools/build.mjs --check
+
+# 以后授权修改时，编辑 src 副本后单独生成实验入口
+node tools/build.mjs --editable
+# 浏览 http://127.0.0.1:8765/editable.html</pre>
+<p>默认构建不会采用解析副本覆盖原作：它检查原始 SHA-256，再复制原文件为 <code>index.html</code>。<code>--editable</code> 才会把 vendor 与 src 拼接到一个闭包，生成另一文件。原始文件、默认入口和实验入口的职责分开，便于以后安全试改。<strong>本次没有执行任何玩法或视觉优化。</strong></p>
+<h2>10. 可直接利用的诊断接口</h2>
+<div class="table"><table><tr><th>入口 / 接口</th><th>作用</th></tr><tr><td><code>?q=low</code> / medium / high / ultra</td><td>固定初始质量档，方便比较</td></tr><tr><td><code>?q=low&amp;bench=1</code></td><td>原作自动巡览与平均/中位/p99 帧时统计；自动启动并禁音</td></tr><tr><td><code>?post=0</code>、<code>?ao=0</code>、<code>?vol=0</code>、<code>?bloom=0</code></td><td>逐项排查后处理开销；参数可用 &amp; 组合</td></tr><tr><td><code>?show=weapon</code> / mats / level / enemies / fx / props / render / backdrop / ground</td><td>单模块 showcase（部分场景使用 stub，不能代替完整游戏测试）</td></tr><tr><td><code>window.__ready</code> / <code>__fatal</code> / <code>__errors</code></td><td>启动与错误检查</td></tr><tr><td><code>window.__stats()</code></td><td>draw calls、三角形、几何/纹理/程序数量、分辨率与动态缩放</td></tr><tr><td><code>window.__G</code></td><td>原作完整运行时上下文：render / physics / player / combat / weapon / enemies / game</td></tr></table></div>
+<p>这是单文件闭包内恢复出来的源码副本，尚无模块级单元测试基础。后续修改应优先使用已有诊断接口和完整关卡回归；若要真正模块化，需另行授权并逐步拆分共享变量，不能简单加上 import/export。</p>
+<h2>11. 优化顺序建议（仅分析，未实施）</h2>
+<ol><li><strong>先固定测量条件。</strong>锁定视口、质量、相机路线与设备；同时记录实际 buffer 尺寸、缩放比例和帧时分位数。否则动态分辨率会掩盖改动代价。</li><li><strong>优先测 GPU 成本。</strong>依次关闭体积光、AO、反射、bloom、阴影和运动模糊，确定主要瓶颈。大面积像素处理、阴影和多 pass 比 HTML 大小更重要。</li><li><strong>降低静态与武器模型成本。</strong>统计远近景与枪械的三角形、draw call 和不可见开销；评估 LOD、重复实例、分区裁剪及高频材质共享，保持已存在的合批。</li><li><strong>测 CPU 热点。</strong>检查每次射线线性扫描碰撞盒、敌人重规划、临时向量分配、HUD DOM 更新的耗时，再决定空间索引、缓存与节流。</li><li><strong>改善工程可维护性。</strong>按渲染、资源、物理、输入、玩家、武器、敌人、任务分域恢复语义名称；建立稳定接口后再拆模块，避免一次性改动数万行。</li><li><strong>最后做手感与平衡。</strong>采集真实玩家的中继路线、死亡点、目标可读性、低生命恢复与敌潮压力；本轮机制通过不能证明平衡或好玩。</li></ol>
+<h2>12. 实际验收与限制</h2>
+<p>桌面玩法测试使用 Chromium、1440×900、low、禁音；另在画廊 iframe 中验证默认 high 与非 stub 音频模块初始化。原版成功启动，Three.js REVISION=180，未出现 fatal、脚本或着色器错误。实键输入验证移动、Enter 备用开火、R 换弹、P 暂停、继续，以及传送到中继附近后按住 E 完成真实交互。撤离、死亡与重试使用原作调试/伤害接口辅助验证，不能视为不作弊完整通关。</p>
+<p>本次验收数据和移动模拟结果以 <a href="validation.json">validation.json</a> 为准；图像见下方。尚未做实体手机、手柄、跨浏览器、声音实听和长期游玩验收；瞬时 FPS 仅作运行状态记录。没有原始工程与 source map，后续可修改的是恢复副本，而非完整原始开发工程。</p>
+<img src="shots/01-title.jpg" alt="原版首屏"><p class="muted">原版标题界面，未改动文案和视觉。</p>
+<img src="shots/03-gameplay.jpg" alt="原版游戏过程"><p class="muted">原版游戏画面，截图来自本机运行。</p>
+<h2>13. 来源与文件证据</h2>
+<p>技术判断以本地原始 HTML、恢复副本和本次运行时为主要证据。Third-party 许可来自 <a href="https://github.com/mrdoob/three.js/blob/r180/LICENSE">Three.js r180 官方 MIT LICENSE</a>，本地保存于 vendor。引擎 API 可参阅 <a href="https://threejs.org/docs/#api/en/renderers/WebGLRenderer">Three.js WebGLRenderer 文档</a>，但版本行为以原包 r180 的实际代码为准。</p>
+<p class="note">交付边界：已完成详细解析与本机修改准备；保留源文件原样并上传案例。后续实际优化需新的明确指令。本次署名、范围和总耗时见 <a href="case-meta.json">工作记录</a>。</p>
+</main></body></html>
