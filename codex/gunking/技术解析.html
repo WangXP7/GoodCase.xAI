@@ -1,15 +1,28 @@
-<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>几猫 V1 · 技术解析与本机修改指南</title>
-<style>html{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0b0e14;color:#dfe5ee;font:16px/1.85 'Microsoft YaHei',system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:42px 24px 90px}a{color:#a9c1ff}h1,h2,h3{line-height:1.4}h1{font-size:34px}h2{margin-top:46px;border-bottom:1px solid #2c3544;padding-bottom:12px}h3{color:#ffbd62}p,li{color:#bdc7d5}code,pre{font-family:Consolas,monospace}code{overflow-wrap:anywhere;background:#1c2432;padding:2px 5px;border-radius:3px}pre{white-space:pre-wrap;background:#151c28;padding:18px;border:1px solid #2c3544;border-radius:8px;font-size:14px;line-height:1.65}.note{border-left:3px solid #ffb347;background:#151c28;padding:16px 20px}.lead{font-size:19px}.muted{color:#8c9aaf;font-size:14px}.table{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;border:1px solid #2a3445;padding:10px 12px;vertical-align:top}th{background:#182232;color:#edf2ff}img{width:100%;height:auto;border-radius:8px}.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px}.flow div{background:#17202d;border:1px solid #33445b;padding:16px;border-radius:6px}.flow b{color:#ffbd62}nav{display:flex;gap:16px;flex-wrap:wrap;margin:22px 0}@media(max-width:600px){main{padding:24px 16px 60px}h1{font-size:27px}table{min-width:650px}}</style></head>
-<body><main>
-<div class="muted">GunKing / V1 / 2026-11-11 · 本次解析：Codex + GPT-6.1 Sol</div>
-<h1>几猫国产3A大作 V1<br>技术解析与本机修改指南</h1>
-<p class="lead">这是一个把 3D 引擎、程序化资源和 FPS 逻辑全部装进 HTML 的浏览器游戏。现已解析到可定位、运行、修改副本和验证的阶段，本轮没有优化或改写原作。</p>
-<nav><a href="index.html">进入原版游戏 →</a><a href="README.md">运行说明</a><a href="validation.json">验收记录</a><a href="case-meta.json">本次耗时与署名</a></nav>
-<div class="note"><strong>原文件保护：</strong>本地原始 HTML 为 1,425,707 字节，SHA-256：<code>9e55b5200b088adaf8e1152da04efc0d3b25e236e6baf2dee96f81e23e084966</code>。默认入口是逐字节副本。以下代码定位指向独立解析副本，不是对源文件的改动。原作界面提及 Fable5.2，但无法仅靠这段文案确认生成 Agent、模型或历史工时。</div>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>枪王 GunKing · 溯源还原与技术解析</title><style>html{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0b0e14;color:#dfe5ee;font:16px/1.85 'Microsoft YaHei',system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:42px 24px 90px}a{color:#a9c1ff}h1,h2,h3{line-height:1.4}h1{font-size:34px}h2{margin-top:46px;border-bottom:1px solid #2c3544;padding-bottom:12px}h3{color:#ffbd62}p,li{color:#bdc7d5}code,pre{font-family:Consolas,monospace}code{overflow-wrap:anywhere;background:#1c2432;padding:2px 5px;border-radius:3px}pre{white-space:pre-wrap;background:#151c28;padding:18px;border:1px solid #2c3544;border-radius:8px;font-size:14px;line-height:1.65}.note{border-left:3px solid #ffb347;background:#151c28;padding:16px 20px}.lead{font-size:19px}.muted{color:#8c9aaf;font-size:14px}.table{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;border:1px solid #2a3445;padding:10px 12px;vertical-align:top}th{background:#182232;color:#edf2ff}img{width:100%;height:auto;border-radius:8px}.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px}.flow div{background:#17202d;border:1px solid #33445b;padding:16px;border-radius:6px}.flow b{color:#ffbd62}nav{display:flex;gap:16px;flex-wrap:wrap;margin:22px 0}@media(max-width:600px){main{padding:24px 16px 60px}h1{font-size:27px}table{min-width:650px}}</style></head><body><main>
+<div class="muted">GunKing / 中文还原版 / 2026-11-12 · 本轮执行：Codex + GPT-6.1 Sol</div>
+<h1>枪王 GunKing · 港区突围<br>溯源、还原与技术解析</h1>
+<p class="lead">固定 Saltline 上游程序，剔除流传版的旧改名与自主研发宣传，保留中文汉化；按用户补充指令，将游戏名称与相关可见标识替换为“枪王 / GunKing”。原作来源独立保留。本轮停在可修改阶段，未优化画质、玩法或平衡。</p>
+<nav><a href="index.html">进入枪王 →</a><a href="README.md">本机运行与修改</a><a href="source-audit.json">来源与差异证据</a><a href="validation.json">本轮验证</a><a href="case-meta.json">Agent、模型与耗时</a></nav>
+<h2>来源确认与版本边界</h2>
+<p>代码中的 SALTLINE_SKY、SALTLINE_SHADOW、SALTLINE_POST、Saltline 设置键和场景机制指向 Saltline。进一步核对后，采用 <a href="https://github.com/realcodebear/saltline-fable-5.2">realcodebear/saltline-fable-5.2</a> 的固定 <a href="https://github.com/realcodebear/saltline-fable-5.2/blob/09d5fc9a5678eb398edfd7d0f0be6ef7754f6538/index.html">09d5fc9 版本 index.html</a> 为程序基准。它自称第三方原版镜像，不是原作者仓库。</p>
+<p>镜像 README 记录原作发布者为 Felix Rieseberg，模型为 Claude Fable 5.2，并链接 <a href="https://claude.ai/artifact/BGY1SztrAYcJQHSsnHHGmp">原始 Artifact</a> 和 <a href="https://x.com/felixrieseberg/status/2119925633564463609">原发布帖</a>。本次未直接取得这两页的完整正文，因此“作者、模型、约 8 小时制作”等历史信息归因于镜像来源记录，不作为本次独立审计结论；具体运行 Agent 未推定。</p>
+<div class="note"><strong>纠正上一轮范围：</strong>上一轮仅解析了本地流传版，没有完成原作溯源。本轮重新比较固定 GitHub 基准，并将程序还原与中文适配做成可复核补丁。输入文件仍本地保留不改；当前发布入口已经换成中文还原版。</div>
+<div class="table"><table><tr><th>对象</th><th>身份 / 哈希</th><th>处理方式</th></tr>
+<tr><td>GitHub 固定基准</td><td>1,423,569 B；SHA-256 <code>f34e6debbfa7526b72be2daa24595c2f195e102a7aede4f22e59138c99cd6852</code></td><td>仅获取对应 HTML 与来源说明，不克隆仓库；保留于 reference/。</td></tr>
+<tr><td>最初流传版输入</td><td><code>几猫国产3A大作_V1.html</code>；SHA-256 <code>9e55b5200b088adaf8e1152da04efc0d3b25e236e6baf2dee96f81e23e084966</code></td><td>本地只读留作比对，不再作为发布版或上传内容。</td></tr>
+<tr><td>当前发布基线</td><td><code>GunKing_中文还原版.html</code>；完整哈希见 source-audit.json</td><td>用户命名为“枪王 / GunKing”，index.html 与此基线一致。</td></tr></table></div>
+<h2>还原清单与比对结果</h2>
+<div class="table"><table><tr><th>分类</th><th>具体处理</th></tr>
+<tr><td>旧改名与宣传</td><td>删除“几猫”“国产3A”“自主研发”文案；移除额外项目介绍按钮、页签、面板及对应事件分支。</td></tr>
+<tr><td>道具与虚构品牌</td><td>恢复 PAC-9 Longshore 等原有身份；航运公司、船名、厂商采用原名或对应译名，去掉植入的旧改名。</td></tr>
+<tr><td>保留汉化</td><td>菜单、HUD、设置、操作帮助、任务、无线电、结算、方向、场景铭牌、中文字体及必要行距/字距。</td></tr>
+<tr><td>本轮授权标识</td><td>游戏标题“枪王 / GunKing”，相关可见港区标识随之替换；原作者来源署名分开保留。SALTLINE_SHADER 等内部诊断标识未无故重命名。</td></tr>
+<tr><td>非文本逻辑</td><td>从固定上游程序应用 193 处可重放中文/标识补丁。排除敌人名称显示、画质按钮和自动画质说明三处纯显示映射后，非文本 AST 结构、数值与控制流程一致。</td></tr>
+<tr><td>着色器与引擎</td><td>153 段 GLSL 模板逐段一致。Three.js 运行时代码忽略 CRLF/LF 换行差异后相同。</td></tr></table></div>
+<p>AST 核对会忽略文本字面量与解析器位置元数据，并将三处显示映射归一到上游表达式；其余语法结构、标识符和数值须一致。GLSL 模板另外精确比较，避免把着色器字符串变化误当汉化。<code>localization/zh-CN.patches.json</code> 保留每个补丁的原文、替换文、字节对应的 JavaScript 字符偏移和分类。该验证证明本轮范围受控，不等于完整形式化正确性证明。</p>
 <h2>1. 技术栈与工程判断</h2>
 <div class="table"><table><tr><th>层</th><th>实际实现</th><th>依据与含义</th></tr>
-<tr><td>交付形态</td><td>HTML + CSS + 原生 JavaScript，单个内联脚本，自执行闭包</td><td>原始文件 6,215 行；1 个 style、1 个 script；没有外链 src/href、importmap 或资源下载地址。少量 fetch 代码来自内嵌引擎的通用加载器，不表示游戏在联网下载资源。</td></tr>
+<tr><td>交付形态</td><td>HTML + CSS + 原生 JavaScript，单个内联脚本，自执行闭包</td><td>当前发布文件为单个 HTML；1 个 style、1 个 script；没有外链 src/href、importmap 或资源下载地址。少量 fetch 代码来自内嵌引擎的通用加载器，不表示游戏在联网下载资源。</td></tr>
 <tr><td>3D 引擎</td><td>Three.js r180 / WebGL2</td><td>包中 <code>M2="180"</code>；运行时 <code>__G.THREE.REVISION === "180"</code>。不存在 Unity、Unreal 或独立客户端工程。</td></tr>
 <tr><td>渲染</td><td>WebGLRenderer、PBR 材质、自定义 ShaderMaterial、离屏 RenderTarget、深度纹理</td><td>有世界相机和武器相机、软阴影、程序化天空、体积光、AO、bloom、曝光与调色、运动模糊、湿地反射等路径。</td></tr>
 <tr><td>资源</td><td>运行时程序化几何、Canvas/数据纹理、文字图集与合批</td><td>港区、集装箱、起重机、枪械、机械敌人都由代码构建；无 GLB/FBX、图片、音频外链。体积小不意味着渲染开销小。</td></tr>
@@ -18,7 +31,7 @@
 <tr><td>音频</td><td>Web Audio API，程序化生成缓冲、音效、环境层与音乐层</td><td>支持空间声源、混响与战斗强度联动；无外部音轨。浏览器用户手势恢复 AudioContext。</td></tr>
 <tr><td>输入与界面</td><td>DOM/CSS HUD，Pointer Lock、键鼠、触屏、Gamepad API</td><td>设置存在 localStorage：<code>saltline.settings.v1</code>；没有账号、服务器存档或网络对战。</td></tr>
 <tr><td>构建线索</td><td>压缩、符号改名后的 bundle；具体构建工具不能确认</td><td>没有 package.json、构建配置或 source map；不能据此断言原作使用了 React、TypeScript、Vite 或 esbuild。</td></tr></table></div>
-<p>“国产3A大作”是原作标题与界面表述。本次技术结论是<strong>程序化浏览器 FPS 开发体验版</strong>，不由标题推导制作规模、商业品质或现代大型引擎特性。</p>
+<p>流传版本的“国产3A”属于后加宣传，不是本轮采用的作品名称或品质结论。当前为<strong>基于 Saltline 的程序化浏览器 FPS 中文还原版</strong>，使用用户指定名称“枪王 / GunKing”。</p>
 <h2>2. 启动、依赖和每帧执行</h2>
 <div class="flow"><div><b>① 核心上下文</b><br>THREE / URL 参数 / events / rng / time / quality</div><div><b>② 场景资源</b><br>render → mats → physics / props / input → level → backdrop / ground</div><div><b>③ 玩法模块</b><br>fx / audio → player / combat → weapon / enemies → hud / game</div><div><b>④ 主循环</b><br>input → game → player / weapon / enemies → 场景特效 → audio / hud → render</div></div>
 <p><code>QC()</code> 创建 <code>window.__G</code>，由加载模块填入统一上下文；<code>Dy()</code> 管理事件，模块通过 <code>player:dead</code>、<code>enemy:killed</code>、<code>impact</code> 等事件通信。渲染器和关卡失败属于致命错误，部分可选模块失败会使用 stub，因此“首屏能出现”还需结合 <code>__errors</code> 判断模块是否完整。</p>
@@ -49,32 +62,34 @@
 <p>音频由 <code>c_()</code> / <code>u_()</code> 创建并挂接事件；脚步和命中按金属、混凝土、水、木材等表面分流，场景还有海浪、雨、风、雷、汽笛、机械声、无线电/任务音与多层配乐。原作提供禁音 stub；本次图形与玩法测试使用禁音，不据此承诺声音混音品质。</p>
 <p><code>v_()</code> 将键盘、鼠标、触屏和手柄映射为统一动作；支持 Pointer Lock 与失败后的备用视角模式。<code>pM()</code> 处理菜单、设置和帮助，<code>hM()</code> 更新 HUD。localStorage 只保存质量、灵敏度、反转、音量与视野等设置，未发现任务进度存档或后端服务。</p>
 <h2>8. 已恢复的代码地图</h2>
-<p>下表行号针对本次格式化副本 <code>src/game.js</code>。变量名保持原包状态；未虚构还原原始模块和命名。原作游戏代码约 688k 字符，Three.js 包约 702k 字符；展开后游戏副本约 3.7 万行，GLSL 模板保留在原位置。</p>
+<p>下表行号针对本轮还原后的格式化副本 <code>src/game.js</code>。变量名保持原包状态；未虚构还原原始模块和命名。原作游戏代码约 688k 字符，Three.js 包约 702k 字符；展开后游戏副本约 3.7 万行，GLSL 模板保留在原位置。</p>
 <div class="table"><table><tr><th>副本位置</th><th>锚点</th><th>负责内容</th></tr>
-<tr><td>2 / 97 / 127</td><td>oi / zy / Dy</td><td>场景配置、画质选择、事件总线</td></tr><tr><td>683 / 899 / 1388 / 2005</td><td>Oy / qy / jy / Hg</td><td>天空、软阴影、后处理、渲染器</td></tr><tr><td>4429 / 4828</td><td>c3 / Gg</td><td>材质配置与工厂</td></tr><tr><td>5217 / 5466</td><td>d3 / nav.findPath</td><td>碰撞与导航</td></tr><tr><td>5683 / 5725</td><td>Gi / Yg</td><td>程序化道具登记与工厂</td></tr><tr><td>13177 / 15445</td><td>ob / C1</td><td>关卡构建辅助与主场景</td></tr><tr><td>18792 / 20087 / 22127</td><td>pv / O1 / Cf</td><td>远景、地面、特效</td></tr><tr><td>26451 / 27720</td><td>c_ / v_</td><td>音频与输入</td></tr><tr><td>28154 / 28193 / 28610</td><td>Mt / x_ / zv</td><td>移动参数、玩家、战斗命中</td></tr><tr><td>28931 / 31226 / 31249</td><td>mi / Gv 等 / dm</td><td>枪械模型配置、武器数值与控制</td></tr><tr><td>33123 / 33668 / 34638 / 34667</td><td>Zv / Kv / Ui / Em</td><td>两类敌人、调度参数与管理器</td></tr><tr><td>35238 / 35811</td><td>hM / pM</td><td>HUD、菜单与设置</td></tr><tr><td>36147 / 36181 / 36932</td><td>Yi / mM / QC</td><td>任务参数、状态机、启动与循环</td></tr></table></div>
-<h2>9. 本机运行与后续改动方式</h2>
-<p>直接双击 <code>启动.cmd</code>，或运行下面命令。工具只依赖本机已有 Node.js，无需 npm install。服务器只绑定 127.0.0.1，默认 8765 端口；如被占用，可先设环境变量 PORT。</p>
+<tr><td>2 / 97 / 127</td><td>oi / zy / Dy</td><td>场景配置、画质选择、事件总线</td></tr><tr><td>683 / 899 / 1388 / 2005</td><td>Oy / qy / jy / Hg</td><td>天空、软阴影、后处理、渲染器</td></tr><tr><td>4429 / 4828</td><td>c3 / Gg</td><td>材质配置与工厂</td></tr><tr><td>5217 / 5466</td><td>d3 / nav.findPath</td><td>碰撞与导航</td></tr><tr><td>5683 / 5725</td><td>Gi / Yg</td><td>程序化道具登记与工厂</td></tr><tr><td>13177 / 15447</td><td>ob / C1</td><td>关卡构建辅助与主场景</td></tr><tr><td>18788 / 20084 / 22124</td><td>pv / O1 / Cf</td><td>远景、地面、特效</td></tr><tr><td>26448 / 27717</td><td>c_ / v_</td><td>音频与输入</td></tr><tr><td>28151 / 28190 / 28607</td><td>Mt / x_ / zv</td><td>移动参数、玩家、战斗命中</td></tr><tr><td>28931 / 31226 / 31249</td><td>mi / Gv 等 / dm</td><td>枪械模型配置、武器数值与控制</td></tr><tr><td>33123 / 33668 / 34638 / 34667</td><td>Zv / Kv / Ui / Em</td><td>两类敌人、调度参数与管理器</td></tr><tr><td>35238 / 35811</td><td>hM / pM</td><td>HUD、菜单与设置</td></tr><tr><td>36136 / 36170 / 36921</td><td>Yi / mM / QC</td><td>任务参数、状态机、启动与循环</td></tr></table></div>
+
+<h2>9. 本机运行与后续修改</h2>
+<p>双击 <code>启动.cmd</code>，或使用下列命令。仅依赖本机已有 Node.js；服务只绑定 127.0.0.1:8765，可用 PORT 环境变量换端口。没有 npm 安装步骤，也不下载外链字体。</p>
 <pre>node tools/build.mjs
 node tools/serve.mjs --open
-
-# 只检查哈希、语法与默认发布入口
 node tools/build.mjs --check
+node tools/verify-source.mjs
 
-# 以后授权修改时，编辑 src 副本后单独生成实验入口
+# 后续获准优化时编辑 src/ 副本，再生成独立实验入口
 node tools/build.mjs --editable
-# 浏览 http://127.0.0.1:8765/editable.html</pre>
-<p>默认构建不会采用解析副本覆盖原作：它检查原始 SHA-256，再复制原文件为 <code>index.html</code>。<code>--editable</code> 才会把 vendor 与 src 拼接到一个闭包，生成另一文件。原始文件、默认入口和实验入口的职责分开，便于以后安全试改。<strong>本次没有执行任何玩法或视觉优化。</strong></p>
+# http://127.0.0.1:8765/editable.html</pre>
+<p>默认构建校验输入备份和中文还原版基线哈希，再复制基线为 index.html。verify-source 会从固定上游重放审查补丁，并检查发布脚本没有混入额外修改。--editable 只生成另一文件供后续优化试验，不覆盖发布基线或最初输入。恢复副本保留压缩变量名，不能伪称获得完整原始开发工程。</p>
 <h2>10. 可直接利用的诊断接口</h2>
 <div class="table"><table><tr><th>入口 / 接口</th><th>作用</th></tr><tr><td><code>?q=low</code> / medium / high / ultra</td><td>固定初始质量档，方便比较</td></tr><tr><td><code>?q=low&amp;bench=1</code></td><td>原作自动巡览与平均/中位/p99 帧时统计；自动启动并禁音</td></tr><tr><td><code>?post=0</code>、<code>?ao=0</code>、<code>?vol=0</code>、<code>?bloom=0</code></td><td>逐项排查后处理开销；参数可用 &amp; 组合</td></tr><tr><td><code>?show=weapon</code> / mats / level / enemies / fx / props / render / backdrop / ground</td><td>单模块 showcase（部分场景使用 stub，不能代替完整游戏测试）</td></tr><tr><td><code>window.__ready</code> / <code>__fatal</code> / <code>__errors</code></td><td>启动与错误检查</td></tr><tr><td><code>window.__stats()</code></td><td>draw calls、三角形、几何/纹理/程序数量、分辨率与动态缩放</td></tr><tr><td><code>window.__G</code></td><td>原作完整运行时上下文：render / physics / player / combat / weapon / enemies / game</td></tr></table></div>
 <p>这是单文件闭包内恢复出来的源码副本，尚无模块级单元测试基础。后续修改应优先使用已有诊断接口和完整关卡回归；若要真正模块化，需另行授权并逐步拆分共享变量，不能简单加上 import/export。</p>
 <h2>11. 优化顺序建议（仅分析，未实施）</h2>
 <ol><li><strong>先固定测量条件。</strong>锁定视口、质量、相机路线与设备；同时记录实际 buffer 尺寸、缩放比例和帧时分位数。否则动态分辨率会掩盖改动代价。</li><li><strong>优先测 GPU 成本。</strong>依次关闭体积光、AO、反射、bloom、阴影和运动模糊，确定主要瓶颈。大面积像素处理、阴影和多 pass 比 HTML 大小更重要。</li><li><strong>降低静态与武器模型成本。</strong>统计远近景与枪械的三角形、draw call 和不可见开销；评估 LOD、重复实例、分区裁剪及高频材质共享，保持已存在的合批。</li><li><strong>测 CPU 热点。</strong>检查每次射线线性扫描碰撞盒、敌人重规划、临时向量分配、HUD DOM 更新的耗时，再决定空间索引、缓存与节流。</li><li><strong>改善工程可维护性。</strong>按渲染、资源、物理、输入、玩家、武器、敌人、任务分域恢复语义名称；建立稳定接口后再拆模块，避免一次性改动数万行。</li><li><strong>最后做手感与平衡。</strong>采集真实玩家的中继路线、死亡点、目标可读性、低生命恢复与敌潮压力；本轮机制通过不能证明平衡或好玩。</li></ol>
-<h2>12. 实际验收与限制</h2>
-<p>桌面玩法测试使用 Chromium、1440×900、low、禁音；另在画廊 iframe 中验证默认 high 与非 stub 音频模块初始化。原版成功启动，Three.js REVISION=180，未出现 fatal、脚本或着色器错误。实键输入验证移动、Enter 备用开火、R 换弹、P 暂停、继续，以及传送到中继附近后按住 E 完成真实交互。撤离、死亡与重试使用原作调试/伤害接口辅助验证，不能视为不作弊完整通关。</p>
-<p>本次验收数据和移动模拟结果以 <a href="validation.json">validation.json</a> 为准；图像见下方。尚未做实体手机、手柄、跨浏览器、声音实听和长期游玩验收；瞬时 FPS 仅作运行状态记录。没有原始工程与 source map，后续可修改的是恢复副本，而非完整原始开发工程。</p>
-<img src="shots/01-title.jpg" alt="原版首屏"><p class="muted">原版标题界面，未改动文案和视觉。</p>
-<img src="shots/03-gameplay.jpg" alt="原版游戏过程"><p class="muted">原版游戏画面，截图来自本机运行。</p>
-<h2>13. 来源与文件证据</h2>
-<p>技术判断以本地原始 HTML、恢复副本和本次运行时为主要证据。Third-party 许可来自 <a href="https://github.com/mrdoob/three.js/blob/r180/LICENSE">Three.js r180 官方 MIT LICENSE</a>，本地保存于 vendor。引擎 API 可参阅 <a href="https://threejs.org/docs/#api/en/renderers/WebGLRenderer">Three.js WebGLRenderer 文档</a>，但版本行为以原包 r180 的实际代码为准。</p>
-<p class="note">交付边界：已完成详细解析与本机修改准备；保留源文件原样并上传案例。后续实际优化需新的明确指令。本次署名、范围和总耗时见 <a href="case-meta.json">工作记录</a>。</p>
+
+<h2>12. 本轮验证与限制</h2>
+<p>本轮重新验证中文还原版，具体检查和结果以 <a href="validation.json">validation.json</a> 为准，不复用上一轮“几猫”版验收。重点检查新名称、原作署名、旧宣传及介绍页移除、中文设置与控制、无外部资源、移动、开火、换弹、中继交互、撤离、死亡重试和移动模拟。调试辅助的流程检查与真实输入操作分开记录。</p>
+<p>截图和瞬时运行统计不是性能基准。移动模拟不代替实体手机；声音模块初始化不代替实听；本轮没有进行无辅助人工完整通关、游戏平衡评估或性能优化。</p>
+<img src="shots/01-title.jpg" alt="枪王 GunKing 中文还原版首屏"><p class="muted">用户指定名称，保留中文与原作署名，删除旧宣传及介绍页。</p>
+<img src="shots/03-gameplay.jpg" alt="枪王游戏过程"><p class="muted">本轮重新运行的游戏画面。</p>
+<h2>13. 文件证据与署名</h2>
+<p>以固定上游文件、本地输入、补丁清单和本轮实际运行结果为证据。完整溯源与审计元数据见 source-audit.json；本轮执行为 Codex + GPT-6.1 Sol，耗时见 case-meta.json；原作发布者与生成模型分开记录，不归为本轮原创。</p>
+<p>镜像没有独立游戏代码许可声明；<a href="https://github.com/mrdoob/three.js/blob/r180/LICENSE">Three.js r180 MIT 许可</a>仅适用于该库，本地保留于 vendor/THREE-LICENSE.txt。</p>
+<p class="note">交付边界：完成溯源、中文与授权标识还原、重新解析、本机可编辑准备、验证和更新发布；未实施玩法或性能优化。</p>
 </main></body></html>

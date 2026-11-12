@@ -110,9 +110,10 @@
         {label:'演示提纲',path:key+'/04-演示文稿提纲-五页.md'}
       ];
       if(key==='codex/gunking') resources = [
-        {label:'原版游戏',path:key+'/index.html'},
-        {label:'技术解析',path:key+'/技术解析.html'},
+        {label:'枪王（中文还原版）',path:key+'/index.html'},
+        {label:'溯源与技术解析',path:key+'/技术解析.html'},
         {label:'运行与修改指南',path:key+'/README.md'},
+        {label:'还原差异证据',path:key+'/source-audit.json'},
         {label:'验证记录',path:key+'/validation.json'}
       ];
       const tags = [...new Set(meta.tags||e.tags||['其他作品'])];

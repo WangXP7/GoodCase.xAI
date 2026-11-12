@@ -1,4 +1,4 @@
-// Recovered V1 game code. Minified identifiers retained; concatenated after vendor by tools/build.mjs.
+// Saltline restored game; Chinese localization only. Provenance: source-audit.json.
 var oi = {
     min: new W(-40, 0, -30),
     max: new W(40, 30, 30),
@@ -3302,9 +3302,11 @@ precision highp float;
 uniform sampler2D tA; uniform float uSq; in vec2 vUv; out vec4 o;
 void main(){ vec4 t = texture(tA, vUv); o = uSq > 0.5 ? vec4(t.rgb * t.rgb, t.a) : t; }`;
 var o3 =
-    '"PingFang SC", "PingFang SC", "PingFang SC", Impact, "PingFang SC", Arial, sans-serif',
-  r3 = '"PingFang SC", "PingFang SC", "PingFang SC", Arial, sans-serif',
-  oA = '"PingFang SC", "PingFang SC", Menlo, Consolas, monospace',
+    '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif',
+  r3 =
+    '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif',
+  oA =
+    '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif',
   Ut = {
     white: [226, 223, 213],
     black: [24, 24, 26],
@@ -3688,7 +3690,7 @@ function l3(i, e = 4) {
                   b.closePath(),
                   b.fill());
               },
-              "几猫北航",
+              "诺德卡普航运",
               "北极 · 大西洋 · 支线运输",
             ),
               Ks(v, g, x, 0.35, y));
@@ -3735,7 +3737,7 @@ function l3(i, e = 4) {
                     b.fill());
                 }
               },
-              "几猫远洋",
+              "燕鸥远洋",
               "集装箱运输",
               Ut.orange,
             ),
@@ -3777,7 +3779,7 @@ function l3(i, e = 4) {
                 (b.fillRect(-m * 1.05, m * 0.42, m * 2.1, m * 0.13),
                   b.fillRect(-m * 0.8, m * 0.68, m * 1.6, m * 0.1));
               },
-              "几猫太平洋",
+              "奥雷尔太平洋",
               "远洋 · 冷链 · 散货",
             ),
               Ks(v, g, x, 0.35, y));
@@ -3803,7 +3805,7 @@ function l3(i, e = 4) {
                   b.fillRect(-m * 0.32, -m, m * 0.64, m * 0.5),
                   b.fillRect(-m * 0.32, m * 0.5, m * 0.64, m * 0.5));
               },
-              "几猫联运",
+              "霍尔姆加德联运",
               "多式联运",
               Ut.yellow,
             ),
@@ -5188,7 +5190,7 @@ function wA(i) {
     }),
       (_ = -x / 2 + 0.25),
       (M = y - 0.75 - 3 * 0.78 - 0.05),
-      w(e.label("几猫港区  B4-0271", { color: "white" }), 0.3),
+      w(e.label("枪王港区  B4-0271", { color: "white" }), 0.3),
       w(
         e.label("最大总重 30480 千克", { color: "yellow", distress: 0.6 }),
         0.22,
@@ -8374,7 +8376,7 @@ function N3(i, e = {}) {
       });
   }
   t.decal(
-    Mi(i, "几猫船用制冷", { color: "black", font: "sans", distress: 0.2 }),
+    Mi(i, "凯尔瓦船用制冷", { color: "black", font: "sans", distress: 0.2 }),
     0.05,
     0.2505,
     2.255,
@@ -10107,7 +10109,7 @@ function GA(i, e) {
 function qA(i, e) {
   let t = new Kn(i, "crate_stack", e.seed || 0),
     n = t.rng;
-  E1(t, 1.2, 0.95, 1, { label: "重物", code: "几猫04" + (t.seed % 2) });
+  E1(t, 1.2, 0.95, 1, { label: "重物", code: "SLT 04" + (t.seed % 2) });
   let s = {
     x: n.range(-0.1, 0.02),
     z: n.range(-0.05, 0.05),
@@ -10411,7 +10413,7 @@ function YA(i, e) {
       );
     }
     (t.label(
-      y > 0 ? "NYY-J 4x95 mm2  500 m" : "几猫港区",
+      y > 0 ? "NYY-J 4x95 mm2  500 m" : "枪王港区",
       { color: "white", font: "stencil", distress: 0.45 },
       0.7,
       0.085,
@@ -11764,7 +11766,7 @@ function oR(i, e) {
         0.4,
       ),
       t.label(
-        "几猫",
+        "GunKing",
         { color: "black", font: "sans", distress: 0.3 },
         0.42,
         0.085,
@@ -16809,7 +16811,7 @@ function z1(i, e, t = {}) {
       ],
       { post: 1, tint: En },
     ));
-  let me = i.mats.label("几猫04号", {
+  let me = i.mats.label("GunKing 04", {
       color: "white",
       font: "stencil",
       distress: 0.35,
@@ -17235,7 +17237,7 @@ function vb(i, e) {
         ),
       );
   }
-  let A = i.mats.label("几猫撤离艇", {
+  let A = i.mats.label("三趾鸥号", {
     color: "white",
     font: "sans",
     distress: 0.3,
@@ -17724,13 +17726,7 @@ function vb(i, e) {
     { min: [37.7, -5, -13], max: [44.3, 16, -9.3] },
     { min: [rt - 7.2, 13, T], max: [rt + 7.2, 24.4, U] },
   ];
-  return {
-    root: F,
-    radar: ne,
-    colliders: re,
-    tris: t.tris,
-    name: "几猫撤离艇",
-  };
+  return { root: F, radar: ne, colliders: re, tris: t.tris, name: "三趾鸥号" };
 }
 function xb(i, e) {
   let t = new io(),
@@ -18783,8 +18779,8 @@ function Eb(i, { only: e = null, showcase: t = !1 } = {}) {
       spreader: l ? l.spreader : null,
       boatBase: r,
       extractionPoint: new W(30, 0, 20),
-      shipName: "几猫撤离艇",
-      craneId: "几猫04号",
+      shipName: "三趾鸥号",
+      craneId: "GunKing 04",
       stats: { tris: Math.round(v), drawCalls: g },
     }
   );
@@ -19030,7 +19026,8 @@ function Pb(i, e = 1) {
     (n.globalCompositeOperation = "lighter"));
   let r = "#ff0000",
     a = "#00ff00",
-    l = '"PingFang SC", "PingFang SC", Impact, "PingFang SC", sans-serif',
+    l =
+      '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif',
     c = 90210,
     u = () => {
       ((c |= 0), (c = (c + 1831565813) | 0));
@@ -28929,7 +28926,7 @@ var fC = (i, e, t, n, s) => [
     [i, e + s],
   ],
   mi = {
-    name: "几猫九式突击步枪",
+    name: "PAC-9 Longshore",
     muzzle: [0, 0, -0.531],
     eject: [0.023, 0.004, -0.028],
     sightY: 0.069,
@@ -30823,12 +30820,15 @@ function TC() {
         (e.textAlign = d),
         e.fillText(h, d === "left" ? v + 2 : v + x / 2, g + y / 2 + 1, x - 4));
     },
-    n = '"PingFang SC", "PingFang SC", Arial, sans-serif',
-    s = '"PingFang SC", "PingFang SC", monospace',
-    o = '"PingFang SC", "PingFang SC", Impact, sans-serif',
+    n =
+      '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif',
+    s =
+      '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif',
+    o =
+      '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif',
     r = "rgba(196,198,194,0.92)";
   (t("model", "PAC-9", `700 78px ${o}`, r),
-    t("maker", "几猫兵工厂 · 港区装备", `600 30px ${n}`, r),
+    t("maker", "LONGSHORE ARMS WORKS · GunKing", `600 30px ${n}`, r),
     t("cal", "CAL 5.8\xD740   SN PA-004217", `500 27px ${s}`, r),
     t("prop", "港务局装备 · 四号泊位武器库", `600 28px ${n}`, r),
     t("safe", "S", `700 30px ${n}`, r, "center"),
@@ -35818,18 +35818,17 @@ function pM(i, e) {
     <div class="m-veil"></div>
     <div class="m-bars"><i></i><i></i></div>
 
-    <section class="m-screen m-title" data-s="title" aria-label="几猫">
+    <section class="m-screen m-title" data-s="title" aria-label="枪王 GunKing">
       <div class="m-title-main">
-        <div class="m-eyebrow"><span class="m-tag">B4</span><span>几猫突击小队</span><span class="m-dim">几猫港区 · 05:42</span></div>
-        <h1 class="m-word">几猫<span class="m-subtitle">3A大作</span></h1>
+        <div class="m-eyebrow"><span class="m-tag">B4</span><span>枪王突击小队</span><span class="m-dim">枪王港区 · 05:42</span></div>
+        <h1 class="m-word">枪王<span class="m-subtitle">GunKing</span></h1>
         <p class="m-premise">港区防御系统失控。切断三处中继，突破封锁，登船撤离。</p>
         <div class="m-actions">
           <button class="btn primary" data-act="deploy">开始行动</button>
           <button class="btn" data-act="settings">设置</button>
-          <button class="btn" data-act="about">项目介绍</button>
           <button class="btn m-only-narrow" data-act="controls">操作说明</button>
         </div>
-        <p class="m-note">使用 Fable5.2 自主研发 · 国产第一人称射击游戏 · 开发体验版</p>
+        <p class="m-note">场景、机械、纹理与声音均由浏览器中的代码实时生成。原作：Felix Rieseberg · Claude Fable 5.2。</p>
       </div>
       <aside class="m-legend" aria-label="操作速览">
         <div><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动</span><span><kbd>鼠标</kbd> 视角</span><span><kbd>左键</kbd> 开火</span><span><kbd>右键</kbd> 瞄准</span><span><kbd>R</kbd> 换弹</span></div>
@@ -35859,7 +35858,7 @@ function pM(i, e) {
 
     <section class="m-screen m-card m-debrief" data-s="complete" aria-label="行动简报">
       <div class="m-k">四号泊位 · 行动简报</div>
-      <h2 class="m-h">几猫港区已解除封锁</h2>
+      <h2 class="m-h">枪王港区已解除封锁</h2>
       <div class="m-rating"><span>行动评级</span><b data-f="rating">干净利落</b></div>
       <dl class="m-stats">
         <div><dt>用时</dt><dd data-f="time">00:00</dd></div>
@@ -35875,17 +35874,9 @@ function pM(i, e) {
         <div class="tabs" role="tablist">
           <button class="tab" role="tab" data-tab="settings" aria-selected="true">设置</button>
           <button class="tab" role="tab" data-tab="controls" aria-selected="false">操作说明</button>
-        <button class="tab" role="tab" data-tab="about" aria-selected="false">项目介绍</button>
         </div>
         <button class="btn small" data-act="close-panel">关闭</button>
       </header>
-      <div class="panel-b about-copy" data-pane="about" hidden>
-        <h3>几猫3A大作</h3>
-        <p>各位老师、同学好！宣传一下我们最近使用 Fable5.2 自主研发的一款国产 3A FPS 大作——<strong>《几猫》</strong>！🎮</p>
-        <p>我们致力于打造具有中国特色的高品质第一人称射击游戏，融合沉浸式战斗体验、创新玩法与次世代视觉表现，探索国产 FPS 游戏的更多可能性。</p>
-        <p>目前项目仍在持续开发与优化中，距离国际顶尖 3A 水准还有一定差距。</p>
-        <p>非常欢迎各位老师、同学关注、体验并提出宝贵建议，期待与游戏开发、图形学及 AI 方向的朋友深入交流！🐱🔥</p>
-      </div>
       <div class="panel-b" data-pane="settings">
         <div class="row"><label id="l-q">画面质量</label>
           <div class="seg" role="group" aria-labelledby="l-q">${dM.map((U) => `<button data-q="${U}" aria-pressed="false">${{ low: "低", medium: "中", high: "高", ultra: "极高" }[U]}</button>`).join("")}</div></div>
@@ -35905,7 +35896,7 @@ function pM(i, e) {
       </div>
     </div>
 
-    <div class="loc-card" aria-hidden="true"><i></i><b>几猫港区 · 四号泊位 · 05:42</b><span>几猫突击小队 · 单兵行动，无人支援</span></div>
+    <div class="loc-card" aria-hidden="true"><i></i><b>枪王港区 · 四号泊位 · 05:42</b><span>枪王突击小队 · 单兵行动，无人支援</span></div>
   `),
     t.appendChild(s));
   let o = (U) => s.querySelector(U),
@@ -36052,19 +36043,17 @@ function pM(i, e) {
       return;
     }
     let D = T.dataset.act;
-    D === "about"
-      ? w("about")
-      : D === "settings"
-        ? w("settings")
-        : D === "controls"
-          ? w("controls")
-          : D === "close-panel"
-            ? S()
-            : D === "invert"
-              ? ((n.invertY = !n.invertY), v("invertY"), g(), Wf(n))
-              : D === "fullscreen"
-                ? M()
-                : D && e[D] && e[D](U);
+    D === "settings"
+      ? w("settings")
+      : D === "controls"
+        ? w("controls")
+        : D === "close-panel"
+          ? S()
+          : D === "invert"
+            ? ((n.invertY = !n.invertY), v("invertY"), g(), Wf(n))
+            : D === "fullscreen"
+              ? M()
+              : D && e[D] && e[D](U);
   }),
     s.addEventListener("mouseover", (U) => {
       let T = U.target.closest("button");
@@ -36168,7 +36157,7 @@ var Yi = {
   jC = ["北方", "东北方", "东方", "东南方", "南方", "西南方", "西方", "西北方"],
   _l = {
     intro:
-      "几猫队员，这里是指挥中心。港区主控已封锁泊位。切断堆场、仓库、码头的三处中继。",
+      "突击队员，这里是指挥中心。港区主控已封锁泊位。切断堆场、仓库、码头的三处中继。",
     contact: "你已被发现！空中有机械飞鸥，地面有机械猎犬。消灭它们。",
     cut: [
       "第一处中继已断开。敌方已察觉，机械守卫正在赶来。",
@@ -36176,7 +36165,7 @@ var Yi = {
     ],
     all: "三处中继全部断开！撤离艇在码头南端的舷梯旁，快撤！",
     low: "伤势严重！找掩体躲避，稍作恢复。",
-    done: "几猫队员已登船，港区封锁解除。干得漂亮！",
+    done: "突击队员已登船，港区封锁解除。干得漂亮！",
   };
 function mM(i) {
   let e = (i.render && i.render.post) || {},
@@ -36904,7 +36893,7 @@ function bM(i) {
     ((e = document.createElement("div")),
     (e.id = "fatal"),
     document.getElementById("app").appendChild(e)),
-    (e.textContent = "几猫启动失败：" + i));
+    (e.textContent = "GunKing 启动失败：" + i));
 }
 window.addEventListener("error", (i) => {
   window.__errors.push(String(i.message));
@@ -37056,7 +37045,7 @@ async function QC() {
       await r("audio", "audio", () => (i.noaudio ? dr.audio() : c_(t))),
       (t.player = x_(t)),
       (t.combat = zv(t)),
-      await Nr("正在检查几猫制式步枪", 0.74),
+      await Nr("正在检查制式步枪", 0.74),
       await r("weapon", "weapon", () => dm(t)),
       await Nr("正在启动港区主控", 0.82),
       await r("enemies", "enemies", () => Em(t)),
@@ -37239,7 +37228,7 @@ function eP(i) {
             m = x[x.length >> 1],
             A = i.render.stats ? i.render.stats() : {},
             _ = i.renderer.getDrawingBufferSize(new Ae());
-          e.textContent = `几猫性能测试  t=${o.toFixed(0)}s
+          e.textContent = `GunKing 性能测试  t=${o.toFixed(0)}s
 GPU: ${t}
 buffer ${_.x}x${_.y}  quality ${i.quality.name}  dpr ${window.devicePixelRatio}
 frame ms avg ${y.toFixed(1)}  median ${m.toFixed(1)}  p99 ${b.toFixed(1)}  => ${(1e3 / y).toFixed(0)} fps

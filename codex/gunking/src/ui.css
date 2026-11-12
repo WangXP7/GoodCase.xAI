@@ -15,10 +15,11 @@
   --line: rgba(232, 228, 218, 0.2);
   --plate: rgba(11, 13, 15, 0.6);
   --plate-solid: rgba(11, 13, 15, 0.9);
-  --f-display: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --f-display:
+    "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Impact, sans-serif;
   --f-label:
-    "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
-  --f-mono: "PingFang SC", "Microsoft YaHei", ui-monospace, monospace;
+    "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  --f-mono: "Microsoft YaHei", "PingFang SC", ui-monospace, Consolas, monospace;
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
@@ -1730,7 +1731,6 @@ kbd {
   }
 }
 
-/* Chinese typography and title proportions. */
 .m-word {
   font-size: clamp(56px, 11vw, 148px) !important;
   line-height: 1.12 !important;
@@ -1745,6 +1745,18 @@ kbd {
   letter-spacing: 0.16em;
   color: var(--signal);
 }
+@media (max-width: 700px) {
+  .m-title {
+    gap: 12px;
+  }
+  .m-word {
+    font-size: clamp(48px, 11vw, 78px) !important;
+  }
+  .m-actions {
+    gap: 8px;
+  }
+}
+/* Chinese localization: readable line-height and spacing only. */
 .m-premise,
 .m-note,
 .panel-note,
@@ -1763,20 +1775,4 @@ kbd {
 .btn,
 .tab {
   letter-spacing: 0.08em;
-}
-.about-copy p {
-  margin: 14px 0;
-  font-size: 16px;
-  line-height: 1.9;
-}
-@media (max-width: 700px) {
-  .m-title {
-    gap: 12px;
-  }
-  .m-word {
-    font-size: clamp(48px, 11vw, 78px) !important;
-  }
-  .m-actions {
-    gap: 8px;
-  }
 }

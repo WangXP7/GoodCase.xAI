@@ -1,308 +1,150 @@
 {
+  "version": "GunKing Chinese restored 2026-11-12",
+  "checkedAt": "2026-11-12T02:36:16.624Z",
   "checks": [
     {
-      "name": "WASD 移动",
+      "name": "还原版首帧与完整模块启动",
       "passed": true,
-      "startPos": [
+      "initial": {
+        "ready": true,
+        "fatal": null,
+        "errors": [],
+        "title": "枪王 GunKing · 港区突围（中文还原版）",
+        "head": "B4\n枪王突击小队\n枪王港区 · 05:42\n枪王\nGunKing\n\n港区防御系统失控。切断三处中继，突破封锁，登船撤离。\n\n开始行动\n设置\n操作说明\n\n场景、机械、纹理与声音均由浏览器中的代码实时生成。原作：Felix Rieseberg · Claude Fable 5.2。\n\nWASD 移动\n鼠标 视角\n左键 开火\n右键 瞄准\nR 换弹\nE 切断中继\nSPACE 跳跃\nSHIFT 冲刺\nC 蹲伏\nESC 暂停\n触屏操作\n左手拇指移动\n右手拇指转动视角\n屏幕按钮：开火 · 瞄准 · 换弹 · 跳跃",
+        "aboutButtons": 0,
+        "audioStub": false,
+        "quality": "low",
+        "objectives": 3,
+        "colliders": 557
+      }
+    },
+    {
+      "name": "枪王 GunKing 标识与原作署名",
+      "passed": true
+    },
+    {
+      "name": "去除旧改名宣传与额外介绍 UI",
+      "passed": true
+    },
+    {
+      "name": "中文菜单保留",
+      "passed": true
+    },
+    {
+      "name": "无外部字体或资产请求",
+      "passed": true,
+      "external": []
+    },
+    {
+      "name": "中文设置及操作面板",
+      "passed": true
+    },
+    {
+      "name": "真实键盘移动",
+      "passed": true,
+      "before": [
         -32,
         0,
         6
       ],
-      "afterMove": [
-        -29.638323439947854,
+      "after": [
+        -29.648566600023596,
         0,
         6
       ]
     },
     {
-      "name": "键盘备用开火与弹药消耗",
-      "passed": true,
-      "ammoBefore": 30,
-      "ammoAfter": 24
+      "name": "备用开火与弹药消耗",
+      "passed": true
     },
     {
       "name": "R 换弹",
       "passed": true
     },
     {
-      "name": "P 暂停",
+      "name": "暂停及中文暂停界面",
       "passed": true
     },
     {
-      "name": "继续游戏",
-      "passed": true
-    },
-    {
-      "name": "靠近中继并按住 E 交互",
+      "name": "中文中继提示与真实 E 按住交互",
       "passed": true,
-      "method": "仅传送玩家到交互范围，使用实际 E 输入完成切断"
+      "method": "仅传送至交互范围，按真实 E 完成切断"
     },
     {
-      "name": "三中继后撤离与完成状态",
+      "name": "撤离与中文结算",
       "passed": true,
-      "method": "使用原作 debugCut 和玩家传送，验证状态机"
+      "method": "原作 debugCut 与传送辅助流程验证"
     },
     {
-      "name": "死亡状态",
+      "name": "死亡与重试状态",
       "passed": true,
-      "method": "调用原作 damage 接口"
+      "method": "damage 接口触发死亡，真实点击重试"
     },
     {
-      "name": "重试重新开始",
-      "passed": true
-    },
-    {
-      "name": "全流程无脚本或着色器错误",
-      "passed": true
-    },
-    {
-      "name": "移动端模拟首屏",
+      "name": "移动模拟中文首屏布局",
       "passed": true,
-      "mobileInfo": {
+      "layout": {
         "ready": true,
         "fatal": null,
         "errors": [],
-        "touch": false,
         "overflow": false,
-        "buttons": [
+        "button": [
           {
-            "label": "开始行动",
-            "rect": {
-              "x": 16,
-              "y": 609.3125,
-              "w": 358,
-              "h": 52
-            }
-          },
-          {
-            "label": "设置",
-            "rect": {
-              "x": 16,
-              "y": 669.3125,
-              "w": 114,
-              "h": 46
-            }
-          },
-          {
-            "label": "项目介绍",
-            "rect": {
-              "x": 138,
-              "y": 669.3125,
-              "w": 114,
-              "h": 46
-            }
-          },
-          {
-            "label": "操作说明",
-            "rect": {
-              "x": 260,
-              "y": 669.3125,
-              "w": 114,
-              "h": 46
-            }
+            "x": 16,
+            "right": 374,
+            "bottom": 643.171875
           }
         ]
       }
     },
     {
-      "name": "触屏模式启用",
+      "name": "触屏模式与任务启动",
       "passed": true
     },
     {
-      "name": "默认参数和声音模块初始化、画廊 iframe 运行",
-      "passed": true
-    },
-    {
-      "name": "现有画廊详情与技术解析入口",
-      "passed": true
-    },
-    {
-      "name": "独立恢复副本可构建并运行",
+      "name": "全流程无脚本或着色器错误",
       "passed": true,
-      "recovered": {
-        "ready": true,
-        "fatal": null,
-        "errors": [],
-        "three": "180",
-        "modules": [
-          "THREE",
-          "params",
-          "events",
-          "rng",
-          "time",
-          "quality",
-          "showcase",
-          "render",
-          "renderer",
-          "scene",
-          "camera",
-          "viewCamera",
-          "mats",
-          "physics",
-          "props",
-          "input",
-          "level",
-          "backdrop",
-          "ground",
-          "fx",
-          "audio",
-          "player",
-          "combat",
-          "weapon",
-          "enemies",
-          "hud",
-          "game"
-        ],
-        "objectives": 3,
-        "colliders": 557
-      }
+      "errors": []
     }
   ],
-  "notes": [
-    "桌面使用真实键鼠事件；流程尾段使用原作调试接口验证，非人工通关。",
-    "画面测试禁音；音频播放暂未实听验收。"
-  ],
   "desktop": {
-    "errors": [],
     "fatal": null,
+    "errors": [],
     "stats": {
-      "calls": 212,
-      "tris": 1050102,
+      "calls": 318,
+      "tris": 1944332,
       "geos": 203,
       "tex": 143,
       "programs": 113,
       "res": [
-        605,
-        378
+        896,
+        560
       ],
-      "scale": 0.6,
+      "scale": 1,
       "advanced": true,
       "softShadows": true,
-      "fps": 44.2,
+      "fps": 60,
       "state": "playing"
     },
-    "three": "180",
-    "counts": {
-      "colliders": 557,
-      "objectives": 3,
-      "geometry": {
-        "calls": 212,
-        "tris": 1050102,
-        "geos": 203,
-        "tex": 143,
-        "programs": 113,
-        "res": [
-          605,
-          378
-        ],
-        "scale": 0.6,
-        "advanced": true,
-        "softShadows": true
-      }
-    },
-    "nav": {
-      "w": 142,
-      "h": 124,
-      "cell": 0.5
-    },
-    "quality": {
-      "name": "low",
-      "scale": 0.7,
-      "msaa": 0,
-      "shadow": 2048,
-      "tex": 512,
-      "volSteps": 12,
-      "ao": false,
-      "planar": 0,
-      "bloom": true,
-      "motionBlur": false,
-      "rain": 0.5
-    }
+    "three": "180"
   },
   "mobile": {
     "ready": true,
     "fatal": null,
     "errors": [],
-    "touch": false,
     "overflow": false,
-    "buttons": [
+    "button": [
       {
-        "label": "开始行动",
-        "rect": {
-          "x": 16,
-          "y": 609.3125,
-          "w": 358,
-          "h": 52
-        }
-      },
-      {
-        "label": "设置",
-        "rect": {
-          "x": 16,
-          "y": 669.3125,
-          "w": 114,
-          "h": 46
-        }
-      },
-      {
-        "label": "项目介绍",
-        "rect": {
-          "x": 138,
-          "y": 669.3125,
-          "w": 114,
-          "h": 46
-        }
-      },
-      {
-        "label": "操作说明",
-        "rect": {
-          "x": 260,
-          "y": 669.3125,
-          "w": 114,
-          "h": 46
-        }
+        "x": 16,
+        "right": 374,
+        "bottom": 643.171875
       }
     ]
   },
-  "defaultEmbed": {
-    "ready": true,
-    "fatal": null,
-    "errors": [],
-    "quality": "high",
-    "audioStub": false,
-    "audioKeys": [
-      "autoIntensity",
-      "ctx",
-      "resume",
-      "play",
-      "loop",
-      "update",
-      "ready",
-      "selfTest",
-      "setIntensity",
-      "setInterior",
-      "setVolume",
-      "setPaused",
-      "names",
-      "intensity",
-      "interior",
-      "debug"
-    ],
-    "stats": {
-      "calls": 307,
-      "tris": 1872228,
-      "geos": 181,
-      "tex": 137,
-      "programs": 107,
-      "res": [
-        1440,
-        930
-      ],
-      "scale": 1,
-      "advanced": true,
-      "softShadows": true,
-      "fps": 15.3,
-      "state": "title"
-    }
-  }
+  "notes": [
+    "本轮重新执行；没有复用上一轮验证结果",
+    "真实键鼠与调试辅助测试分别标注，非人工无辅助通关",
+    "移动模拟非实体设备；音频仅验证初始化，未实听验收",
+    "瞬时 FPS 为测试环境记录，非固定分辨率性能基准"
+  ]
 }

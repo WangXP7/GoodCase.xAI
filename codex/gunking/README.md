@@ -1,53 +1,56 @@
-# 几猫国产3A大作 V1 · 港区突围
+# 枪王 GunKing · 港区突围（中文还原版）
 
 > **Codex + GPT-6.1 Sol**
 
-本次完成原作解析、本机运行与可编辑工程准备、验证和案例发布。上述署名与耗时仅指本次工作，不代表原作生成信息。原作制作耗时未记录；页面内的“Fable5.2”是原作自述，未据此推定 Agent 或模型。
+本次完成 Saltline 溯源、程序还原、中文汉化保留与用户授权的“枪王 / GunKing”标识替换。这里的署名与总耗时只指本轮工作，不代表游戏由 Codex 原创。本轮未优化玩法、数值或画质，停在可在本机修改的阶段。
 
-**原始 `几猫国产3A大作_V1.html` 保持不变；发布入口 `index.html` 与原文件逐字节一致。** 未优化玩法、数值、画质或源文件。SHA-256：`9e55b5200b088adaf8e1152da04efc0d3b25e236e6baf2dee96f81e23e084966`。
+## 来源与还原依据
 
-- 在线游戏：<https://wangxp7.github.io/GoodCase.xAI/codex/gunking/index.html>
-- [详细技术解析](技术解析.html)
-- [验证记录](validation.json)
-- [本次工作记录与耗时](case-meta.json)
+GitHub 基准是 [realcodebear/saltline-fable-5.2](https://github.com/realcodebear/saltline-fable-5.2)，这是第三方原版镜像，不是原作者仓库。固定文件为 [index.html @ 09d5fc9](https://github.com/realcodebear/saltline-fable-5.2/blob/09d5fc9a5678eb398edfd7d0f0be6ef7754f6538/index.html)，SHA-256：`f34e6debbfa7526b72be2daa24595c2f195e102a7aede4f22e59138c99cd6852`。
 
-## 本机运行
+镜像 README 记载原作发布者为 Felix Rieseberg，生成模型为 Claude Fable 5.2，链接了 [原始 Artifact](https://claude.ai/artifact/BGY1SztrAYcJQHSsnHHGmp) 与 [发布帖](https://x.com/felixrieseberg/status/2119925633564463609)。具体运行 Agent 未据此推定。本次没有直接取得原发布帖和 Artifact 的完整内容，精确比较基准是上述固定 GitHub 文件。
 
-双击 **`启动.cmd`**。已有 Node.js 即可，不需要 npm install，不需要联网。浏览器打开 `http://127.0.0.1:8765/`，关闭终端或按 Ctrl+C 停止服务。
+镜像自述未改游戏代码，只去掉 Claude 页面宿主脚本并加上独立网页基础标签。镜像没有独立游戏代码许可证声明；Three.js 的 MIT 许可仅覆盖该第三方库。
 
-也可手动运行：
+去除了“几猫”“国产3A”“自主研发”宣传，及额外项目介绍按钮、页签、面板和事件分支；恢复原作枪械、厂商、船名等身份或对应译名。保留中文菜单、HUD、操作、设置、任务、无线电、结算、场景标识与字体适配。按本轮用户补充要求，可见游戏名称和相关港区标识使用“枪王 / GunKing”，原作署名独立保留。
+
+本轮从固定上游程序应用 193 处审查后的中文与标识补丁。排除三处纯显示语言映射后，非文本程序结构、数值和控制流程一致；153 段 GLSL 模板不变，Three.js 运行时忽略换行符后相同。证据见 [source-audit.json](source-audit.json) 与 [补丁清单](localization/zh-CN.patches.json)。汉化版不会与英文上游逐字节相同。
+
+## 本机运行与后续修改
+
+双击 **`启动.cmd`**，打开 `http://127.0.0.1:8765/`。只需已有 Node.js，不用 npm install，不下载字体或游戏资产。
 
 ```powershell
 node tools/build.mjs
 node tools/serve.mjs --open
+node tools/build.mjs --check
+node tools/verify-source.mjs
+
+# 日后获准优化时，编辑 src/ 后生成独立实验入口
+node tools/build.mjs --editable
+# http://127.0.0.1:8765/editable.html
 ```
 
-低画质排查入口：`http://127.0.0.1:8765/?q=low`。基准巡览：`?q=low&bench=1`。画面需要支持 WebGL2 的浏览器和显卡驱动。原作自身是单文件无外链，但本次主要验收走 HTTP。
-
-## 文件与后续修改入口
+默认构建把已审计的 `GunKing_中文还原版.html` 复制为 `index.html`。`--editable` 只生成实验文件，不覆盖发布基线。恢复副本保留压缩变量名，没有原始 TypeScript、源目录或 source map；必须由构建脚本按顺序拼接，不能直接作为独立 ES Module 使用。
 
 | 文件 | 用途 |
 |---|---|
-| `几猫国产3A大作_V1.html` | 本地原始文件，保留不改 |
-| `index.html` | 原作逐字节副本，线上及本机默认入口 |
-| `src/game.js` | 从内嵌 bundle 提取、仅展开格式的游戏代码副本，约 3.7 万行 |
-| `src/ui.css`、`src/page.html` | 提取出的界面样式副本和页面模板 |
-| `vendor/three-r180.js` | 原包内提取的 Three.js r180 运行时，保留压缩名称 |
-| `vendor/THREE-LICENSE.txt` | 官方 r180 MIT 许可 |
-| `tools/build.mjs` | 默认校验原文件哈希并复制发布入口；`--check` 只校验 |
-| `tools/serve.mjs` | 无额外依赖、本机回环地址 HTTP 服务 |
-| `技术解析.html` | 架构、代码定位、参数、运行机制与优化建议 |
-| `shots/`、`validation.json` | 本次验收图与结果 |
-| `case-meta.json` | 本次 Agent、模型、范围与耗时 |
+| `index.html`、`GunKing_中文还原版.html` | 当前中文还原版与发布基线 |
+| `src/game.js`、`src/ui.css`、`src/page.html` | 可读、可修改的独立副本 |
+| `reference/saltline-upstream.html` | 固定上游单文件；未克隆仓库 |
+| `reference/UPSTREAM-README.txt` | 同版本来源说明 |
+| `localization/zh-CN.patches.json` | 可重放的中文与标识补丁 |
+| `source-audit.json` | 来源、版本、哈希与结构核对 |
+| `技术解析.html` | 修正后的技术栈、代码地图与优化建议 |
+| `validation.json`、`shots/` | 本轮重做的验证与画面 |
+| `case-meta.json` | 本轮 Agent、模型及总耗时 |
 
-**本轮停在可修改阶段，尚未进行优化。** 若以后授权修改，编辑 `src/` 副本后运行 `node tools/build.mjs --editable`，只生成独立的 `editable.html`，不会覆盖原作和默认发布入口。然后打开 `http://127.0.0.1:8765/editable.html`。
+最初输入 `几猫国产3A大作_V1.html` 本地保留不改，其 SHA-256 仍为 `9e55b5200b088adaf8e1152da04efc0d3b25e236e6baf2dee96f81e23e084966`，仅供比对，不再作为发布入口，也不继续上传。
 
-这些文件是从构建产物恢复的可读副本，**没有恢复原始变量名、源目录、TypeScript 或 source map**。游戏与运行时共享词法作用域，必须按构建脚本顺序拼接，不能把 `src/game.js` 作为独立 ES Module 加载。直接修改 `index.html` 不会反向同步到副本，并会被默认构建恢复为原始字节。
+## 玩法与验证范围
 
-## 玩法与验证边界
+WASD 移动，鼠标环视，左键开火、右键瞄准，R 换弹，按住 E 切断中继，Space 跳跃、Shift 冲刺、C/Ctrl 蹲伏、F 近战，Esc/P 暂停；方向键/IJKL、Enter 提供备用转向与开火。切断三处中继后撤离。
 
-WASD 移动，鼠标环视，左键开火、右键瞄准，R 换弹，按住 E 切断中继，Space 跳跃、Shift 冲刺、C/Ctrl 蹲伏、F 近战，Esc/P 暂停。鼠标捕获失败时可用方向键/IJKL 转向、Enter 开火。切断堆场、仓库、码头三处中继后前往撤离艇。
+本轮验证见 `validation.json`，不会把上一轮测试当成本轮结果。真实输入与调试辅助流程分开记录；移动模拟不是实体手机测试；音频初始化不代表声音实听验收；瞬时 FPS 不作为正式性能基准。
 
-已通过的详细检查见 `validation.json`。真实键鼠验证了移动、备用开火、换弹、暂停和 E 交互；撤离、死亡、重试部分结合原作调试接口验证。桌面与移动模拟不等于实体手机验收，禁音测试不等于声音已实听验收，瞬时 FPS 不代表正式性能基准。
-
-![原版首屏](shots/01-title.jpg)
+![枪王中文还原版](shots/01-title.jpg)

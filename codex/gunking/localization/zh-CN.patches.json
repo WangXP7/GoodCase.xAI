@@ -1,0 +1,1549 @@
+{
+  "upstreamScriptSHA256": "8d0057dc4d6dac77e20be2ef1f2b623e19346b5803fde1b3dbabbab508d75d9d",
+  "patches": [
+    {
+      "start": 807844,
+      "end": 807950,
+      "from": "'\"Big Shoulders Display\", \"Barlow Condensed\", \"Arial Narrow\", Impact, \"Helvetica Neue\", Arial, sans-serif'",
+      "to": "\"\\\"Microsoft YaHei\\\", \\\"PingFang SC\\\", \\\"Noto Sans CJK SC\\\", Arial, sans-serif\"",
+      "path": "$.program.body.0.expression.callee.body.body.401.declarations.0.init",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 807954,
+      "end": 808027,
+      "from": "'\"Barlow Condensed\", \"Arial Narrow\", \"Helvetica Neue\", Arial, sans-serif'",
+      "to": "\"\\\"Microsoft YaHei\\\", \\\"PingFang SC\\\", \\\"Noto Sans CJK SC\\\", Arial, sans-serif\"",
+      "path": "$.program.body.0.expression.callee.body.body.401.declarations.1.init",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 808031,
+      "end": 808096,
+      "from": "'\"IBM Plex Mono\", \"DejaVu Sans Mono\", Menlo, Consolas, monospace'",
+      "to": "\"\\\"Microsoft YaHei\\\", \\\"PingFang SC\\\", \\\"Noto Sans CJK SC\\\", Arial, sans-serif\"",
+      "path": "$.program.body.0.expression.callee.body.body.401.declarations.2.init",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 814373,
+      "end": 814387,
+      "from": "\"NORDKAP LINE\"",
+      "to": "\"诺德卡普航运\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.5.value.body.arguments.3.body.body.0.expression.expressions.0.arguments.5",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 814388,
+      "end": 814426,
+      "from": "\"ARCTIC  \\xB7  ATLANTIC  \\xB7  FEEDER\"",
+      "to": "\"北极 · 大西洋 · 支线运输\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.5.value.body.arguments.3.body.body.0.expression.expressions.0.arguments.6",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 814847,
+      "end": 814861,
+      "from": "\"TERN OCEANIC\"",
+      "to": "\"燕鸥远洋\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.6.value.body.arguments.3.body.body.0.expression.expressions.0.arguments.5",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 814862,
+      "end": 814882,
+      "from": "\"CONTAINER SERVICES\"",
+      "to": "\"集装箱运输\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.6.value.body.arguments.3.body.body.0.expression.expressions.0.arguments.6",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 815362,
+      "end": 815377,
+      "from": "\"AUREL PACIFIC\"",
+      "to": "\"奥雷尔太平洋\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.7.value.body.arguments.3.body.body.0.expression.expressions.0.arguments.5",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 815378,
+      "end": 815414,
+      "from": "\"DEEP SEA  \\xB7  REEFER  \\xB7  BULK\"",
+      "to": "\"远洋 · 冷链 · 散货\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.7.value.body.arguments.3.body.body.0.expression.expressions.0.arguments.6",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 815696,
+      "end": 815706,
+      "from": "\"HOLMGARD\"",
+      "to": "\"霍尔姆加德联运\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.8.value.body.arguments.3.body.body.0.expression.expressions.0.arguments.5",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 815707,
+      "end": 815728,
+      "from": "\"INTERMODAL  FREIGHT\"",
+      "to": "\"多式联运\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.8.value.body.arguments.3.body.body.0.expression.expressions.0.arguments.6",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 816038,
+      "end": 816047,
+      "from": "\"BERTH 4\"",
+      "to": "\"四号泊位\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.9.value.body.arguments.3.body.body.2.expression.expressions.1.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 823311,
+      "end": 823334,
+      "from": "\"SAFETY APPROVAL PLATE\"",
+      "to": "\"安全检验铭牌\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.20.value.body.arguments.3.body.body.4.expression.expressions.0.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 823411,
+      "end": 823441,
+      "from": "\"APPROVAL REF   SL/PA-4207/19\"",
+      "to": "\"检验编号 SL/PA-4207/19\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.20.value.body.arguments.3.body.body.4.expression.expressions.1.callee.object.elements.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 823442,
+      "end": 823471,
+      "from": "\"DATE MANUFACTURED   03/2019\"",
+      "to": "\"制造日期 2019年03月\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.20.value.body.arguments.3.body.body.4.expression.expressions.1.callee.object.elements.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 823472,
+      "end": 823498,
+      "from": "\"IDENT NO   SLTU 402719 6\"",
+      "to": "\"设备编号 SLTU 402719 6\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.20.value.body.arguments.3.body.body.4.expression.expressions.1.callee.object.elements.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 823499,
+      "end": 823522,
+      "from": "\"MAX GROSS   30 480 KG\"",
+      "to": "\"最大总重 30 480 千克\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.20.value.body.arguments.3.body.body.4.expression.expressions.1.callee.object.elements.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 823523,
+      "end": 823551,
+      "from": "\"STACKING LOAD   192 000 KG\"",
+      "to": "\"堆码载荷 192 000 千克\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.20.value.body.arguments.3.body.body.4.expression.expressions.1.callee.object.elements.4",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 823552,
+      "end": 823575,
+      "from": "\"RACKING TEST   150 KN\"",
+      "to": "\"横向试验 150 千牛\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.20.value.body.arguments.3.body.body.4.expression.expressions.1.callee.object.elements.5",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 823576,
+      "end": 823597,
+      "from": "\"NEXT EXAM   09/2027\"",
+      "to": "\"下次检验 2027年09月\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.5.declarations.0.init.properties.20.value.body.arguments.3.body.body.4.expression.expressions.1.callee.object.elements.6",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 825429,
+      "end": 825463,
+      "from": "'700 20px \"Big Shoulders Display\"'",
+      "to": "\"700 20px \\\"PingFang SC\\\"\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.9.block.body.0.consequent.body.1.right.elements.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 825464,
+      "end": 825498,
+      "from": "'900 20px \"Big Shoulders Display\"'",
+      "to": "\"900 20px \\\"PingFang SC\\\"\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.9.block.body.0.consequent.body.1.right.elements.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 825499,
+      "end": 825528,
+      "from": "'600 20px \"Barlow Condensed\"'",
+      "to": "\"600 20px \\\"PingFang SC\\\"\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.9.block.body.0.consequent.body.1.right.elements.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 825529,
+      "end": 825555,
+      "from": "'500 20px \"IBM Plex Mono\"'",
+      "to": "\"500 20px \\\"PingFang SC\\\"\"",
+      "path": "$.program.body.0.expression.callee.body.body.409.body.body.9.block.body.0.consequent.body.1.right.elements.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 844494,
+      "end": 844522,
+      "from": "\"SALTLINE TERMINAL  B4-0271\"",
+      "to": "\"枪王港区  B4-0271\"",
+      "path": "$.program.body.0.expression.callee.body.body.416.body.body.5.consequent.body.3.expression.expressions.3.arguments.0.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 844554,
+      "end": 844574,
+      "from": "\"MAX GROSS 30480 KG\"",
+      "to": "\"最大总重 30480 千克\"",
+      "path": "$.program.body.0.expression.callee.body.body.416.body.body.5.consequent.body.3.expression.expressions.4.arguments.0.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 844620,
+      "end": 844628,
+      "from": "\"DANGER\"",
+      "to": "\"危险\"",
+      "path": "$.program.body.0.expression.callee.body.body.416.body.body.5.consequent.body.3.expression.expressions.5.arguments.0.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 844670,
+      "end": 844682,
+      "from": "\"KEEP CLEAR\"",
+      "to": "\"请勿靠近\"",
+      "path": "$.program.body.0.expression.callee.body.body.416.body.body.5.consequent.body.3.expression.expressions.6.arguments.0.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 869112,
+      "end": 869124,
+      "from": "\"MAX GROSS \"",
+      "to": "\"最大总重 \"",
+      "path": "$.program.body.0.expression.callee.body.body.451.body.body.18.body.body.13.consequent.body.2.expression.expressions.0.arguments.0.arguments.1.left.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 869133,
+      "end": 869138,
+      "from": "\" KG\"",
+      "to": "\" 千克\"",
+      "path": "$.program.body.0.expression.callee.body.body.451.body.body.18.body.body.13.consequent.body.2.expression.expressions.0.arguments.0.arguments.1.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 869181,
+      "end": 869188,
+      "from": "\"TARE \"",
+      "to": "\"皮重 \"",
+      "path": "$.program.body.0.expression.callee.body.body.451.body.body.18.body.body.13.consequent.body.2.expression.expressions.1.arguments.0.arguments.1.left.left.left.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 869196,
+      "end": 869208,
+      "from": "\" KG   NET \"",
+      "to": "\" 千克  净重 \"",
+      "path": "$.program.body.0.expression.callee.body.body.451.body.body.18.body.body.13.consequent.body.2.expression.expressions.1.arguments.0.arguments.1.left.left.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 869215,
+      "end": 869220,
+      "from": "\" KG\"",
+      "to": "\" 千克\"",
+      "path": "$.program.body.0.expression.callee.body.body.451.body.body.18.body.body.13.consequent.body.2.expression.expressions.1.arguments.0.arguments.1.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 869258,
+      "end": 869268,
+      "from": "\"CU.CAP. \"",
+      "to": "\"容积 \"",
+      "path": "$.program.body.0.expression.callee.body.body.451.body.body.18.body.body.13.consequent.body.2.expression.expressions.2.arguments.0.arguments.1.left.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 869274,
+      "end": 869281,
+      "from": "\" CU.M\"",
+      "to": "\" 立方米\"",
+      "path": "$.program.body.0.expression.callee.body.body.451.body.body.18.body.body.13.consequent.body.2.expression.expressions.2.arguments.0.arguments.1.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 881751,
+      "end": 881765,
+      "from": "\"GATE CONTROL\"",
+      "to": "\"门禁控制\"",
+      "path": "$.program.body.0.expression.callee.body.body.458.body.body.28.expression.expressions.2.arguments.0.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 885814,
+      "end": 885841,
+      "from": "\"AUTHORISED PERSONNEL ONLY\"",
+      "to": "\"仅限授权人员\"",
+      "path": "$.program.body.0.expression.callee.body.body.462.declarations.1.init.elements.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 885842,
+      "end": 885858,
+      "from": "\"NO PEDESTRIANS\"",
+      "to": "\"禁止行人通行\"",
+      "path": "$.program.body.0.expression.callee.body.body.462.declarations.1.init.elements.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 885859,
+      "end": 885878,
+      "from": "\"HI-VIS AND HELMET\"",
+      "to": "\"请穿反光服并佩戴安全帽\"",
+      "path": "$.program.body.0.expression.callee.body.body.462.declarations.1.init.elements.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 885879,
+      "end": 885899,
+      "from": "\"AUTOMATED VEHICLES\"",
+      "to": "\"自动作业车辆\"",
+      "path": "$.program.body.0.expression.callee.body.body.462.declarations.1.init.elements.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 885900,
+      "end": 885912,
+      "from": "\"KEEP CLEAR\"",
+      "to": "\"请勿靠近\"",
+      "path": "$.program.body.0.expression.callee.body.body.462.declarations.1.init.elements.4",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 893057,
+      "end": 893063,
+      "from": "\"LOT \"",
+      "to": "\"批次 \"",
+      "path": "$.program.body.0.expression.callee.body.body.469.body.body.2.alternate.consequent.body.3.expression.arguments.0.arguments.1.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 895198,
+      "end": 895204,
+      "from": "\"BAY \"",
+      "to": "\"货位 \"",
+      "path": "$.program.body.0.expression.callee.body.body.470.body.body.4.expression.expressions.0.arguments.0.arguments.1.left.left.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 895330,
+      "end": 895351,
+      "from": "\"MAX 2000 KG / LEVEL\"",
+      "to": "\"每层限重2000千克\"",
+      "path": "$.program.body.0.expression.callee.body.body.470.body.body.4.expression.expressions.1.arguments.0.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 897190,
+      "end": 897221,
+      "from": "\"KELVAR  MARINE  REFRIGERATION\"",
+      "to": "\"凯尔瓦船用制冷\"",
+      "path": "$.program.body.0.expression.callee.body.body.471.body.body.11.expression.arguments.0.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 902150,
+      "end": 902158,
+      "from": "\"RELAY \"",
+      "to": "\"中继 \"",
+      "path": "$.program.body.0.expression.callee.body.body.473.body.body.16.expression.expressions.2.arguments.0.arguments.1.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 902255,
+      "end": 902276,
+      "from": "\"HARBORMASTER UPLINK\"",
+      "to": "\"港区主控上行链路\"",
+      "path": "$.program.body.0.expression.callee.body.body.473.body.body.16.expression.expressions.3.arguments.0.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 902753,
+      "end": 902777,
+      "from": "\"WIRING DIAGRAM  SLT-R4\"",
+      "to": "\"接线图 SLT-R4\"",
+      "path": "$.program.body.0.expression.callee.body.body.473.body.body.18.expression.expressions.7.arguments.0.object.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 902968,
+      "end": 902992,
+      "from": "\"ISOLATE BEFORE SERVICE\"",
+      "to": "\"检修前请断电\"",
+      "path": "$.program.body.0.expression.callee.body.body.473.body.body.20.expression.arguments.0.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 922821,
+      "end": 922830,
+      "from": "\"FRAGILE\"",
+      "to": "\"易碎物品\"",
+      "path": "$.program.body.0.expression.callee.body.body.523.params.4.left.properties.1.value.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 925486,
+      "end": 925495,
+      "from": "\"FRAGILE\"",
+      "to": "\"易碎物品\"",
+      "path": "$.program.body.0.expression.callee.body.body.524.body.body.1.argument.expressions.0.arguments.4.properties.0.value.consequent.object.elements.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 925496,
+      "end": 925510,
+      "from": "\"THIS SIDE UP\"",
+      "to": "\"此面向上\"",
+      "path": "$.program.body.0.expression.callee.body.body.524.body.body.1.argument.expressions.0.arguments.4.properties.0.value.consequent.object.elements.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 925511,
+      "end": 925521,
+      "from": "\"KEEP DRY\"",
+      "to": "\"保持干燥\"",
+      "path": "$.program.body.0.expression.callee.body.body.524.body.body.1.argument.expressions.0.arguments.4.properties.0.value.consequent.object.elements.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 925522,
+      "end": 925537,
+      "from": "\"MACHINE PARTS\"",
+      "to": "\"机械零件\"",
+      "path": "$.program.body.0.expression.callee.body.body.524.body.body.1.argument.expressions.0.arguments.4.properties.0.value.consequent.object.elements.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 925700,
+      "end": 925707,
+      "from": "\"HEAVY\"",
+      "to": "\"重物\"",
+      "path": "$.program.body.0.expression.callee.body.body.525.body.body.1.expression.arguments.4.properties.0.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 925906,
+      "end": 925915,
+      "from": "\"FRAGILE\"",
+      "to": "\"易碎物品\"",
+      "path": "$.program.body.0.expression.callee.body.body.525.body.body.3.expression.expressions.1.arguments.4.properties.2.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 928674,
+      "end": 928686,
+      "from": "\"IBC 1000 L\"",
+      "to": "\"储液箱 1000 升\"",
+      "path": "$.program.body.0.expression.callee.body.body.526.body.body.14.argument.expressions.1.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 930688,
+      "end": 930707,
+      "from": "\"SALTLINE TERMINAL\"",
+      "to": "\"枪王港区\"",
+      "path": "$.program.body.0.expression.callee.body.body.528.body.body.2.body.body.4.expression.expressions.0.arguments.0.alternate",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 936729,
+      "end": 936740,
+      "from": "\"ACETYLENE\"",
+      "to": "\"乙炔\"",
+      "path": "$.program.body.0.expression.callee.body.body.533.body.body.6.body.body.3.expression.expressions.1.arguments.0.arguments.0.object.elements.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 936741,
+      "end": 936749,
+      "from": "\"OXYGEN\"",
+      "to": "\"氧气\"",
+      "path": "$.program.body.0.expression.callee.body.body.533.body.body.6.body.body.3.expression.expressions.1.arguments.0.arguments.0.object.elements.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 936750,
+      "end": 936757,
+      "from": "\"ARGON\"",
+      "to": "\"氩气\"",
+      "path": "$.program.body.0.expression.callee.body.body.533.body.body.6.body.body.3.expression.expressions.1.arguments.0.arguments.0.object.elements.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 936758,
+      "end": 936767,
+      "from": "\"PROPANE\"",
+      "to": "\"丙烷\"",
+      "path": "$.program.body.0.expression.callee.body.body.533.body.body.6.body.body.3.expression.expressions.1.arguments.0.arguments.0.object.elements.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 947342,
+      "end": 947351,
+      "from": "\"FRAGILE\"",
+      "to": "\"易碎物品\"",
+      "path": "$.program.body.0.expression.callee.body.body.543.body.body.1.argument.expressions.0.arguments.5.properties.1.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 947454,
+      "end": 947464,
+      "from": "\"KEEP DRY\"",
+      "to": "\"保持干燥\"",
+      "path": "$.program.body.0.expression.callee.body.body.543.body.body.1.argument.expressions.1.arguments.5.properties.1.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 950932,
+      "end": 950942,
+      "from": "\"SALTLINE\"",
+      "to": "\"GunKing\"",
+      "path": "$.program.body.0.expression.callee.body.body.549.body.body.8.body.expression.expressions.2.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 955138,
+      "end": 955143,
+      "from": "\"LPG\"",
+      "to": "\"液化气\"",
+      "path": "$.program.body.0.expression.callee.body.body.549.body.body.33.expression.expressions.6.arguments.0.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 956683,
+      "end": 956696,
+      "from": "\"MAX 2500 kg\"",
+      "to": "\"最大载重2500千克\"",
+      "path": "$.program.body.0.expression.callee.body.body.549.body.body.36.expression.expressions.6.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 961417,
+      "end": 961425,
+      "from": "\"DANGER\"",
+      "to": "\"危险\"",
+      "path": "$.program.body.0.expression.callee.body.body.550.body.body.16.expression.expressions.1.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 962677,
+      "end": 962685,
+      "from": "\"DIESEL\"",
+      "to": "\"柴油\"",
+      "path": "$.program.body.0.expression.callee.body.body.550.body.body.23.argument.expressions.8.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 964204,
+      "end": 964215,
+      "from": "\"B4 WASTE \"",
+      "to": "\"四号泊位废物 \"",
+      "path": "$.program.body.0.expression.callee.body.body.551.body.body.8.expression.expressions.0.arguments.0.right.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 967686,
+      "end": 967694,
+      "from": "\"MAINT \"",
+      "to": "\"检修 \"",
+      "path": "$.program.body.0.expression.callee.body.body.552.body.body.7.expression.expressions.0.arguments.0.right.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 997516,
+      "end": 997528,
+      "from": "\"BOAT STN 4\"",
+      "to": "\"四号登船点\"",
+      "path": "$.program.body.0.expression.callee.body.body.578.body.body.6.body.7.expression.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1006406,
+      "end": 1006414,
+      "from": "\"LANE 1\"",
+      "to": "\"一号通道\"",
+      "path": "$.program.body.0.expression.callee.body.body.580.body.body.10.expression.expressions.62.arguments.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1006438,
+      "end": 1006446,
+      "from": "\"LANE 2\"",
+      "to": "\"二号通道\"",
+      "path": "$.program.body.0.expression.callee.body.body.580.body.body.10.expression.expressions.63.arguments.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1006465,
+      "end": 1006473,
+      "from": "\"LANE 3\"",
+      "to": "\"三号通道\"",
+      "path": "$.program.body.0.expression.callee.body.body.580.body.body.10.expression.expressions.64.arguments.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1006494,
+      "end": 1006502,
+      "from": "\"LANE 2\"",
+      "to": "\"二号通道\"",
+      "path": "$.program.body.0.expression.callee.body.body.580.body.body.10.expression.expressions.65.arguments.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1006517,
+      "end": 1006535,
+      "from": "\"BERTH 4 WORKSHOP\"",
+      "to": "\"四号泊位维修车间\"",
+      "path": "$.program.body.0.expression.callee.body.body.580.body.body.10.expression.expressions.66.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1010726,
+      "end": 1010747,
+      "from": "\"Relay A \\u2014 Yard\"",
+      "to": "\"甲号中继 · 堆场\"",
+      "path": "$.program.body.0.expression.callee.body.body.582.body.body.21.declarations.1.init.elements.0.properties.1.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1010808,
+      "end": 1010829,
+      "from": "\"Relay B \\u2014 Shed\"",
+      "to": "\"乙号中继 · 仓库\"",
+      "path": "$.program.body.0.expression.callee.body.body.582.body.body.21.declarations.1.init.elements.1.properties.1.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1010915,
+      "end": 1010936,
+      "from": "\"Relay C \\u2014 Quay\"",
+      "to": "\"丙号中继 · 码头\"",
+      "path": "$.program.body.0.expression.callee.body.body.582.body.body.21.declarations.1.init.elements.2.properties.1.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1033003,
+      "end": 1033016,
+      "from": "\"SALTLINE 04\"",
+      "to": "\"GunKing 04\"",
+      "path": "$.program.body.0.expression.callee.body.body.608.body.body.63.declarations.0.init.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1040610,
+      "end": 1040621,
+      "from": "\"KITTIWAKE\"",
+      "to": "\"三趾鸥号\"",
+      "path": "$.program.body.0.expression.callee.body.body.615.body.body.9.declarations.0.init.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1047882,
+      "end": 1047893,
+      "from": "\"KITTIWAKE\"",
+      "to": "\"三趾鸥号\"",
+      "path": "$.program.body.0.expression.callee.body.body.615.body.body.58.argument.properties.4.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1067417,
+      "end": 1067428,
+      "from": "\"KITTIWAKE\"",
+      "to": "\"三趾鸥号\"",
+      "path": "$.program.body.0.expression.callee.body.body.621.body.body.17.argument.expressions.1.properties.12.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1067437,
+      "end": 1067450,
+      "from": "\"SALTLINE 04\"",
+      "to": "\"GunKing 04\"",
+      "path": "$.program.body.0.expression.callee.body.body.621.body.body.17.argument.expressions.1.properties.13.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1071836,
+      "end": 1071917,
+      "from": "'\"Big Shoulders Display\", \"Barlow Condensed\", Impact, \"Arial Narrow\", sans-serif'",
+      "to": "\"\\\"Microsoft YaHei\\\", \\\"PingFang SC\\\", \\\"Noto Sans CJK SC\\\", Arial, sans-serif\"",
+      "path": "$.program.body.0.expression.callee.body.body.636.body.body.6.declarations.2.init",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1073691,
+      "end": 1073697,
+      "from": "\"SLOW\"",
+      "to": "\"减速慢行\"",
+      "path": "$.program.body.0.expression.callee.body.body.636.body.body.9.expression.expressions.0.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1074735,
+      "end": 1074747,
+      "from": "\"KEEP CLEAR\"",
+      "to": "\"请勿靠近\"",
+      "path": "$.program.body.0.expression.callee.body.body.636.body.body.15.expression.expressions.3.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1074800,
+      "end": 1074812,
+      "from": "\"KEEP CLEAR\"",
+      "to": "\"请勿靠近\"",
+      "path": "$.program.body.0.expression.callee.body.body.636.body.body.15.expression.expressions.5.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1074977,
+      "end": 1074986,
+      "from": "\"BERTH 4\"",
+      "to": "\"四号泊位\"",
+      "path": "$.program.body.0.expression.callee.body.body.636.body.body.15.expression.expressions.10.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1075008,
+      "end": 1075017,
+      "from": "\"BERTH 4\"",
+      "to": "\"四号泊位\"",
+      "path": "$.program.body.0.expression.callee.body.body.636.body.body.15.expression.expressions.11.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1105678,
+      "end": 1105712,
+      "from": "'900 40px \"Big Shoulders Display\"'",
+      "to": "\"900 40px \\\"PingFang SC\\\"\"",
+      "path": "$.program.body.0.expression.callee.body.body.650.body.body.1.block.body.0.expression.right.argument.arguments.0.elements.0.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1218577,
+      "end": 1218600,
+      "from": "\"Touch controls active\"",
+      "to": "\"触屏操作已启用\"",
+      "path": "$.program.body.0.expression.callee.body.body.774.body.body.0.declarations.11.init.properties.21.body.body.0.argument.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1218617,
+      "end": 1218763,
+      "from": "\"Mouse capture unavailable \\u2014 move the mouse to look, rest it at a screen edge to keep turning \\xB7 click fires \\xB7 arrows or IJKL also turn\"",
+      "to": "\"鼠标捕获不可用：移动鼠标调整视角，停在屏幕边缘持续转向；点击开火；方向键或 IJKL 也可转向\"",
+      "path": "$.program.body.0.expression.callee.body.body.774.body.body.0.declarations.11.init.properties.21.body.body.0.argument.alternate.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1218773,
+      "end": 1218812,
+      "from": "\"Mouse captured \\u2014 Esc releases it\"",
+      "to": "\"鼠标已捕获，按 Esc 释放\"",
+      "path": "$.program.body.0.expression.callee.body.body.774.body.body.0.declarations.11.init.properties.21.body.body.0.argument.alternate.alternate.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1218813,
+      "end": 1218850,
+      "from": "\"Click the view to capture the mouse\"",
+      "to": "\"点击游戏画面以捕获鼠标\"",
+      "path": "$.program.body.0.expression.callee.body.body.774.body.body.0.declarations.11.init.properties.21.body.body.0.argument.alternate.alternate.alternate",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1221338,
+      "end": 1221945,
+      "from": "'<div class=\"t-stick\"><i class=\"t-ring\"></i><i class=\"t-nub\"></i></div><button class=\"t-btn t-fire\" data-a=\"fire\" aria-label=\"Fire\"><span>FIRE</span></button><button class=\"t-btn t-ads\" data-a=\"ads\" aria-label=\"Aim\"><span>AIM</span></button><button class=\"t-btn t-reload\" data-a=\"reload\" aria-label=\"Reload\"><span>RLD</span></button><button class=\"t-btn t-jump\" data-a=\"jump\" aria-label=\"Jump\"><span>JUMP</span></button><button class=\"t-btn t-interact\" data-a=\"interact\" aria-label=\"Interact\"><span>USE</span></button><button class=\"t-btn t-pause\" data-a=\"pause\" aria-label=\"Pause\"><span>II</span></button>'",
+      "to": "\"<div class=\\\"t-stick\\\"><i class=\\\"t-ring\\\"></i><i class=\\\"t-nub\\\"></i></div><button class=\\\"t-btn t-fire\\\" data-a=\\\"fire\\\" aria-label=\\\"开火\\\"><span>开火</span></button><button class=\\\"t-btn t-ads\\\" data-a=\\\"ads\\\" aria-label=\\\"瞄准\\\"><span>瞄准</span></button><button class=\\\"t-btn t-reload\\\" data-a=\\\"reload\\\" aria-label=\\\"换弹\\\"><span>换弹</span></button><button class=\\\"t-btn t-jump\\\" data-a=\\\"jump\\\" aria-label=\\\"跳跃\\\"><span>跳跃</span></button><button class=\\\"t-btn t-interact\\\" data-a=\\\"interact\\\" aria-label=\\\"Interact\\\"><span>交互</span></button><button class=\\\"t-btn t-pause\\\" data-a=\\\"pause\\\" aria-label=\\\"暂停\\\"><span>暂停</span></button>\"",
+      "path": "$.program.body.0.expression.callee.body.body.774.body.body.13.body.body.1.expression.expressions.1.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1263617,
+      "end": 1263672,
+      "from": "'\"Barlow Condensed\", \"Arial Narrow\", Arial, sans-serif'",
+      "to": "\"\\\"Microsoft YaHei\\\", \\\"PingFang SC\\\", \\\"Noto Sans CJK SC\\\", Arial, sans-serif\"",
+      "path": "$.program.body.0.expression.callee.body.body.814.body.body.4.declarations.1.init",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1263675,
+      "end": 1263718,
+      "from": "'\"IBM Plex Mono\", \"Courier New\", monospace'",
+      "to": "\"\\\"Microsoft YaHei\\\", \\\"PingFang SC\\\", \\\"Noto Sans CJK SC\\\", Arial, sans-serif\"",
+      "path": "$.program.body.0.expression.callee.body.body.814.body.body.4.declarations.2.init",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1263721,
+      "end": 1263786,
+      "from": "'\"Big Shoulders Display\", \"Barlow Condensed\", Impact, sans-serif'",
+      "to": "\"\\\"Microsoft YaHei\\\", \\\"PingFang SC\\\", \\\"Noto Sans CJK SC\\\", Arial, sans-serif\"",
+      "path": "$.program.body.0.expression.callee.body.body.814.body.body.4.declarations.3.init",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1263861,
+      "end": 1263899,
+      "from": "\"LONGSHORE ARMS WORKS  \\xB7  SALTLINE\"",
+      "to": "\"LONGSHORE ARMS WORKS · GunKing\"",
+      "path": "$.program.body.0.expression.callee.body.body.814.body.body.5.expression.expressions.1.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1263986,
+      "end": 1264037,
+      "from": "\"PROPERTY OF PORT AUTHORITY \\u2014 BERTH 4 ARMOURY\"",
+      "to": "\"港务局装备 · 四号泊位武器库\"",
+      "path": "$.program.body.0.expression.callee.body.body.814.body.body.5.expression.expressions.3.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1264372,
+      "end": 1264385,
+      "from": "\"HX-2 REFLEX\"",
+      "to": "\"HX-2 反射瞄具\"",
+      "path": "$.program.body.0.expression.callee.body.body.814.body.body.7.expression.expressions.0.arguments.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1264542,
+      "end": 1264579,
+      "from": "\"WARNING \\u2014 CLEAR CHAMBER BEFORE\"",
+      "to": "\"警告：存放前必须清空弹膛\"",
+      "path": "$.program.body.0.expression.callee.body.body.814.body.body.8.body.1.expression.expressions.3.callee.object.elements.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1264580,
+      "end": 1264608,
+      "from": "\"STOWAGE. AUTHORISED BREACH\"",
+      "to": "\"仅限授权突击队员使用\"",
+      "path": "$.program.body.0.expression.callee.body.body.814.body.body.8.body.1.expression.expressions.3.callee.object.elements.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1264609,
+      "end": 1264638,
+      "from": "\"PERSONNEL ONLY. PA-REG 44/7\"",
+      "to": "\"港务安全规程 44/7\"",
+      "path": "$.program.body.0.expression.callee.body.body.814.body.body.8.body.1.expression.expressions.3.callee.object.elements.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1347907,
+      "end": 1347910,
+      "from": "\"N\"",
+      "to": "\"北\"",
+      "path": "$.program.body.0.expression.callee.body.body.850.declarations.3.init.properties.0.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1347914,
+      "end": 1347918,
+      "from": "\"NE\"",
+      "to": "\"东北\"",
+      "path": "$.program.body.0.expression.callee.body.body.850.declarations.3.init.properties.1.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1347922,
+      "end": 1347925,
+      "from": "\"E\"",
+      "to": "\"东\"",
+      "path": "$.program.body.0.expression.callee.body.body.850.declarations.3.init.properties.2.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1347930,
+      "end": 1347934,
+      "from": "\"SE\"",
+      "to": "\"东南\"",
+      "path": "$.program.body.0.expression.callee.body.body.850.declarations.3.init.properties.3.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1347939,
+      "end": 1347942,
+      "from": "\"S\"",
+      "to": "\"南\"",
+      "path": "$.program.body.0.expression.callee.body.body.850.declarations.3.init.properties.4.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1347947,
+      "end": 1347951,
+      "from": "\"SW\"",
+      "to": "\"西南\"",
+      "path": "$.program.body.0.expression.callee.body.body.850.declarations.3.init.properties.5.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1347956,
+      "end": 1347959,
+      "from": "\"W\"",
+      "to": "\"西\"",
+      "path": "$.program.body.0.expression.callee.body.body.850.declarations.3.init.properties.6.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1347964,
+      "end": 1347968,
+      "from": "\"NW\"",
+      "to": "\"西北\"",
+      "path": "$.program.body.0.expression.callee.body.body.850.declarations.3.init.properties.7.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1348746,
+      "end": 1348885,
+      "from": "'<div class=\"h-k\">Objective</div><div class=\"h-obj-t\"></div><div class=\"h-relays\"><span>Relays</span><i></i><i></i><i></i><b>0/3</b></div>'",
+      "to": "\"<div class=\\\"h-k\\\">任务目标</div><div class=\\\"h-obj-t\\\"></div><div class=\\\"h-relays\\\"><span>中继</span><i></i><i></i><i></i><b>0/3</b></div>\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.9.declarations.0.init.arguments.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1349915,
+      "end": 1350015,
+      "from": "'<div class=\"h-k\">Vitals</div><div class=\"h-hp-row\"><b class=\"h-hp-n\">100</b><div class=\"h-hp-bar\">'",
+      "to": "\"<div class=\\\"h-k\\\">生命状态</div><div class=\\\"h-hp-row\\\"><b class=\\\"h-hp-n\\\">100</b><div class=\\\"h-hp-bar\\\">\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.11.declarations.6.init.arguments.2.left.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1350559,
+      "end": 1350628,
+      "from": "'<span class=\"comms-who\">Control</span><span class=\"comms-t\"></span>'",
+      "to": "\"<span class=\\\"comms-who\\\">指挥中心</span><span class=\\\"comms-t\\\"></span>\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.13.declarations.0.init.arguments.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1351445,
+      "end": 1351466,
+      "from": "\"<em>Weak point</em>\"",
+      "to": "\"<em>弱点命中</em>\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.19.expression.expressions.1.arguments.1.body.body.0.expression.expressions.1.right.expressions.1.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1351508,
+      "end": 1351575,
+      "from": "String(k&&(k.type||k.enemy&&k.enemy.type)||\"machine\").toUpperCase()",
+      "to": "({gull:\"机械飞鸥\",hound:\"机械猎犬\"})[k&&(k.type||k.enemy&&k.enemy.type)]||\"机械守卫\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.19.expression.expressions.2.arguments.1.body.body.0.declarations.0.init",
+      "category": "中文显示映射"
+    },
+    {
+      "start": 1351595,
+      "end": 1351609,
+      "from": "</b> destroyed",
+      "to": "</b> 已摧毁",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.19.expression.expressions.2.arguments.1.body.body.1.expression.expressions.0.right.arguments.0.quasis.1",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1352969,
+      "end": 1352974,
+      "from": "\"USE\"",
+      "to": "\"交互\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.20.declarations.0.init.properties.5.body.body.2.declarations.0.init.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1353115,
+      "end": 1353120,
+      "from": "Hold ",
+      "to": "按住 ",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.20.declarations.0.init.properties.5.body.body.4.declarations.0.init.quasis.0",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1353125,
+      "end": 1353133,
+      "from": " \\u2014 ",
+      "to": " · ",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.20.declarations.0.init.properties.5.body.body.4.declarations.0.init.quasis.1",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1354968,
+      "end": 1354971,
+      "from": "\"m\"",
+      "to": "\"米\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.21.body.body.8.consequent.body.2.body.body.1.consequent.body.1.declarations.0.init.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1357035,
+      "end": 1357046,
+      "from": "\"Reloading\"",
+      "to": "\"换弹中\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.21.body.body.14.declarations.1.init.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1357073,
+      "end": 1357081,
+      "from": "\"Reload\"",
+      "to": "\"换弹\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.21.body.body.14.declarations.1.init.alternate.consequent.consequent.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1357082,
+      "end": 1357099,
+      "from": "\"R \\u2014 Reload\"",
+      "to": "\"R · 换弹\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.21.body.body.14.declarations.1.init.alternate.consequent.consequent.alternate",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1357100,
+      "end": 1357107,
+      "from": "\"Empty\"",
+      "to": "\"弹药耗尽\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.21.body.body.14.declarations.1.init.alternate.consequent.alternate",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1357111,
+      "end": 1357121,
+      "from": "\"Low ammo\"",
+      "to": "\"弹药不足\"",
+      "path": "$.program.body.0.expression.callee.body.body.852.body.body.21.body.body.14.declarations.1.init.alternate.alternate.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1359358,
+      "end": 1360026,
+      "from": "\n  <dl class=\"keys\">\n    <div><dt>Move</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd></div>\n    <div><dt>Look</dt><dd>Mouse</dd></div>\n    <div><dt>Fire</dt><dd>Left button</dd></div>\n    <div><dt>Aim</dt><dd>Right button</dd></div>\n    <div><dt>Reload</dt><dd><kbd>R</kbd></dd></div>\n    <div><dt>Cut relay</dt><dd>Hold <kbd>E</kbd></dd></div>\n    <div><dt>Jump</dt><dd><kbd>Space</kbd></dd></div>\n    <div><dt>Sprint</dt><dd><kbd>Shift</kbd></dd></div>\n    <div><dt>Crouch</dt><dd><kbd>C</kbd> or <kbd>Ctrl</kbd></dd></div>\n    <div><dt>Melee</dt><dd><kbd>F</kbd></dd></div>\n    <div><dt>Pause</dt><dd><kbd>Esc</kbd> or <kbd>P</kbd></dd></div>\n  </dl>",
+      "to": "\n  <dl class=\"keys\">\n    <div><dt>移动</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd></div>\n    <div><dt>视角</dt><dd>鼠标</dd></div>\n    <div><dt>开火</dt><dd>鼠标左键</dd></div>\n    <div><dt>瞄准</dt><dd>鼠标右键</dd></div>\n    <div><dt>换弹</dt><dd><kbd>R</kbd></dd></div>\n    <div><dt>切断中继</dt><dd>按住 <kbd>E</kbd></dd></div>\n    <div><dt>跳跃</dt><dd><kbd>Space</kbd></dd></div>\n    <div><dt>冲刺</dt><dd><kbd>Shift</kbd></dd></div>\n    <div><dt>蹲伏</dt><dd><kbd>C</kbd> 或 <kbd>Ctrl</kbd></dd></div>\n    <div><dt>近战</dt><dd><kbd>F</kbd></dd></div>\n    <div><dt>暂停</dt><dd><kbd>Esc</kbd> 或 <kbd>P</kbd></dd></div>\n  </dl>",
+      "path": "$.program.body.0.expression.callee.body.body.856.declarations.0.init.quasis.0",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1360032,
+      "end": 1360500,
+      "from": "\n  <dl class=\"keys\">\n    <div><dt>Move</dt><dd>Left thumb, anywhere</dd></div>\n    <div><dt>Look</dt><dd>Drag the right side</dd></div>\n    <div><dt>Fire</dt><dd>Hold FIRE, drag to track</dd></div>\n    <div><dt>Aim</dt><dd>AIM toggles</dd></div>\n    <div><dt>Reload</dt><dd>RLD</dd></div>\n    <div><dt>Jump</dt><dd>JUMP</dd></div>\n    <div><dt>Cut relay</dt><dd>Hold USE at a relay</dd></div>\n    <div><dt>Sprint</dt><dd>Push the stick fully forward</dd></div>\n  </dl>",
+      "to": "\n  <dl class=\"keys\">\n    <div><dt>移动</dt><dd>左手拇指在左侧任意位置滑动</dd></div>\n    <div><dt>视角</dt><dd>在屏幕右侧拖动</dd></div>\n    <div><dt>开火</dt><dd>按住“开火”，拖动跟踪目标</dd></div>\n    <div><dt>瞄准</dt><dd>点击“瞄准”切换瞄准状态</dd></div>\n    <div><dt>换弹</dt><dd>换弹</dd></div>\n    <div><dt>跳跃</dt><dd>跳跃</dd></div>\n    <div><dt>切断中继</dt><dd>靠近中继并按住“交互”</dd></div>\n    <div><dt>冲刺</dt><dd>将摇杆推到最前方</dd></div>\n  </dl>",
+      "path": "$.program.body.0.expression.callee.body.body.856.declarations.1.init.quasis.0",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1360650,
+      "end": 1364550,
+      "from": "\n    <div class=\"m-veil\"></div>\n    <div class=\"m-bars\"><i></i><i></i></div>\n\n    <section class=\"m-screen m-title\" data-s=\"title\" aria-label=\"Saltline\">\n      <div class=\"m-title-main\">\n        <div class=\"m-eyebrow\"><span class=\"m-tag\">B4</span><span>Port Authority Breach Unit</span><span class=\"m-dim\">Saltline Terminal \\xB7 05:42</span></div>\n        <h1 class=\"m-word\">SALTLINE</h1>\n        <p class=\"m-premise\">The port\\u2019s security net has gone feral. Cut its three uplinks. Reach the boat.</p>\n        <div class=\"m-actions\">\n          <button class=\"btn primary\" data-act=\"deploy\">Deploy</button>\n          <button class=\"btn\" data-act=\"settings\">Settings</button>\n          <button class=\"btn m-only-narrow\" data-act=\"controls\">Controls</button>\n        </div>\n        <p class=\"m-note\">Every surface, machine and sound is generated in your browser. Nothing is downloaded.</p>\n      </div>\n      <aside class=\"m-legend\" aria-label=\"Controls at a glance\">\n        <div><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span><span><kbd>Mouse</kbd> Look</span><span><kbd>LMB</kbd> Fire</span><span><kbd>RMB</kbd> Aim</span><span><kbd>R</kbd> Reload</span></div>\n        <div><span><kbd>E</kbd> Cut relay</span><span><kbd>Space</kbd> Jump</span><span><kbd>Shift</kbd> Sprint</span><span><kbd>C</kbd> Crouch</span><span><kbd>Esc</kbd> Pause</span></div>\n        <div class=\"lg-touch\"><em>Touch</em><span>Left thumb moves</span><span>Right thumb looks</span><span>Fire \\xB7 Aim \\xB7 Reload \\xB7 Jump on screen</span></div>\n      </aside>\n    </section>\n\n    <section class=\"m-screen m-card\" data-s=\"paused\" aria-label=\"Paused\">\n      <div class=\"m-k\">Operation on hold</div>\n      <h2 class=\"m-h\">Paused</h2>\n      <p class=\"m-line\" data-f=\"lookmode\"></p>\n      <div class=\"m-actions col\">\n        <button class=\"btn primary\" data-act=\"resume\">Resume</button>\n        <button class=\"btn\" data-act=\"settings\">Settings</button>\n        <button class=\"btn\" data-act=\"controls\">Controls</button>\n        <button class=\"btn\" data-act=\"restart\">Restart mission</button>\n      </div>\n    </section>\n\n    <section class=\"m-screen m-card m-dead\" data-s=\"dead\" aria-label=\"Signal lost\">\n      <div class=\"m-k\">Breacher down</div>\n      <h2 class=\"m-h\">Signal lost</h2>\n      <dl class=\"m-stats\"><div><dt>Time survived</dt><dd data-f=\"dead-time\">00:00</dd></div><div><dt>Relays cut</dt><dd data-f=\"dead-relays\">0/3</dd></div></dl>\n      <div class=\"m-actions col\"><button class=\"btn primary\" data-act=\"retry\">Retry</button></div>\n    </section>\n\n    <section class=\"m-screen m-card m-debrief\" data-s=\"complete\" aria-label=\"Debrief\">\n      <div class=\"m-k\">Berth 4 \\xB7 Debrief</div>\n      <h2 class=\"m-h\">Saltline is dark</h2>\n      <div class=\"m-rating\"><span>Rating</span><b data-f=\"rating\">Clean</b></div>\n      <dl class=\"m-stats\">\n        <div><dt>Time</dt><dd data-f=\"time\">00:00</dd></div>\n        <div><dt>Accuracy</dt><dd data-f=\"acc\">0%</dd></div>\n        <div><dt>Machines destroyed</dt><dd data-f=\"kills\">0</dd></div>\n        <div><dt>Retries</dt><dd data-f=\"retries\">0</dd></div>\n      </dl>\n      <div class=\"m-actions col\"><button class=\"btn primary\" data-act=\"redeploy\">Redeploy</button></div>\n    </section>\n\n    <div class=\"panel\" role=\"dialog\" aria-modal=\"true\" aria-label=\"Settings and controls\" tabindex=\"-1\" hidden>\n      <header class=\"panel-h\">\n        <div class=\"tabs\" role=\"tablist\">\n          <button class=\"tab\" role=\"tab\" data-tab=\"settings\" aria-selected=\"true\">Settings</button>\n          <button class=\"tab\" role=\"tab\" data-tab=\"controls\" aria-selected=\"false\">Controls</button>\n        </div>\n        <button class=\"btn small\" data-act=\"close-panel\">Close</button>\n      </header>\n      <div class=\"panel-b\" data-pane=\"settings\">\n        <div class=\"row\"><label id=\"l-q\">Graphics quality</label>\n          <div class=\"seg\" role=\"group\" aria-labelledby=\"l-q\">",
+      "to": "\n    <div class=\"m-veil\"></div>\n    <div class=\"m-bars\"><i></i><i></i></div>\n\n    <section class=\"m-screen m-title\" data-s=\"title\" aria-label=\"枪王 GunKing\">\n      <div class=\"m-title-main\">\n        <div class=\"m-eyebrow\"><span class=\"m-tag\">B4</span><span>枪王突击小队</span><span class=\"m-dim\">枪王港区 · 05:42</span></div>\n        <h1 class=\"m-word\">枪王<span class=\"m-subtitle\">GunKing</span></h1>\n        <p class=\"m-premise\">港区防御系统失控。切断三处中继，突破封锁，登船撤离。</p>\n        <div class=\"m-actions\">\n          <button class=\"btn primary\" data-act=\"deploy\">开始行动</button>\n          <button class=\"btn\" data-act=\"settings\">设置</button>\n          <button class=\"btn m-only-narrow\" data-act=\"controls\">操作说明</button>\n        </div>\n        <p class=\"m-note\">场景、机械、纹理与声音均由浏览器中的代码实时生成。原作：Felix Rieseberg · Claude Fable 5.2。</p>\n      </div>\n      <aside class=\"m-legend\" aria-label=\"操作速览\">\n        <div><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动</span><span><kbd>鼠标</kbd> 视角</span><span><kbd>左键</kbd> 开火</span><span><kbd>右键</kbd> 瞄准</span><span><kbd>R</kbd> 换弹</span></div>\n        <div><span><kbd>E</kbd> 切断中继</span><span><kbd>Space</kbd> 跳跃</span><span><kbd>Shift</kbd> 冲刺</span><span><kbd>C</kbd> 蹲伏</span><span><kbd>Esc</kbd> 暂停</span></div>\n        <div class=\"lg-touch\"><em>触屏操作</em><span>左手拇指移动</span><span>右手拇指转动视角</span><span>屏幕按钮：开火 · 瞄准 · 换弹 · 跳跃</span></div>\n      </aside>\n    </section>\n\n    <section class=\"m-screen m-card\" data-s=\"paused\" aria-label=\"已暂停\">\n      <div class=\"m-k\">行动暂时中止</div>\n      <h2 class=\"m-h\">已暂停</h2>\n      <p class=\"m-line\" data-f=\"lookmode\"></p>\n      <div class=\"m-actions col\">\n        <button class=\"btn primary\" data-act=\"resume\">继续游戏</button>\n        <button class=\"btn\" data-act=\"settings\">设置</button>\n        <button class=\"btn\" data-act=\"controls\">操作说明</button>\n        <button class=\"btn\" data-act=\"restart\">重新开始任务</button>\n      </div>\n    </section>\n\n    <section class=\"m-screen m-card m-dead\" data-s=\"dead\" aria-label=\"信号中断\">\n      <div class=\"m-k\">突击队员倒下</div>\n      <h2 class=\"m-h\">信号中断</h2>\n      <dl class=\"m-stats\"><div><dt>生存时间</dt><dd data-f=\"dead-time\">00:00</dd></div><div><dt>已切断中继</dt><dd data-f=\"dead-relays\">0/3</dd></div></dl>\n      <div class=\"m-actions col\"><button class=\"btn primary\" data-act=\"retry\">重试</button></div>\n    </section>\n\n    <section class=\"m-screen m-card m-debrief\" data-s=\"complete\" aria-label=\"行动简报\">\n      <div class=\"m-k\">四号泊位 · 行动简报</div>\n      <h2 class=\"m-h\">枪王港区已解除封锁</h2>\n      <div class=\"m-rating\"><span>行动评级</span><b data-f=\"rating\">干净利落</b></div>\n      <dl class=\"m-stats\">\n        <div><dt>用时</dt><dd data-f=\"time\">00:00</dd></div>\n        <div><dt>命中率</dt><dd data-f=\"acc\">0%</dd></div>\n        <div><dt>摧毁机械</dt><dd data-f=\"kills\">0</dd></div>\n        <div><dt>重试次数</dt><dd data-f=\"retries\">0</dd></div>\n      </dl>\n      <div class=\"m-actions col\"><button class=\"btn primary\" data-act=\"redeploy\">再次出击</button></div>\n    </section>\n\n    <div class=\"panel\" role=\"dialog\" aria-modal=\"true\" aria-label=\"设置与操作\" tabindex=\"-1\" hidden>\n      <header class=\"panel-h\">\n        <div class=\"tabs\" role=\"tablist\">\n          <button class=\"tab\" role=\"tab\" data-tab=\"settings\" aria-selected=\"true\">设置</button>\n          <button class=\"tab\" role=\"tab\" data-tab=\"controls\" aria-selected=\"false\">操作说明</button>\n        </div>\n        <button class=\"btn small\" data-act=\"close-panel\">关闭</button>\n      </header>\n      <div class=\"panel-b\" data-pane=\"settings\">\n        <div class=\"row\"><label id=\"l-q\">画面质量</label>\n          <div class=\"seg\" role=\"group\" aria-labelledby=\"l-q\">",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.1.expression.expressions.2.right.quasis.0",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1364608,
+      "end": 1364609,
+      "from": "U",
+      "to": "({low:\"低\",medium:\"中\",high:\"高\",ultra:\"极高\"})[U]",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.1.expression.expressions.2.right.expressions.0.callee.object.arguments.0.body.expressions.1",
+      "category": "中文显示映射"
+    },
+    {
+      "start": 1364631,
+      "end": 1365753,
+      "from": "</div></div>\n        <div class=\"row\"><label for=\"s-sens\">Mouse sensitivity</label><div class=\"slider\"><input id=\"s-sens\" type=\"range\" min=\"0.2\" max=\"3\" step=\"0.05\"><output data-o=\"sens\"></output></div></div>\n        <div class=\"row\"><label id=\"l-inv\">Invert Y</label><button class=\"toggle\" data-act=\"invert\" aria-labelledby=\"l-inv\" aria-pressed=\"false\"><i></i><span>Off</span></button></div>\n        <div class=\"row\"><label for=\"s-vol\">Master volume</label><div class=\"slider\"><input id=\"s-vol\" type=\"range\" min=\"0\" max=\"100\" step=\"1\"><output data-o=\"vol\"></output></div></div>\n        <div class=\"row\"><label for=\"s-fov\">Field of view</label><div class=\"slider\"><input id=\"s-fov\" type=\"range\" min=\"60\" max=\"95\" step=\"1\"><output data-o=\"fov\"></output></div></div>\n        <div class=\"row\" data-row=\"fs\"><label id=\"l-fs\">Display</label><button class=\"btn small\" data-act=\"fullscreen\" aria-labelledby=\"l-fs fs-t\"><span id=\"fs-t\">Enter fullscreen</span></button></div>\n        <p class=\"panel-note\" data-f=\"qnote\"></p>\n      </div>\n      <div class=\"panel-b\" data-pane=\"controls\" hidden>\n        <h3>Keyboard \\xB7 Mouse</h3>",
+      "to": "</div></div>\n        <div class=\"row\"><label for=\"s-sens\">鼠标灵敏度</label><div class=\"slider\"><input id=\"s-sens\" type=\"range\" min=\"0.2\" max=\"3\" step=\"0.05\"><output data-o=\"sens\"></output></div></div>\n        <div class=\"row\"><label id=\"l-inv\">反转垂直视角</label><button class=\"toggle\" data-act=\"invert\" aria-labelledby=\"l-inv\" aria-pressed=\"false\"><i></i><span>关闭</span></button></div>\n        <div class=\"row\"><label for=\"s-vol\">主音量</label><div class=\"slider\"><input id=\"s-vol\" type=\"range\" min=\"0\" max=\"100\" step=\"1\"><output data-o=\"vol\"></output></div></div>\n        <div class=\"row\"><label for=\"s-fov\">视野范围</label><div class=\"slider\"><input id=\"s-fov\" type=\"range\" min=\"60\" max=\"95\" step=\"1\"><output data-o=\"fov\"></output></div></div>\n        <div class=\"row\" data-row=\"fs\"><label id=\"l-fs\">显示模式</label><button class=\"btn small\" data-act=\"fullscreen\" aria-labelledby=\"l-fs fs-t\"><span id=\"fs-t\">进入全屏</span></button></div>\n        <p class=\"panel-note\" data-f=\"qnote\"></p>\n      </div>\n      <div class=\"panel-b\" data-pane=\"controls\" hidden>\n        <h3>键盘 · 鼠标</h3>",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.1.expression.expressions.2.right.quasis.1",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1365758,
+      "end": 1366024,
+      "from": "\n        <p class=\"panel-note\">If the browser will not capture the mouse, hold a mouse button and drag to look (left also fires, right also aims). Arrow keys or <kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> turn, <kbd>Enter</kbd> fires.</p>\n        <h3>Touch</h3>",
+      "to": "\n        <p class=\"panel-note\">若浏览器无法捕获鼠标，按住鼠标按钮并拖动以调整视角（左键同时开火，右键同时瞄准）。方向键或 <kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> 转向，<kbd>Enter</kbd> 开火。</p>\n        <h3>触屏操作</h3>",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.1.expression.expressions.2.right.quasis.2",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1366029,
+      "end": 1366429,
+      "from": "\n        <h3>Gamepad</h3>\n        <p class=\"panel-note\">Sticks move and look \\xB7 RT fire \\xB7 LT aim \\xB7 A jump \\xB7 B crouch \\xB7 X reload \\xB7 Y cut relay \\xB7 L3 sprint \\xB7 Start pause.</p>\n      </div>\n    </div>\n\n    <div class=\"loc-card\" aria-hidden=\"true\"><i></i><b>Saltline Terminal \\xB7 Berth 4 \\xB7 05:42</b><span>Port Authority Breach Unit \\u2014 one breacher, no backup</span></div>\n  ",
+      "to": "\n        <h3>手柄</h3>\n        <p class=\"panel-note\">摇杆移动与转动视角 · RT 开火 · LT 瞄准 · A 跳跃 · B 蹲伏 · X 换弹 · Y 切断中继 · L3 冲刺 · Start 暂停。</p>\n      </div>\n    </div>\n\n    <div class=\"loc-card\" aria-hidden=\"true\"><i></i><b>枪王港区 · 四号泊位 · 05:42</b><span>枪王突击小队 · 单兵行动，无人支援</span></div>\n  ",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.1.expression.expressions.2.right.quasis.3",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1367715,
+      "end": 1367719,
+      "from": "\"On\"",
+      "to": "\"开启\"",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.4.body.body.4.expression.expressions.1.right.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1367720,
+      "end": 1367725,
+      "from": "\"Off\"",
+      "to": "\"关闭\"",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.4.body.body.4.expression.expressions.1.right.alternate",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1367769,
+      "end": 1367805,
+      "from": "Quality was picked for this device (",
+      "to": "已根据设备自动选择画质（",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.4.body.body.4.expression.expressions.2.right.consequent.quasis.0",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1367807,
+      "end": 1367808,
+      "from": "U",
+      "to": "({low:\"低\",medium:\"中\",high:\"高\",ultra:\"极高\"})[U]",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.4.body.body.4.expression.expressions.2.right.consequent.expressions.0.left",
+      "category": "中文显示映射"
+    },
+    {
+      "start": 1367810,
+      "end": 1367819,
+      "from": "\"default\"",
+      "to": "\"默认\"",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.4.body.body.4.expression.expressions.2.right.consequent.expressions.0.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1367820,
+      "end": 1367860,
+      "from": "). Lower it if the frame rate struggles.",
+      "to": "），运行不流畅时可降低画质。",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.4.body.body.4.expression.expressions.2.right.consequent.quasis.1",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1367862,
+      "end": 1367948,
+      "from": "\"Quality changes apply at once; shadows and reflections may take a moment to rebuild.\"",
+      "to": "\"画质设置立即生效；阴影和反射需要片刻重新生成。\"",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.4.body.body.4.expression.expressions.2.right.alternate",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1368503,
+      "end": 1368537,
+      "from": "\"Fullscreen is not available here\"",
+      "to": "\"当前环境不支持全屏\"",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.8.body.body.0.expression.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1368768,
+      "end": 1368785,
+      "from": "\"Exit fullscreen\"",
+      "to": "\"退出全屏\"",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.10.declarations.0.init.body.body.0.expression.right.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1368786,
+      "end": 1368804,
+      "from": "\"Enter fullscreen\"",
+      "to": "\"进入全屏\"",
+      "path": "$.program.body.0.expression.callee.body.body.857.body.body.10.declarations.0.init.body.body.0.expression.right.alternate",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371626,
+      "end": 1371633,
+      "from": "\"NORTH\"",
+      "to": "\"北方\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.1.init.elements.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371634,
+      "end": 1371646,
+      "from": "\"NORTH-EAST\"",
+      "to": "\"东北方\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.1.init.elements.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371647,
+      "end": 1371653,
+      "from": "\"EAST\"",
+      "to": "\"东方\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.1.init.elements.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371654,
+      "end": 1371666,
+      "from": "\"SOUTH-EAST\"",
+      "to": "\"东南方\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.1.init.elements.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371667,
+      "end": 1371674,
+      "from": "\"SOUTH\"",
+      "to": "\"南方\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.1.init.elements.4",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371675,
+      "end": 1371687,
+      "from": "\"SOUTH-WEST\"",
+      "to": "\"西南方\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.1.init.elements.5",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371688,
+      "end": 1371694,
+      "from": "\"WEST\"",
+      "to": "\"西方\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.1.init.elements.6",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371695,
+      "end": 1371707,
+      "from": "\"NORTH-WEST\"",
+      "to": "\"西北方\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.1.init.elements.7",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371719,
+      "end": 1371828,
+      "from": "\"Breacher, this is Control. The Harbormaster holds the berth. Cut its three uplinks \\u2014 yard, shed, quay.\"",
+      "to": "\"突击队员，这里是指挥中心。港区主控已封锁泊位。切断堆场、仓库、码头的三处中继。\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.2.init.properties.0.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371837,
+      "end": 1371894,
+      "from": "\"It has seen you. Gulls fly, Hounds walk. Put them down.\"",
+      "to": "\"你已被发现！空中有机械飞鸥，地面有机械猎犬。消灭它们。\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.2.init.properties.1.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371900,
+      "end": 1371955,
+      "from": "\"One relay dark. It felt that \\u2014 machines inbound.\"",
+      "to": "\"第一处中继已断开。敌方已察觉，机械守卫正在赶来。\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.2.init.properties.2.value.elements.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1371956,
+      "end": 1372013,
+      "from": "\"Two dark. It is throwing everything it has left at you.\"",
+      "to": "\"第二处中继已断开。敌方正全力围攻，小心应对。\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.2.init.properties.2.value.elements.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1372019,
+      "end": 1372092,
+      "from": "\"All three dark. The boat is holding at the quay ladder, south end. Run.\"",
+      "to": "\"三处中继全部断开！撤离艇在码头南端的舷梯旁，快撤！\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.2.init.properties.3.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1372097,
+      "end": 1372146,
+      "from": "\"You are hit hard. Get behind steel and breathe.\"",
+      "to": "\"伤势严重！找掩体躲避，稍作恢复。\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.2.init.properties.4.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1372152,
+      "end": 1372202,
+      "from": "\"Breacher is aboard. Saltline is dark. Good work.\"",
+      "to": "\"突击队员已登船，港区封锁解除。干得漂亮！\"",
+      "path": "$.program.body.0.expression.callee.body.body.858.declarations.2.init.properties.5.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1375417,
+      "end": 1375425,
+      "from": "\"Relay \"",
+      "to": "\"中继 \"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.10.body.body.1.declarations.0.init.arguments.0.body.properties.2.value.right.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1375513,
+      "end": 1375517,
+      "from": "\"EX\"",
+      "to": "\"撤离\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.10.body.body.2.expression.expressions.0.right.arguments.0.properties.1.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1375524,
+      "end": 1375530,
+      "from": "\"Boat\"",
+      "to": "\"撤离艇\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.10.body.body.2.expression.expressions.0.right.arguments.0.properties.2.value",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1376081,
+      "end": 1376098,
+      "from": "\"Get to the boat\"",
+      "to": "\"前往撤离艇\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.13.body.body.0.consequent.argument",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1376144,
+      "end": 1376173,
+      "from": "\"Cut the three uplink relays\"",
+      "to": "\"切断三处上行中继\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.13.body.body.2.argument.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1376180,
+      "end": 1376200,
+      "from": "\"Cut the last relay\"",
+      "to": "\"切断最后一处中继\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.13.body.body.2.argument.alternate.consequent",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1376202,
+      "end": 1376220,
+      "from": "Cut the remaining ",
+      "to": "切断剩余 ",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.13.body.body.2.argument.alternate.alternate.quasis.0",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1376224,
+      "end": 1376231,
+      "from": " relays",
+      "to": " 处中继",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.13.body.body.2.argument.alternate.alternate.quasis.1",
+      "category": "中文模板（剔除改名与宣传）"
+    },
+    {
+      "start": 1377095,
+      "end": 1377125,
+      "from": "\"Resume recaptures the mouse.\"",
+      "to": "\"继续游戏后将重新捕获鼠标。\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.16.body.body.0.expression.right.expressions.3.arguments.0.alternate.alternate",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1378921,
+      "end": 1378938,
+      "from": "\"Contact \\u2014 \"",
+      "to": "\"发现敌情 · \"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.22.body.body.6.expression.right.arguments.0.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1380130,
+      "end": 1380155,
+      "from": "\"Hauled out of the water\"",
+      "to": "\"已从水中获救\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.26.expression.expressions.2.arguments.1.body.body.0.expression.right.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1380878,
+      "end": 1380890,
+      "from": "\"Cut relay \"",
+      "to": "\"切断中继 \"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.28.body.body.2.expression.consequent.right.arguments.0.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1381157,
+      "end": 1381217,
+      "from": "\"Relays still live \\u2014 the boat will not wait under fire\"",
+      "to": "\"中继尚未断开，撤离艇无法在火力下接应\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.28.body.body.4.consequent.body.1.expression.expressions.0.alternate.right.expressions.1.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1382391,
+      "end": 1382398,
+      "from": "\"Messy\"",
+      "to": "\"险象环生\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.31.body.body.1.declarations.3.init.object.elements.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1382399,
+      "end": 1382405,
+      "from": "\"Loud\"",
+      "to": "\"火力全开\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.31.body.body.1.declarations.3.init.object.elements.1",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1382406,
+      "end": 1382414,
+      "from": "\"Steady\"",
+      "to": "\"稳扎稳打\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.31.body.body.1.declarations.3.init.object.elements.2",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1382415,
+      "end": 1382422,
+      "from": "\"Clean\"",
+      "to": "\"干净利落\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.31.body.body.1.declarations.3.init.object.elements.3",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1382423,
+      "end": 1382430,
+      "from": "\"Sharp\"",
+      "to": "\"精准果断\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.31.body.body.1.declarations.3.init.object.elements.4",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1382431,
+      "end": 1382441,
+      "from": "\"Surgical\"",
+      "to": "\"完美突击\"",
+      "path": "$.program.body.0.expression.callee.body.body.859.body.body.31.body.body.1.declarations.3.init.object.elements.5",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1384621,
+      "end": 1384649,
+      "from": "\"Saltline could not start: \"",
+      "to": "\"GunKing 启动失败：\"",
+      "path": "$.program.body.0.expression.callee.body.body.866.body.body.2.expression.expressions.1.right.left",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1385935,
+      "end": 1385956,
+      "from": "\"Waking the renderer\"",
+      "to": "\"正在启动渲染器\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.10.test.expressions.0.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1386121,
+      "end": 1386150,
+      "from": "\"Mixing paint, rust and rain\"",
+      "to": "\"正在生成涂装、锈迹与雨水\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.10.test.expressions.6.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1387044,
+      "end": 1387065,
+      "from": "\"Stacking containers\"",
+      "to": "\"正在布置集装箱\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.10.alternate.body.0.test.expressions.0.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1387118,
+      "end": 1387138,
+      "from": "\"Raising the cranes\"",
+      "to": "\"正在架设起重机\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.10.alternate.body.0.test.expressions.2.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1387193,
+      "end": 1387213,
+      "from": "\"Flooding the apron\"",
+      "to": "\"正在生成港区地面\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.10.alternate.body.0.test.expressions.4.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1387391,
+      "end": 1387418,
+      "from": "\"Loading tracers and smoke\"",
+      "to": "\"正在加载弹道与烟雾\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.10.alternate.body.1.expression.expressions.1.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1387548,
+      "end": 1387568,
+      "from": "\"Checking the rifle\"",
+      "to": "\"正在检查制式步枪\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.10.alternate.body.1.expression.expressions.6.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1387620,
+      "end": 1387645,
+      "from": "\"Waking the Harbormaster\"",
+      "to": "\"正在启动港区主控\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.10.alternate.body.1.expression.expressions.8.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1387743,
+      "end": 1387768,
+      "from": "\"Waiting for first light\"",
+      "to": "\"正在准备首帧画面\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.11.expression.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1388232,
+      "end": 1388239,
+      "from": "\"Ready\"",
+      "to": "\"准备就绪\"",
+      "path": "$.program.body.0.expression.callee.body.body.871.body.body.15.expression.expressions.2.argument.arguments.0",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1389864,
+      "end": 1390102,
+      "from": "'position:absolute;left:12px;top:12px;z-index:90;margin:0;padding:10px 12px;font:12px/1.45 \"IBM Plex Mono\",ui-monospace,monospace;color:#d8f0d0;background:rgba(0,0,0,.72);white-space:pre-wrap;max-width:min(560px,90vw);pointer-events:none'",
+      "to": "\"position:absolute;left:12px;top:12px;z-index:90;margin:0;padding:10px 12px;font:12px/1.45 \\\"PingFang SC\\\",ui-monospace,monospace;color:#d8f0d0;background:rgba(0,0,0,.72);white-space:pre-wrap;max-width:min(560px,90vw);pointer-events:none\"",
+      "path": "$.program.body.0.expression.callee.body.body.872.body.body.1.expression.expressions.1.right",
+      "category": "中文文本或原名恢复"
+    },
+    {
+      "start": 1391097,
+      "end": 1391115,
+      "from": "SALTLINE BENCH  t=",
+      "to": "GunKing 性能测试  t=",
+      "path": "$.program.body.0.expression.callee.body.body.872.body.body.5.expression.expressions.1.right.properties.0.body.body.2.consequent.body.2.expression.right.quasis.0",
+      "category": "中文模板（剔除改名与宣传）"
+    }
+  ]
+}
