@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "2bf9c65f98cca962b0b09c43a4e8aebf5c14471a",
+  "snapshot": "95c4fb670c74bb8d6a1fc9537d3fece87d38f7b7",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-10-13T11:50:24Z",
@@ -23,6 +23,16 @@
       "commit": "c10bfcd05d2dd04410900facbe191a00cf75186b",
       "scope": "codex/attention-residuals"
     },
+    "codex/chongqing-8d/index.html": {
+      "committedAt": "2026-11-12T05:46:12Z",
+      "commit": "95c4fb670c74bb8d6a1fc9537d3fece87d38f7b7",
+      "scope": "codex/chongqing-8d"
+    },
+    "codex/crab-island-3d/index.html": {
+      "committedAt": "2026-11-12T05:46:12Z",
+      "commit": "95c4fb670c74bb8d6a1fc9537d3fece87d38f7b7",
+      "scope": "codex/crab-island-3d"
+    },
     "codex/eggstreme-farming/index.html": {
       "committedAt": "2026-10-13T08:15:51Z",
       "commit": "170a19bfc4fe5ff02be5aec78550bc9b458c01be",
@@ -39,8 +49,8 @@
       "scope": "codex/gif-motion-studies"
     },
     "codex/gunking/index.html": {
-      "committedAt": "2026-11-12T02:47:48Z",
-      "commit": "2bf9c65f98cca962b0b09c43a4e8aebf5c14471a",
+      "committedAt": "2026-11-12T05:46:12Z",
+      "commit": "95c4fb670c74bb8d6a1fc9537d3fece87d38f7b7",
       "scope": "codex/gunking"
     },
     "codex/hanmo-qingyun/index.html": {
@@ -57,6 +67,11 @@
       "committedAt": "2026-10-14T07:53:14Z",
       "commit": "568a21b75c2810ca52775c79bac8fe78348e5544",
       "scope": "codex/ink-trace"
+    },
+    "codex/iphone-duo-exhibit/index.html": {
+      "committedAt": "2026-11-12T05:46:12Z",
+      "commit": "95c4fb670c74bb8d6a1fc9537d3fece87d38f7b7",
+      "scope": "codex/iphone-duo-exhibit"
     },
     "codex/jarvis/index.html": {
       "committedAt": "2026-10-15T07:43:14Z",
@@ -108,6 +123,11 @@
       "commit": "3e6946fe0f217c794689d4ec19617fe3bd33d5cc",
       "scope": "codex/serpent-survivor"
     },
+    "codex/silk-scroll/index.html": {
+      "committedAt": "2026-11-12T05:46:12Z",
+      "commit": "95c4fb670c74bb8d6a1fc9537d3fece87d38f7b7",
+      "scope": "codex/silk-scroll"
+    },
     "codex/three-kingdoms-gilded/index.html": {
       "committedAt": "2026-10-15T15:47:03Z",
       "commit": "9aae79818e94197217d09c6a7774d1f359020e0a",
@@ -127,6 +147,11 @@
       "committedAt": "2026-10-14T07:47:45Z",
       "commit": "fe4a1cf35c0bd151059baaa7a3b935c56bdb144b",
       "scope": "codex/woolly-debts"
+    },
+    "codex/youtube-frame-reconstruction/index.html": {
+      "committedAt": "2026-11-12T05:46:12Z",
+      "commit": "95c4fb670c74bb8d6a1fc9537d3fece87d38f7b7",
+      "scope": "codex/youtube-frame-reconstruction"
     },
     "trae/glsl-poster/index.html": {
       "committedAt": "2026-10-11T06:44:36Z",
