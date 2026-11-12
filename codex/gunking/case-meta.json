@@ -38,5 +38,25 @@
   "validationChecks": 16,
   "localValidationPassed": true,
   "liveVerified": true,
-  "liveVerifiedAt": "2026-11-12T02:45:55.393Z"
+  "liveVerifiedAt": "2026-11-12T02:45:55.393Z",
+  "cumulativeSession": {
+    "durationSeconds": 4851,
+    "durationLabel": "1 小时 20 分 51 秒",
+    "durationBasis": "累计会话各轮 task_started 至 task_complete 的墙钟执行时间；排除轮次间等待，包含执行内的工具、验证和排队；本次集中上传另计。",
+    "sessionId": "01a1ca42-9b3c-7233-960f-e96f7d7ef941",
+    "turns": [
+      {
+        "start": "2026-11-11T10:58:46.741Z",
+        "end": "2026-11-11T11:46:25.188Z",
+        "seconds": 2858.447,
+        "type": "task_complete"
+      },
+      {
+        "start": "2026-11-12T02:17:05.785Z",
+        "end": "2026-11-12T02:50:18.147Z",
+        "seconds": 1992.362,
+        "type": "task_complete"
+      }
+    ]
+  }
 }

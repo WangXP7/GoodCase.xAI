@@ -78,6 +78,11 @@
   set('codex/wanming-xianzhi','晚明县志 · 叙事治理','游戏|文字叙事|国风历史');
   set('codex/woolly-debts','羊债必须清 · 砸罐还债','游戏|经营养成|3D');
   const covers = {
+    "codex/crab-island-3d":"shots/cover.jpg",
+    "codex/chongqing-8d":"shots/cover.jpg",
+    "codex/youtube-frame-reconstruction":"shots/cover.jpg",
+    "codex/iphone-duo-exhibit":"shots/cover.jpg",
+    "codex/silk-scroll":"shots/cover.jpg",
     'codex/gunking':'shots/03-gameplay.jpg',
     'workbuddy/diorama-winter':'shots/iter-13-final.png',
     'workbuddy/gummy-bears':'shots/01-pile.jpg',

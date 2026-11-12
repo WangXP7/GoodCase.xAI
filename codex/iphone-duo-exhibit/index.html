@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eeefed">
+  <meta name="description" content="An independent, interactive industrial design study. Explore, unfold and disassemble the imaginary iPhone Duo in real time.">
+  <title>iPhone Duo · 双屏概念展台 / Concept Exhibit</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='17' height='30' x='2' y='5' rx='4' fill='%23373d43'/%3E%3Crect width='17' height='30' x='21' y='5' rx='4' fill='%238c9ba8'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+  <div id="viewport" aria-label="Interactive 3D iPhone Duo. Drag to rotate. Scroll to zoom."></div>
+  <header class="topbar">
+    <a href="./" class="brand" aria-label="Duo concept home"><svg viewBox="0 0 30 30" fill="none"><rect x="3" y="5" width="10.5" height="20" rx="2.6"/><rect x="16.5" y="5" width="10.5" height="20" rx="2.6"/></svg><span>DUO<span class="brand-small"> DESIGN STUDY</span></span></a>
+    <div class="top-center">OBJECTS OF POSSIBILITY <span>/</span> No. 001</div>
+    <button id="about-btn" class="text-button">About the concept <span>↗</span></button>
+  </header>
+  <main>
+    <section class="intro" aria-label="Exhibit introduction">
+      <div class="eyebrow"><span class="live-dot"></span> AN INDEPENDENT CONCEPT</div>
+      <h1>iPhone Duo<span class="period">.</span></h1>
+      <p class="tagline">A familiar feeling.<br>An entirely new dimension.</p>
+      <p class="intro-copy">Two displays. One considered object.<br>A study in what could unfold.</p>
+      <div class="finish-label">01 <span class="line"></span> NATURAL TITANIUM</div>
+      <div class="swatches" aria-label="Device finish">
+        <button class="swatch selected" data-finish="natural" aria-label="Natural titanium" title="Natural titanium" aria-pressed="true" style="--swatch:#a9aaa5"></button>
+        <button class="swatch" data-finish="dark" aria-label="Black titanium" title="Black titanium" aria-pressed="false" style="--swatch:#41464b"></button>
+        <button class="swatch" data-finish="blue" aria-label="Blue titanium" title="Blue titanium" aria-pressed="false" style="--swatch:#7c8e9c"></button>
+        <span id="finish-name">Natural titanium</span>
+      </div>
+    </section>
+    <div class="view-heading"><span id="view-index">01 / 03</span><span id="view-label">THE COMPLETE OBJECT</span></div>
+    <div class="orbit-note"><span class="orbit-icon">↻</span><span>DESIGNED TO BE EXPLORED<br><small>Drag to rotate · Scroll to zoom</small></span></div>
+    <aside id="part-card" class="part-card" hidden aria-live="polite">
+      <div class="part-top"><span id="part-number">COMPONENT 01</span><button id="clear-part" aria-label="Close component details">×</button></div>
+      <h2 id="part-name"></h2><p id="part-description"></p><div class="part-material" id="part-material"></div>
+    </aside>
+    <section id="anatomy" class="anatomy" hidden aria-label="Component selector"><div class="eyebrow">THE ANATOMY <span>10 SYSTEMS</span></div><div id="part-list"></div></section>
+    <div class="bottom-caption"><span class="caption-rule"></span><div><span id="caption-title">Beautifully together.</span><small id="caption-copy">Precision, from every perspective.</small></div></div>
+    <div class="view-tools"><button id="reset-view" title="Reset camera" aria-label="Reset camera">⌖</button><button id="auto-rotate" title="Toggle automatic rotation" aria-label="Toggle automatic rotation" aria-pressed="false">↻</button><span></span><button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button></div>
+    <div class="control-area">
+      <div class="angle-control"><span>FOLD ANGLE</span><input id="fold" type="range" min="0" max="180" value="0" step="1" aria-label="Fold opening angle"><output id="angle">0°</output></div>
+      <nav class="dock" aria-label="Exhibit controls">
+        <button id="toggle-open" class="dock-button"><svg viewBox="0 0 24 24"><path d="M12 5v15M3 4l8 2v15l-8-2V4zm10 2 8-2v15l-8 2V6z"/></svg><span id="open-label">Open device</span></button>
+        <i></i>
+        <button id="explode" class="dock-button"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg><span>Explode</span></button>
+        <button id="reassemble" class="dock-button" disabled><svg viewBox="0 0 24 24"><path d="m12 7 8 5-8 5-8-5 8-5zm0-5v3m0 14v3M2 6l3 2m14 8 3 2M2 18l3-2M19 8l3-2"/></svg><span>Reassemble</span></button>
+        <i></i>
+        <button id="demonstrate" class="dock-button demo"><svg viewBox="0 0 24 24"><path d="m9 5 11 7-11 7V5z"/></svg><span id="demo-label">Demonstrate</span></button>
+      </nav>
+      <div id="demo-progress" hidden><div></div><span id="demo-phase">A new perspective</span></div>
+    </div>
+  </main>
+  <footer><span>CONCEPT EXHIBIT <b>© 2026</b></span><span>IMAGINED. NOT ANNOUNCED.<span class="footer-sep">/</span> REAL-TIME 3D</span><span class="status"><span class="live-dot"></span> <span id="status-text">INITIALIZING</span></span></footer>
+  <div id="loader"><div class="loader-mark">D<span>u</span>o.</div><p>Preparing your private viewing</p><span></span></div>
+  <dialog id="about"><button class="dialog-close" aria-label="Close about dialog">×</button><div class="eyebrow">A STUDY IN POSSIBILITY</div><h2>What if one<br>became two?</h2><p>iPhone Duo is an imaginary dual-screen device, explored as an independent industrial design concept. It is not an Apple product, announcement or leak.</p><p>Every surface and component in this exhibit is rendered in real time. The construction illustrates a plausible design direction; it is not a verified engineering specification.</p><div class="about-instructions"><span>DRAG / Rotate</span><span>SCROLL / Zoom</span><span>CLICK / Inspect a part</span></div><button class="about-done">Explore the object <span>↗</span></button></dialog>
+  <div id="toast" role="status"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

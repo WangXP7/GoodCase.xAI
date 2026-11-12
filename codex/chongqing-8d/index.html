@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#08151d">
+<title>重庆 · 山河入夜 | 8D CHONGQING</title>
+<style>
+:root{color-scheme:dark;--ink:#e8eee7;--muted:#9baea9;--accent:#d6b982;--line:rgba(204,222,208,.2)}
+*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#08151d;color:var(--ink);font:13px/1.6 "Microsoft YaHei",system-ui,sans-serif}canvas{display:block;touch-action:none}button{font:inherit;color:inherit;cursor:pointer}button:focus-visible{outline:2px solid var(--accent);outline-offset:5px}button:disabled{opacity:.4;cursor:default}
+#world{position:fixed;inset:0}.vignette{position:fixed;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(3,12,20,.3),transparent 23%,transparent 75%,rgba(3,12,20,.65)),linear-gradient(90deg,rgba(3,12,20,.22),transparent 40%)}
+header{position:fixed;top:28px;left:36px;right:36px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}.brand{font-size:11px;letter-spacing:4px}.brand b{display:inline-block;width:20px;height:20px;transform:rotate(45deg);border:1px solid var(--accent);margin-right:18px;vertical-align:middle}.live{display:flex;gap:20px;color:#b9c8c2;font-size:11px;letter-spacing:2px}.live i{display:inline-block;width:5px;height:5px;border-radius:50%;background:#a5cda5;box-shadow:0 0 9px #a5cda5;margin-right:7px}
+.intro{position:fixed;left:44px;top:110px;pointer-events:none}.eyebrow{font:10px/1.6 ui-monospace,monospace;letter-spacing:4px;color:var(--accent)}h1{font-family:"Songti SC","SimSun",serif;font-size:clamp(54px,6.6vw,92px);font-weight:400;letter-spacing:16px;margin:14px 0 5px;line-height:1.3}.subtitle{font-size:12px;letter-spacing:5px;color:#c1cbc3;margin:0}.intro:after{content:"";display:block;width:38px;border-bottom:1px solid var(--accent);margin-top:24px}.side-note{position:fixed;right:29px;top:44%;writing-mode:vertical-rl;font-size:10px;letter-spacing:4px;color:#a9b6b0}
+footer{position:fixed;bottom:26px;left:36px;right:36px;display:grid;grid-template-columns:1fr auto;gap:25px;align-items:end}.chapter{display:flex;gap:14px;align-items:center}.chapter .number{font:38px/1 ui-monospace,monospace;color:var(--accent);font-weight:200}.chapter strong{font-weight:400;font-size:14px;letter-spacing:3px}.chapter small{display:block;color:var(--muted);font:10px/2 ui-monospace,monospace;letter-spacing:2px}.controls{display:flex;gap:6px;padding:5px;border:1px solid var(--line);background:#091a23b8;backdrop-filter:blur(15px);border-radius:5px}.controls button{background:none;border:0;padding:11px 16px;font-size:11px;letter-spacing:1px;border-radius:2px;white-space:nowrap}.controls button:hover{background:#ffffff0c}.controls button.active{background:#c9ba931f;color:#eed9ad}.controls kbd{font:10px monospace;border:1px solid #82908a70;border-radius:2px;padding:1px 4px;margin-left:8px}.hint{margin-top:17px;color:#91a49f;font-size:10px;letter-spacing:1px;display:flex;gap:18px}.route-wrap{position:fixed;left:50%;bottom:118px;transform:translateX(-50%);width:min(410px,50vw);opacity:0;transition:opacity .5s;pointer-events:none}.riding .route-wrap{opacity:1}.riding .intro{opacity:0;transition:opacity .5s}.route-text{display:flex;justify-content:space-between;font-size:10px;letter-spacing:2px;color:#c9d4cb}.route{height:1px;background:#849f9344;margin-top:10px;position:relative}.route:before,.route:after{content:"";position:absolute;top:-2px;width:5px;height:5px;background:#b7a57c;border-radius:50%}.route:after{right:0}#trainDot{position:absolute;top:-3px;width:7px;height:7px;border-radius:50%;background:#ffe3a3;box-shadow:0 0 12px #e5be73;left:0}#fps{font-family:ui-monospace,monospace;color:#c0cfc4}#toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#10242de8;border:1px solid var(--line);padding:9px 20px;opacity:0;transition:opacity .3s;pointer-events:none;font-size:12px;letter-spacing:2px}.loading{position:fixed;inset:0;display:grid;place-content:center;text-align:center;background:#08151d;z-index:10;transition:opacity .8s}.loading b{font:42px "SimSun",serif;letter-spacing:14px}.loading p{color:var(--muted);letter-spacing:3px;font-size:11px}.loading .bar{height:1px;width:180px;margin:18px auto;background:#455751;overflow:hidden}.loading .bar:after{content:"";display:block;height:1px;background:var(--accent);animation:loading 1.6s infinite}@keyframes loading{from{transform:translateX(-100%)}to{transform:translateX(100%)}}#rideStatus{color:#f3d297}
+@media(max-width:760px){header{top:22px;left:22px;right:22px}.brand{font-size:9px;letter-spacing:2px}.live .coords{display:none}.intro{left:25px;top:100px}h1{font-size:58px}.side-note{display:none}footer{left:20px;right:20px;bottom:18px;grid-template-columns:1fr;gap:15px}.chapter{display:none}.controls{justify-content:center}.controls button{padding:10px 11px;font-size:10px}.hint{justify-content:center;font-size:9px;gap:12px;margin-top:11px}.route-wrap{bottom:116px;width:65vw}.live{gap:8px;font-size:9px}.subtitle{font-size:10px;letter-spacing:3px}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="world" aria-label="可拖拽旋转的重庆三维夜景"></div><div class="vignette"></div>
+<header><div class="brand"><b></b>山 城 夜 行 / CHONGQING</div><div class="live"><span><i></i>夜景漫游</span><span class="coords">29°33′ N &nbsp; 106°33′ E</span><span id="fps">— FPS</span></div></header>
+<div class="intro"><div class="eyebrow">A CITY BEYOND DIMENSIONS</div><h1>重庆</h1><p class="subtitle">山河入夜 · 人间灯火</p></div>
+<div class="side-note">两江之间，万家灯火。 / EST. 1997</div>
+<div class="route-wrap"><div class="route-text"><span>山城环线 · 驾驶室</span><span id="rideStatus">驶向穿楼隧道</span></div><div class="route"><i id="trainDot"></i></div></div>
+<footer><div><div class="chapter"><span class="number" id="chapterNumber">01</span><div><strong id="chapterTitle">两江灯火</strong><small id="chapterSub">RIVER / MOUNTAIN / CITY</small></div></div><div class="hint"><span>拖拽 旋转视角</span><span>滚轮 拉近远眺</span><span>C 进入列车 · R 重置 · 空格 暂停</span></div></div><div class="controls"><button id="overview" class="active">两江全景</button><button id="riverside">临江听风</button><button id="ride">轻轨穿楼<kbd>C</kbd></button><button id="pause" title="暂停或继续动画" aria-label="暂停动画">Ⅱ</button><button id="fog" title="切换江雾" aria-pressed="true">雾 开</button></div></footer>
+<div id="toast" role="status"></div>
+<div id="loading" class="loading"><b>山城入夜</b><div class="bar"></div><p id="loadMessage">正在点亮万家灯火</p></div>
+<script>
+// 模块加载错误也能给出可见提示。除 Three.js CDN 外，不请求模型、贴图或字体。
+window.addEventListener('error', e => { const m=document.getElementById('loadMessage');if(m&&document.getElementById('loading').style.display!=='none')m.textContent='场景载入失败，请检查网络或 WebGL 支持';console.error(e.error||e.message); });
+setTimeout(()=>{const e=document.getElementById('loadMessage');if(e&&e.textContent==='正在点亮万家灯火')e.textContent='正在连接 Three.js CDN，请保持网络畅通';},12000);
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// 所有空间单位为米。静态构件与窗灯实例化；水面低分辨率反射每四帧更新。
+const $=id=>document.getElementById(id), TAU=Math.PI*2;
+let seed=48271;const rand=()=>((seed=(seed*16807)%2147483647)-1)/2147483646;
+const between=(a,b)=>a+(b-a)*rand();
+const scene=new THREE.Scene();scene.background=new THREE.Color('#091923');scene.fog=new THREE.FogExp2('#102630',.00315);
+const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.12,1400);camera.position.set(-188,135,-295);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
+renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;
+renderer.info.autoReset=false;$('world').appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(4,35,43);controls.enableDamping=true;controls.dampingFactor=.065;controls.minDistance=22;controls.maxDistance=480;controls.maxPolarAngle=Math.PI*.485;controls.minPolarAngle=.18;controls.enablePan=true;controls.autoRotate=false;
+scene.add(new THREE.HemisphereLight('#a8c7de','#19291e',2.05));
+const moonlight=new THREE.DirectionalLight('#87b9d4',2.2);moonlight.position.set(-70,160,-80);scene.add(moonlight);
+const warmFill=new THREE.DirectionalLight('#e4a36a',.8);warmFill.position.set(0,30,-60);scene.add(warmFill);
+
+// 一个材质批次一次 draw call，重复构件共享单位立方体。
+const cube=new THREE.BoxGeometry(1,1,1), temp=new THREE.Object3D(), batches=new Map();
+const materials={
+ stone:new THREE.MeshStandardMaterial({color:'#30433c',roughness:1}),
+ concrete:new THREE.MeshStandardMaterial({color:'#83918c',roughness:.85}),
+ road:new THREE.MeshStandardMaterial({color:'#263638',roughness:.92}),
+ steel:new THREE.MeshStandardMaterial({color:'#819496',metalness:.45,roughness:.48}),
+ wood:new THREE.MeshStandardMaterial({color:'#503023',roughness:.95}),
+ ochre:new THREE.MeshStandardMaterial({color:'#aa6235',roughness:.8}),
+ roof:new THREE.MeshStandardMaterial({color:'#253e3e',roughness:.85}),
+ red:new THREE.MeshStandardMaterial({color:'#8b3634',roughness:.6}),
+ gold:new THREE.MeshBasicMaterial({color:new THREE.Color('#ffbc59').multiplyScalar(1.55)}),
+ soft:new THREE.MeshBasicMaterial({color:'#f7dca3'}),
+ cyan:new THREE.MeshBasicMaterial({color:'#74d0d8'}),
+ white:new THREE.MeshBasicMaterial({color:'#dce6d6'}),
+ ruby:new THREE.MeshBasicMaterial({color:'#f25e3d'}),
+};
+function box(key,x,y,z,w,h,d,ry=0,rz=0){if(!batches.has(key))batches.set(key,[]);batches.get(key).push([x,y,z,w,h,d,ry,rz]);}
+function beam(key,a,b,width=.3,depth=width){const v=new THREE.Vector3().subVectors(b,a),o=new THREE.Object3D();o.position.copy(a).add(b).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize());o.scale.set(width,v.length(),depth);o.updateMatrix();if(!batches.has(key))batches.set(key,[]);batches.get(key).push(o.matrix.clone());}
+function flush(){for(const [key,items] of batches){const m=new THREE.InstancedMesh(cube,materials[key],items.length);m.name='static-'+key;for(let i=0;i<items.length;i++){const a=items[i];if(a.isMatrix4)m.setMatrixAt(i,a);else{temp.position.set(a[0],a[1],a[2]);temp.rotation.set(0,a[6],a[7]);temp.scale.set(a[3],a[4],a[5]);temp.updateMatrix();m.setMatrixAt(i,temp.matrix);}}m.computeBoundingSphere();scene.add(m);}batches.clear();}
+const V=(x,y,z)=>new THREE.Vector3(x,y,z);
+
+// 陡坡地形和层层挡土墙。
+function height(x,z){return 3+Math.max(0,z-17)*.48+Math.sin(x*.022)*3+Math.sin(z*.05+x*.011)*2;}
+function terrain(z0,z1,far=false){const g=new THREE.PlaneGeometry(600,z1-z0,65,38);g.rotateX(-Math.PI/2);g.translate(0,0,(z0+z1)/2);const p=g.attributes.position,colors=[];for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);const y=far?3+(-z-87)*.2+Math.sin(x*.03)*3:height(x,z);p.setY(i,y);const c=new THREE.Color().setHSL(.39,.13,between(.085,.145));colors.push(c.r,c.g,c.b);}g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));g.computeVertexNormals();scene.add(new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:1})));}
+terrain(18,290);terrain(-260,-91,true);
+for(const z of [20,49,76,105,137]){const y=height(0,z);box('stone',0,y-3,z,420,6,2);box('road',0,y+.08,z+1,420,.45,6);for(let x=-203;x<207;x+=13)box('soft',x,y+.34,z+1,5,.025,.13);for(let x=-200;x<208;x+=20){box('steel',x,y+2.5,z-2,.13,5,.13);box('gold',x,y+5,z-2,.65,.2,.45);}}
+
+// 程序化外墙：每个窗格有确定的随机明暗和色温，无贴图。
+const buildingData=[];
+function building(x,y,z,w,h,d,tone=0){buildingData.push({x,y:y+h*.5,z,w,h,d,tone,seed:rand()*1000});}
+const facadeMat=new THREE.ShaderMaterial({
+ uniforms:{uFogColor:{value:scene.fog.color},uFogDensity:{value:scene.fog.density}},
+ vertexShader:`attribute vec3 aSize;attribute float aSeed;attribute float aTone;varying vec3 vP;varying vec3 vN;varying float vSeed;varying float vTone;varying float vDepth;void main(){vP=position*aSize;vN=normal;vSeed=aSeed;vTone=aTone;vec4 p=modelViewMatrix*instanceMatrix*vec4(position,1.);vDepth=-p.z;gl_Position=projectionMatrix*p;}`,
+ fragmentShader:`uniform vec3 uFogColor;uniform float uFogDensity;varying vec3 vP;varying vec3 vN;varying float vSeed;varying float vTone;varying float vDepth;
+ float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7))+vSeed)*43758.5453);}void main(){vec2 uv=vec2(abs(vN.z)>.5?vP.x:vP.z,vP.y);uv+=vec2(vSeed,0.);vec2 cell=floor(uv/vec2(2.4,3.15));vec2 f=fract(uv/vec2(2.4,3.15));float pane=step(.25,f.x)*step(f.x,.76)*step(.23,f.y)*step(f.y,.76)*(1.-step(.5,abs(vN.y)));float lit=step(.34,hash(cell));float stripes=1.-step(.055,fract((vP.y+.35)/3.15));vec3 wall=mix(vec3(.085,.14,.16),vec3(.19,.205,.19),vTone);wall*=.64+max(0.,dot(vN,normalize(vec3(-.4,.8,-.7))))*.65;wall*=1.-stripes*.24;vec3 warm=mix(vec3(1.6,.58,.16),vec3(1.5,1.22,.65),hash(cell+3.));if(hash(cell+18.)>.91)warm=vec3(.33,.83,1.);vec3 col=mix(wall,mix(vec3(.035,.09,.12),warm,lit),pane);float fog=1.-exp(-uFogDensity*uFogDensity*vDepth*vDepth);gl_FragColor=vec4(mix(col,uFogColor,fog),1.);
+ #include <tonemapping_fragment>
+ #include <colorspace_fragment>
+ }`
+});
+for(let row=0;row<6;row++){const z=39+row*24;for(let col=0;col<18;col++){const x=-208+col*25+between(-5,5);if(row<2&&Math.abs(x+25)<28)continue;if(Math.abs(x+25)<10)continue;if(row===0&&x>15&&x<82)continue;const zz=z+between(-3,3),y=height(x,zz),h=between(15,53)+(row>2?between(0,20):0);building(x,y,zz,between(10,18),h,between(10,17),rand());if(rand()>.55)box('concrete',x,y+h+1,zz,5,2,5);}}
+for(let i=0;i<24;i++){let x=-245+i*21,z=between(-156,-113),y=3+(-z-87)*.2+Math.sin(x*.03)*3;building(x,y,z,between(8,13),between(7,20),between(9,14),rand());}
+
+// 地标天际线：双塔、退台塔冠、楼顶青色轮廓。
+for(const x of [58,84]){building(x,height(x,150),150,18,93,17,.45);const top=height(x,150)+93;box('cyan',x,top,141.4,18,.25,.25);box('cyan',x-9,top-42,141.4,.22,84,.22);box('steel',x,top+5,150,.35,10,.35);}box('concrete',71,142,150,42,7,15);box('gold',71,138.5,142.4,42,.3,.3);
+building(136,height(136,145),145,17,108,17,.3);for(let j=0;j<4;j++)box('concrete',136,height(136,145)+108+j*2,145,16-j*3,2,16-j*3);box('cyan',136,height(136,145)+116,145,.5,17,.5);
+
+// 轻轨路径：前侧直线准确穿过居民楼，后侧曲线形成连续闭环。
+const route=new THREE.CatmullRomCurve3([V(-155,30,34),V(-102,30,34),V(-57,30,34),V(-25,30,34),V(18,30,34),V(76,32,37),V(126,41,56),V(138,54,90),V(95,62,112),V(0,60,112),V(-106,55,100),V(-155,37,63)],true,'centripetal');
+route.arcLengthDivisions=1800;route.updateArcLengths();const routeLength=route.getLength();
+// 给整条环线保留净空，避免随机楼群与非穿楼路段发生意外交叉。
+const clearanceSamples=Array.from({length:900},(_,i)=>route.getPointAt(i/900));
+for(let i=buildingData.length-1;i>=0;i--){const b=buildingData[i];if(clearanceSamples.some(p=>Math.abs(p.x-b.x)<b.w/2+3&&Math.abs(p.z-b.z)<b.d/2+3&&p.y+4>b.y-b.h/2&&p.y-1<b.y+b.h/2))buildingData.splice(i,1);}
+function pathTube(curve,r,mat,segments=300){const mesh=new THREE.Mesh(new THREE.TubeGeometry(curve,segments,r,5,false),mat);scene.add(mesh);return mesh;}
+// 高架箱梁与双轨；轨道朝向由切线计算，避免弯道断裂。
+const trackPoints=Array.from({length:381},(_,i)=>route.getPointAt(i/380));
+for(let i=0;i<380;i++){const a=trackPoints[i],b=trackPoints[i+1];beam('concrete',a.clone().add(V(0,-.7,0)),b.clone().add(V(0,-.7,0)),1.35,3.7);}
+for(const offset of [-.84,.84]){const pts=Array.from({length:501},(_,i)=>{const t=i/500,p=route.getPointAt(t),d=route.getTangentAt(t);return p.add(V(d.z,0,-d.x).normalize().multiplyScalar(offset)).add(V(0,.2,0));});pathTube(new THREE.CatmullRomCurve3(pts),.095,materials.steel,500);}
+for(let i=0;i<88;i++){const t=i/88,p=route.getPointAt(t),d=route.getTangentAt(t);if(p.x>-40&&p.x<-10&&p.z<43)continue;let y=height(p.x,p.z);box('concrete',p.x,(y+p.y-1)/2,p.z,1.25,Math.max(1,p.y-y-1),1.25);box('concrete',p.x,p.y-1.6,p.z,1.5,.7,4.3,Math.atan2(-d.z,d.x));}
+
+// 真正中空的穿楼居民楼：底部、上部和两侧墙分别建模，无遮挡的 X 向通道。
+const tunnel={x:-25,z:34,minX:-38,maxX:-12,floor:29.55,ceiling:37.8,halfWidth:3.85};
+building(-25,10,34,26,19.4,19,.85);building(-25,37.8,34,26,42.2,19,.75);
+building(-25,29.4,26.35,26,8.4,3.7,.7);building(-25,29.4,41.65,26,8.4,3.7,.7);
+box('concrete',-25,29.1,34,27,.5,19);box('concrete',-25,37.85,34,27,.45,19);
+for(const xx of [-38.35,-11.65]){box('gold',xx,37.5,34,.22,.18,8.3);for(const zz of [30,38]){box('gold',xx,33.6,zz,.2,7.8,.17);box('concrete',xx,33.6,zz,.7,8.4,.7);}}
+for(let xx=-36;xx<-12;xx+=3.8){box('soft',xx,37.4,34,1.1,.1,1.1);for(const zz of [30.1,37.9]){box('gold',xx,31.35,zz,1.3,.24,.08);box('concrete',xx,33.6,zz,.32,7.4,.35);}}
+const tunnelLight=new THREE.PointLight('#ffcc88',38,22,1.8);tunnelLight.position.set(-25,34.5,34);scene.add(tunnelLight);
+
+// 同一栋楼：一楼接低路，顶楼接高路。两条路相差 68 米。
+box('road',-25,11.3,20,91,.7,6);box('concrete',-25,10.7,20,91,.8,7);
+box('road',-25,11.3,24,5,.7,4);
+box('road',-25,80.4,89,6,.65,120);box('concrete',-25,79.8,89,7,.65,120);
+for(const z of [58,88,118,146]){let ground=height(-25,z);box('concrete',-25,(ground+79.5)/2,z,1.1,79.5-ground,1.1);}
+for(let z=39;z<147;z+=10){box('soft',-25,80.75,z,.16,.03,3.5);for(const x of [-28.35,-21.65])box('cyan',x,81.3,z,.12,.12,8);}
+for(let x=-65;x<20;x+=10)box('soft',x,11.68,20,4,.03,.12);
+box('gold',-25,12.8,24.35,5,2,.12);box('cyan',-25,82,26,9,2,.15);
+
+// 江边吊脚楼：木构支脚、堆叠开间、挑檐、回廊和灯笼。
+const roofGeo=new THREE.BufferGeometry();roofGeo.setAttribute('position',new THREE.Float32BufferAttribute([- .57,0,-.55,.57,0,-.55,0,.24,-.55, -.57,0,.55,0,.24,.55,.57,0,.55, -.57,0,-.55,0,.24,-.55,0,.24,.55, -.57,0,-.55,0,.24,.55,-.57,0,.55, .57,0,-.55,.57,0,.55,0,.24,.55, .57,0,-.55,0,.24,.55,0,.24,-.55],3));roofGeo.computeVertexNormals();
+const roofs=[];
+// 吊脚楼背靠逐级升高的石崖，支脚露在临江一侧；石崖止于轨道净空前。
+for(let row=0;row<4;row++){const top=5.5+row*7.5;for(let j=0;j<12-row;j++){const x=3+j*9.1+row*2.6;box('stone',x,top/2,7.8+row*6.6,9.2,top,1.6);}}
+for(let row=0;row<4;row++){const z=4+row*6.6;for(let j=0;j<12-row;j++){const x=3+j*9.1+row*2.6,y=5.5+row*7.5+Math.sin(j*.8)*1.1,w=8.3,h=6.2,d=8;
+box('ochre',x,y+h/2,z,w,h,d);box('wood',x,y+h/2,z-4.04,w,.35,.28);box('wood',x,y+h,z,w+.8,.35,d+.8);
+for(const dx of [-3.5,0,3.5]){box('wood',x+dx,(y+h)*.5,z-3.5,.32,y+h,.32);box('gold',x+dx,y+3.1,z-4.1,1.55,3.7,.09);box('wood',x+dx,y+3.1,z-4.18,.13,3.8,.1);}
+for(const xx of [-4.2,4.2]){box('gold',x+xx,y+3.2,z, .09,3.3,5.5);box('wood',x+xx,y+3.2,z,.16,.14,7.8);}
+box('wood',x,y+.25,z-5.1,w+1.7,.4,2.7);box('gold',x,y+.46,z-6.4,w+1.4,.1,.13);
+for(let k=-4;k<=4;k+=1)box('wood',x+k,y+1.1,z-6.35,.1,1.3,.1);box('wood',x,y+1.7,z-6.35,w+1,.12,.12);
+roofs.push([x,y+h+.1,z,w+1.7,5,d+2.1]);
+box('gold',x,y+h+.12,z-d/2-1.03,w+1.7,.12,.12);
+for(const side of [-1,1])beam('gold',V(x+side*(w+1.7)*.57,y+h+.1,z-d/2-1.05),V(x,y+h+1.3,z-d/2-1.05),.095);
+for(const dx of [-3.9,3.9]){box('ruby',x+dx,y+4.7,z-5.3,.7,1.1,.7);box('gold',x+dx,y+4.7,z-5.68,.38,.7,.04);}
+}}
+const roofMesh=new THREE.InstancedMesh(roofGeo,materials.roof,roofs.length);roofs.forEach((a,i)=>{temp.position.set(a[0],a[1],a[2]);temp.rotation.set(0,0,0);temp.scale.set(a[3],a[4],a[5]);temp.updateMatrix();roofMesh.setMatrixAt(i,temp.matrix);});scene.add(roofMesh);
+box('stone',54,1.7,-1,129,3,4);box('gold',54,3.3,-3.1,129,.13,.13);
+// 低位滨江路的阶梯，每级连续升高。
+for(let i=0;i<36;i++){const x=-5-i*1.3,y=3+i*.43;box('concrete',x,y,4,1.4,.5,5);box('gold',x,y+.28,1.45,.9,.06,.06);}
+
+// 跨江悬索桥：桥面沿 Z 方向跨越江流，桥塔与悬索不依赖模型。
+const bridgeX=-138,bridgeY=22,zNear=27,zFar=-108;
+box('road',bridgeX,bridgeY,(zNear+zFar)/2,12,1.3,zNear-zFar+22);box('red',bridgeX,bridgeY-1.7,-40,13,1.4,155);
+beam('road',V(bridgeX,22,38),V(bridgeX,height(bridgeX,71)+.4,71),12,.8);
+beam('road',V(bridgeX,22,-119),V(bridgeX,3+(170-87)*.2+Math.sin(bridgeX*.03)*3,-170),12,.8);
+for(const z of [-88,8]){for(const x of [bridgeX-7.7,bridgeX+7.7]){box('red',x,36,z,1.8,72,2);box('gold',x-1,42,z-.9,.12,57,.12);}box('red',bridgeX,66,z,17,2,2);box('red',bridgeX,49,z,17,1.1,1.8);box('gold',bridgeX,67.1,z,17,.13,.15);}
+for(const x of [bridgeX-7.7,bridgeX+7.7]){const ps=[];for(let i=0;i<=70;i++){const z=-119+i*2.1;let y;if(z<-88)y=67-(-88-z)*1.12;else if(z>8)y=67-(z-8)*1.12;else y=30+37*Math.pow((z+40)/48,2);ps.push(V(x,y,z));if(i%2===0&&z>-111&&z<29)beam('steel',V(x,bridgeY+1,z),V(x,y,z),.12);}pathTube(new THREE.CatmullRomCurve3(ps),.25,materials.red,170);pathTube(new THREE.CatmullRomCurve3(ps.map(p=>p.clone().add(V(0,.23,0)))),.08,materials.gold,170);}
+for(let z=-116;z<40;z+=7){box('soft',bridgeX,bridgeY+.68,z,.15,.025,3);for(const dx of [-6.2,6.2]){box('steel',bridgeX+dx,bridgeY+1.2,z,.14,1.8,.14);box('gold',bridgeX+dx,bridgeY+2.2,z,.45,.16,.45);}}
+for(const dx of [-6.3,6.3])box('gold',bridgeX+dx,bridgeY+.7,-40,.13,.12,155);
+
+// 第二条远景小桥，形成山城空间层次。
+box('concrete',-158,17,-39,7,1.3,131);for(let z=-95;z<27;z+=20){box('concrete',-158,8,z,2,17,2);box('cyan',-161.6,17.8,z,.2,.16,17);}
+
+// 实例化全部外墙。
+const facades=new THREE.InstancedMesh(cube.clone(),facadeMat,buildingData.length);const sizes=[],seeds=[],tones=[];
+buildingData.forEach((b,i)=>{temp.position.set(b.x,b.y,b.z);temp.rotation.set(0,0,0);temp.scale.set(b.w,b.h,b.d);temp.updateMatrix();facades.setMatrixAt(i,temp.matrix);sizes.push(b.w,b.h,b.d);seeds.push(b.seed);tones.push(b.tone);});
+facades.geometry.setAttribute('aSize',new THREE.InstancedBufferAttribute(new Float32Array(sizes),3));facades.geometry.setAttribute('aSeed',new THREE.InstancedBufferAttribute(new Float32Array(seeds),1));facades.geometry.setAttribute('aTone',new THREE.InstancedBufferAttribute(new Float32Array(tones),1));scene.add(facades);
+flush();
+
+// 招牌是代码绘制的 CanvasTexture，非外部贴图；同一个地标只用一张小纹理。
+function sign(text,x,y,z,w,h,color='#ffd58a',ry=Math.PI,bg='#40291c'){const c=document.createElement('canvas');c.width=1024;c.height=256;const ctx=c.getContext('2d');ctx.fillStyle=bg;ctx.fillRect(0,0,1024,256);ctx.strokeStyle=color;ctx.lineWidth=5;ctx.strokeRect(9,9,1006,238);ctx.fillStyle=color;ctx.font='bold 135px Microsoft YaHei, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,512,137,940);const tx=new THREE.CanvasTexture(c);tx.colorSpace=THREE.SRGBColorSpace;const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tx,side:THREE.DoubleSide,toneMapped:false}));m.position.set(x,y,z);m.rotation.y=ry;scene.add(m);return m;}
+sign('洪 崖 洞',53,31,16,17,4.2);sign('山城 · 穿楼环线',-25,51,24.35,20,4,'#bcf0db',Math.PI,'#183d40');
+sign('1F · 滨江路',-25,15,24.3,13,2.4);sign('22F · 天空公路',-25,83,29.5,16,2.4,'#b5e9e3',Math.PI,'#153c45');
+sign('重庆 · 你好',58,131,141.3,14,5,'#b6e4de',Math.PI,'#163b40');
+
+// 三节轻轨。车头沿本地 +Z，摄像机置于车头前风挡内、车体之前。
+const trainCars=[],trainCarLength=8.2,carGap=1.1;
+const trainBodyMat=new THREE.MeshStandardMaterial({color:'#c7d7d3',metalness:.35,roughness:.38});
+const trainRedMat=new THREE.MeshStandardMaterial({color:'#ad4636',roughness:.5});
+const trainGlass=new THREE.MeshBasicMaterial({color:'#82b9be'});
+function carBox(g,mat,x,y,z,w,h,d){const m=new THREE.Mesh(cube,mat);m.position.set(x,y,z);m.scale.set(w,h,d);g.add(m);return m;}
+for(let i=0;i<3;i++){const g=new THREE.Group();carBox(g,trainBodyMat,0,1.8,0,2.75,2.85,trainCarLength);carBox(g,trainRedMat,0,1.05,0,2.81,.5,trainCarLength+.02);carBox(g,materials.roof,0,.35,0,2,.6,6.6);carBox(g,materials.steel,0,3.4,0,1.6,.3,3.7);
+for(const x of [-1.39,1.39])for(let z=-3.1;z<3.6;z+=1.55)carBox(g,trainGlass,x,2.3,z,.035,1.1,1.15);
+carBox(g,materials.road,0,2.35,4.13,2.15,1.2,.07);if(i===0){for(const x of [-.85,.85])carBox(g,materials.soft,x,1.2,4.16,.36,.25,.08);}else carBox(g,materials.ruby,0,1.2,-4.16,1.3,.14,.08);
+scene.add(g);trainCars.push(g);}
+// 第一人称驾驶室遮罩只画细边框，不挡住隧道出口。
+const cab=new THREE.Group();camera.add(cab);scene.add(camera);carBox(cab,materials.road,0,-.47,-.65,1.6,.13,.16);for(const x of [-.69,.69])carBox(cab,materials.road,x,0,-.65,.035,1.1,.05);cab.visible=false;
+
+// 桥上往返车流：车身实例化，灯光为几何体，不产生几十个动态光源。
+const carCount=42,carBodies=new THREE.InstancedMesh(cube,new THREE.MeshStandardMaterial({color:'#607b80',metalness:.4,roughness:.5}),carCount);
+const headlights=new THREE.InstancedMesh(cube,materials.soft,carCount*2),taillights=new THREE.InstancedMesh(cube,materials.ruby,carCount*2);scene.add(carBodies,headlights,taillights);
+const traffic=Array.from({length:carCount},(_,i)=>({lane:i%4,phase:rand(),speed:between(.014,.026)}));
+function setI(mesh,i,x,y,z,w,h,d){temp.position.set(x,y,z);temp.rotation.set(0,0,0);temp.scale.set(w,h,d);temp.updateMatrix();mesh.setMatrixAt(i,temp.matrix);}
+function updateTraffic(t){traffic.forEach((c,i)=>{const dir=c.lane<2?1:-1,z=-117+((c.phase+t*c.speed)%1)*156,x=bridgeX+(c.lane-1.5)*2.6;setI(carBodies,i,x,bridgeY+1.05,z,1.6,.75,3.3);for(let j=0;j<2;j++){setI(headlights,i*2+j,x+(j-.5)*1.1,bridgeY+1.05,z+dir*1.7,.27,.16,.1);setI(taillights,i*2+j,x+(j-.5)*1.1,bridgeY+1.05,z-dir*1.7,.25,.14,.1);}});for(const m of [carBodies,headlights,taillights])m.instanceMatrix.needsUpdate=true;}
+// 动态实例覆盖整座桥，禁止依据首帧矩阵误剔除。
+for(const m of [carBodies,headlights,taillights])m.frustumCulled=false;
+
+// 航船和温暖的舱灯。
+const boat=new THREE.Group();carBox(boat,materials.wood,0,1,0,15,1.8,5);carBox(boat,materials.soft,0,2.5,0,9,1.6,3.6);carBox(boat,materials.roof,0,3.6,0,11,.4,4.8);for(const x of [-3,-1,1,3])carBox(boat,materials.wood,x,2.5,-1.83,.18,1.8,.12);scene.add(boat);
+
+// 星空与远山均为程序几何。地平线逐层淡出。
+for(let k=0;k<3;k++){const pts=[];for(let x=-600;x<=600;x+=24)pts.push(V(x,45+k*15+Math.sin(x*.012+k)*24+Math.sin(x*.037)*9,340+k*90));const vertices=[];for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];vertices.push(a.x,a.y,a.z,b.x,b.y,b.z,a.x,-20,a.z,b.x,b.y,b.z,b.x,-20,b.z,a.x,-20,a.z);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));scene.add(new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:['#122b32','#142d36','#16303a'][k],side:THREE.DoubleSide})));}
+const starPos=[];for(let i=0;i<230;i++){const a=rand()*TAU,b=between(.1,1.1),r=700;starPos.push(Math.cos(a)*Math.cos(b)*r,Math.sin(b)*r,Math.sin(a)*Math.cos(b)*r);}const starG=new THREE.BufferGeometry();starG.setAttribute('position',new THREE.Float32BufferAttribute(starPos,3));const stars=new THREE.Points(starG,new THREE.PointsMaterial({color:'#b6d4d3',size:1.1,transparent:true,opacity:.55,sizeAttenuation:true}));scene.add(stars);
+const moon=new THREE.Mesh(new THREE.SphereGeometry(5,20,12),new THREE.MeshBasicMaterial({color:'#b7c9ba',fog:false}));moon.position.set(-180,176,310);scene.add(moon);
+
+// 程序化流雾：稀疏平面，片元噪声随时间平流，软边无贴图。
+const fogUniforms={uTime:{value:0},uOpacity:{value:.22}};
+const fogMat=new THREE.ShaderMaterial({uniforms:fogUniforms,transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.NormalBlending,vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`uniform float uTime;uniform float uOpacity;varying vec2 vUv;float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}void main(){vec2 uv=vUv;float edge=pow(max(0.,1.-length((uv-.5)*2.)),1.5);float n=noise(uv*vec2(11.,4.)+vec2(uTime*.025,uTime*.008));n+=noise(uv*vec2(23.,8.)-uTime*.012)*.45;gl_FragColor=vec4(.29,.43,.46,edge*n*uOpacity);}`});
+const mist=new THREE.Group();for(let i=0;i<7;i++){const m=new THREE.Mesh(new THREE.PlaneGeometry(280,85),fogMat);m.rotation.x=-Math.PI/2;m.position.set(between(-75,70),2+i*1.7,-40+i*9);mist.add(m);}for(let i=0;i<3;i++){const m=new THREE.Mesh(new THREE.PlaneGeometry(240,26),fogMat);m.position.set(-40,14+i*13,42+i*36);mist.add(m);}scene.add(mist);
+
+// 真实平面反射。反射相机使用斜裁切平面，裁掉水下几何；四帧刷新一次。
+const reflectionTarget=new THREE.WebGLRenderTarget(640,360,{type:THREE.HalfFloatType,depthBuffer:true});reflectionTarget.texture.generateMipmaps=false;
+const reflectCam=new THREE.PerspectiveCamera(),textureMatrix=new THREE.Matrix4(),clipPlane=new THREE.Vector4(),q=new THREE.Vector4(),look=new THREE.Vector3(),mirrorPos=new THREE.Vector3(),mirrorUp=new THREE.Vector3();
+const waterUniforms={uReflection:{value:reflectionTarget.texture},uMatrix:{value:textureMatrix},uTime:{value:0},uEye:{value:camera.position},uReflectOn:{value:1}};
+const water=new THREE.Mesh(new THREE.PlaneGeometry(1200,800),new THREE.ShaderMaterial({uniforms:waterUniforms,vertexShader:`uniform mat4 uMatrix;varying vec4 vMirror;varying vec3 vWorld;void main(){vec4 p=modelMatrix*vec4(position,1.);vWorld=p.xyz;vMirror=uMatrix*p;gl_Position=projectionMatrix*viewMatrix*p;}`,fragmentShader:`uniform sampler2D uReflection;uniform float uTime;uniform vec3 uEye;uniform float uReflectOn;varying vec4 vMirror;varying vec3 vWorld;
+void main(){vec2 p=vWorld.xz;float a=sin(p.x*.21+p.y*.32+uTime*.6),b=sin(p.x*.64-p.y*.49-uTime*.9);vec2 wave=vec2(a,b)*.0015;vec2 uv=vMirror.xy/vMirror.w+wave;vec3 reflection=texture2D(uReflection,clamp(uv,.001,.999)).rgb;float fres=pow(1.-clamp(normalize(uEye-vWorld).y,0.,1.),2.);float ripples=.88+.12*sin(p.y*2.+a*2.+uTime*.7);vec3 base=vec3(.025,.085,.095);vec3 col=mix(base,reflection*(.64+.26*fres)*ripples,.8*uReflectOn);col+=vec3(.035,.065,.065)*pow(max(0.,b*a),12.);float edge=smoothstep(280.,750.,length(p));col=mix(col,vec3(.035,.085,.105),edge);gl_FragColor=vec4(col,1.);
+ #include <tonemapping_fragment>
+ #include <colorspace_fragment>
+}` }));water.rotation.x=-Math.PI/2;water.position.y=.12;scene.add(water);
+function renderReflection(){if(camera.position.y<.5)return;water.visible=false;mist.visible=false;cab.visible=false;
+mirrorPos.copy(camera.position);mirrorPos.y=.24-camera.position.y;camera.getWorldDirection(look);look.add(camera.position);look.y=.24-look.y;
+reflectCam.position.copy(mirrorPos);reflectCam.up.copy(camera.up);reflectCam.up.y*=-1;reflectCam.lookAt(look);reflectCam.far=camera.far;reflectCam.near=camera.near;reflectCam.aspect=camera.aspect;reflectCam.fov=camera.fov;reflectCam.updateProjectionMatrix();reflectCam.updateMatrixWorld();
+textureMatrix.set(.5,0,0,.5,0,.5,0,.5,0,0,.5,.5,0,0,0,1);textureMatrix.multiply(reflectCam.projectionMatrix).multiply(reflectCam.matrixWorldInverse);
+const plane=new THREE.Plane(V(0,1,0),-.13);plane.applyMatrix4(reflectCam.matrixWorldInverse);clipPlane.set(plane.normal.x,plane.normal.y,plane.normal.z,plane.constant);
+const p=reflectCam.projectionMatrix.elements;q.x=(Math.sign(clipPlane.x)+p[8])/p[0];q.y=(Math.sign(clipPlane.y)+p[9])/p[5];q.z=-1;q.w=(1+p[10])/p[14];clipPlane.multiplyScalar(2/clipPlane.dot(q));p[2]=clipPlane.x;p[6]=clipPlane.y;p[10]=clipPlane.z+1-.003;p[14]=clipPlane.w;
+renderer.setRenderTarget(reflectionTarget);renderer.clear();renderer.render(scene,reflectCam);renderer.setRenderTarget(null);water.visible=true;mist.visible=fogEnabled;cab.visible=riding;
+}
+
+// 驾驶室视角、预设镜头和交互状态。
+let riding=false,paused=false,fogEnabled=true,time=0,trainDistance=0,frame=0,quality=1,transition=null,last=performance.now(),sampleStart=last,sampleFrames=0,lastQualityChange=last;
+const tunnelT=(()=>{let best=0,dist=Infinity;for(let i=0;i<3000;i++){const p=route.getPointAt(i/3000),d=p.distanceToSquared(V(-53,30,34));if(d<dist){dist=d;best=i/3000;}}return best;})();
+trainDistance=tunnelT*routeLength;
+function notify(text){$('toast').textContent=text;$('toast').style.opacity=1;clearTimeout(notify.timer);notify.timer=setTimeout(()=>$('toast').style.opacity=0,3000);}
+const presets={overview:{position:V(-188,135,-295),target:V(4,35,43),title:'两江灯火',sub:'RIVER / MOUNTAIN / CITY',number:'01'},riverside:{position:V(12,34,-91),target:V(44,23,22),title:'崖壁上的灯火',sub:'WARM LIGHTS ALONG THE RIVER',number:'02'}};
+function preset(name){riding=false;document.body.classList.remove('riding');cab.visible=false;controls.enabled=true;camera.fov=48;camera.updateProjectionMatrix();const p=presets[name];transition={start:performance.now(),from:camera.position.clone(),fromTarget:controls.target.clone(),to:p.position,toTarget:p.target};$('chapterTitle').textContent=p.title;$('chapterSub').textContent=p.sub;$('chapterNumber').textContent=p.number;for(const id of ['overview','riverside','ride'])$(id).classList.toggle('active',id===name);}
+function toggleRide(){if(riding){preset('overview');return;}transition=null;riding=true;controls.enabled=false;document.body.classList.add('riding');cab.visible=true;camera.fov=67;camera.updateProjectionMatrix();trainDistance=tunnelT*routeLength;$('chapterNumber').textContent='03';$('chapterTitle').textContent='下一站，穿楼而过';$('chapterSub').textContent='MONORAIL / DRIVER’S VIEW';for(const id of ['overview','riverside','ride'])$(id).classList.toggle('active',id==='ride');notify('已进入驾驶室 · 前方居民楼隧道');}
+function togglePause(){paused=!paused;$('pause').textContent=paused?'▶':'Ⅱ';$('pause').setAttribute('aria-label',paused?'继续动画':'暂停动画');}
+$('overview').onclick=()=>preset('overview');$('riverside').onclick=()=>preset('riverside');$('ride').onclick=toggleRide;$('pause').onclick=togglePause;
+$('fog').onclick=()=>{fogEnabled=!fogEnabled;mist.visible=fogEnabled;$('fog').textContent=fogEnabled?'雾 开':'雾 关';$('fog').setAttribute('aria-pressed',String(fogEnabled));};
+addEventListener('keydown',e=>{if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.code==='KeyC')toggleRide();if(e.code==='KeyR')preset('overview');if(e.code==='Space'&&e.target===document.body){e.preventDefault();togglePause();}});
+renderer.domElement.addEventListener('pointerdown',()=>{transition=null;});
+function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);reflectionTarget.setSize(Math.min(800,Math.round(innerWidth*.45)),Math.min(480,Math.round(innerHeight*.45)));}addEventListener('resize',resize);resize();
+// 页面后台暂停计时，避免回到页面时列车突然跳跃。
+document.addEventListener('visibilitychange',()=>{last=performance.now();sampleStart=last;sampleFrames=0;});
+let lastTunnel=false,reportedFps=0;
+function updateTrain(){const headT=((trainDistance/routeLength)%1+1)%1;
+for(let i=0;i<trainCars.length;i++){const t=((trainDistance-i*(trainCarLength+carGap))/routeLength%1+1)%1,p=route.getPointAt(t),tangent=route.getTangentAt(t);trainCars[i].position.copy(p);trainCars[i].lookAt(p.clone().add(tangent));}
+const head=route.getPointAt(headT),direction=route.getTangentAt(headT);if(riding){camera.position.copy(head).addScaledVector(direction,4.23).add(V(0,2.45,0));camera.up.set(0,1,0);camera.lookAt(camera.position.clone().addScaledVector(direction,28));controls.target.copy(camera.position).addScaledVector(direction,30);}
+const inTunnel=head.x>tunnel.minX-4.3&&head.x<tunnel.maxX-4.3&&Math.abs(head.z-34)<3.2;
+if(riding){$('trainDot').style.left=(headT*100)+'%';$('rideStatus').textContent=inTunnel?'穿楼中 · 居民楼 7F':head.z<40&&head.x<-35?'前方：居民楼穿楼段':head.z>70?'山城高架 · 环线运行':'沿江高架 · 环线运行';if(inTunnel&&!lastTunnel)notify('正在从居民楼第 7 层内部穿过');}lastTunnel=inTunnel;
+return {headT,inTunnel,head};}
+function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;if(document.hidden)return;
+if(!paused){time+=dt;trainDistance=(trainDistance+dt*12)%routeLength;}
+fogUniforms.uTime.value=time;waterUniforms.uTime.value=time;updateTraffic(time);boat.position.set(-55+Math.sin(time*.025)*67,0,-39);boat.rotation.y=-Math.cos(time*.025)*.07;
+const train=updateTrain();if(!riding){if(transition){let k=Math.min((now-transition.start)/1600,1);k=k*k*(3-2*k);camera.position.lerpVectors(transition.from,transition.to,k);controls.target.lerpVectors(transition.fromTarget,transition.toTarget,k);if(k===1)transition=null;}controls.update();}
+camera.updateMatrixWorld();renderer.info.reset();if(frame%4===0)renderReflection();renderer.render(scene,camera);frame++;sampleFrames++;
+if(now-sampleStart>=1400){reportedFps=Math.round(sampleFrames*1000/(now-sampleStart));$('fps').textContent=reportedFps+' FPS';sampleStart=now;sampleFrames=0;
+// 帧率持续不足时才下调分辨率，保留所有玩法及几何。不同硬件实际帧率可见右上角。
+if(reportedFps<53&&now-lastQualityChange>5500&&quality>.55){quality=Math.max(.55,quality-.15);renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)*quality);lastQualityChange=now;}
+else if(reportedFps>59&&quality<1&&now-lastQualityChange>15000){quality=Math.min(1,quality+.1);renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)*quality);lastQualityChange=now;}}
+// 只读诊断用于实际检查几何与性能，不影响交互。
+window.__nightCity={fps:reportedFps,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,riding,paused,fogEnabled,quality,time,trainT:train.headT,trainPosition:train.head.toArray(),inTunnel:train.inTunnel,buildingCount:buildingData.length,tunnel,routeLength,cameraPosition:camera.position.toArray()};
+}
+updateTrain();updateTraffic(0);controls.update();renderReflection();renderer.render(scene,camera);requestAnimationFrame(animate);
+$('loading').style.opacity=0;setTimeout(()=>$('loading').style.display='none',900);
+</script>
+</body>
+</html>

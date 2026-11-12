@@ -1,0 +1,25 @@
+{
+  "title": "双屏构想 · iPhone Duo 3D 展台",
+  "agent": "Codex",
+  "model": "GPT-6.1 Sol",
+  "modelId": "gpt-6.1-sol",
+  "durationSeconds": 2728,
+  "durationLabel": "45 分 28 秒",
+  "durationBasis": "累计会话各轮 task_started 至 task_complete 的墙钟执行时间；排除轮次间等待，包含执行内的工具、验证和排队；本次集中上传另计。",
+  "sessionId": "01a1ca44-f6c2-7111-be9d-197dbf8ad407",
+  "turns": [
+    {
+      "start": "2026-11-11T11:01:22.251Z",
+      "end": "2026-11-11T11:31:32.317Z",
+      "seconds": 1810.066,
+      "type": "task_complete"
+    },
+    {
+      "start": "2026-11-12T01:42:24.404Z",
+      "end": "2026-11-12T01:57:42.548Z",
+      "seconds": 918.144,
+      "type": "task_complete"
+    }
+  ],
+  "publishedPath": "codex/iphone-duo-exhibit/index.html"
+}

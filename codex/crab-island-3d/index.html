@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+ <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+ <meta name="theme-color" content="#e8e5dd"><title>蟹屿 · 湖畔居所 | 交互建筑漫游</title>
+ <link rel="stylesheet" href="./src/style.css"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f4538'/%3E%3Ctext x='32' y='46' font-size='42' text-anchor='middle' fill='%23eee8d6'%3E屿%3C/text%3E%3C/svg%3E">
+ <script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head>
+<body>
+ <main id="viewport" aria-label="可交互的三维建筑场景"></main>
+ <div id="loading"><div class="load-mark">蟹<span>屿</span></div><p>正在构筑一座湖畔居所</p><div class="load-line"><i></i></div><small id="load-status">建筑 · 材质 · 光影</small></div>
+ <header class="ui"><a class="brand" href="./" aria-label="返回初始视角"><span class="brand-symbol">⌘</span><span>蟹屿<span class="brand-en">CRAB ISLAND</span></span></a><div class="edition">一张图纸，一处可步入的风景<span>ARCHITECTURAL EXPLORATION / 01</span></div><div class="top-actions"><button id="reference-btn" class="text-btn">▧ <span>原图对照</span></button><button id="help-btn" class="circle-btn" aria-label="操作说明">?</button></div></header>
+ <section class="intro ui"><div class="eyebrow"><i></i> LAKESIDE RESIDENCE / 概念重建</div><h1>让生活，<br>向风景展开。</h1><p>沿着蟹形的轮廓，走进十处湖畔日常。</p><button id="enter-btn" class="enter">进入建筑 <span>↗</span></button></section>
+ <aside class="tour-panel ui" id="tour-panel"><div class="panel-heading"><span>空间导览</span><span class="muted">01 — 04</span></div><button class="tour-stop" data-tour="0"><span class="stop-num">01</span><span>中央门厅<small>光影与秩序</small></span><span>↗</span></button><button class="tour-stop" data-tour="1"><span class="stop-num">02</span><span>湖景客厅<small>向湖面舒展</small></span><span>↗</span></button><button class="tour-stop" data-tour="2"><span class="stop-num">03</span><span>温暖卧室<small>木色的宁静</small></span><span>↗</span></button><button class="tour-stop" data-tour="3"><span class="stop-num">04</span><span>水岸平台<small>建筑之外</small></span><span>↗</span></button><div class="tour-foot"><i></i> 实时渲染 · 可自由探索</div></aside>
+ <div class="scene-caption ui"><span id="scene-name">全景 · 蟹形聚落</span><span id="time-label">16:30 / 午后暖阳</span></div>
+ <div class="bottom-wrap ui"><div class="toolbar"><nav aria-label="视角模式"><button data-mode="orbit" class="active"><span>◈</span>自由环绕</button><button data-mode="plan"><span>▦</span>平面鸟瞰</button><button data-mode="walk"><span>♧</span>步行漫游</button></nav><div class="divider"></div><button id="roof-btn" class="tool" aria-pressed="false"><span>⌂</span><span id="roof-label">盖上屋顶</span></button><button id="light-btn" class="tool" aria-pressed="false"><span>☼</span><span id="light-label">午后</span></button><button id="photo-btn" class="tool icon-only" title="保存当前画面" aria-label="保存当前画面">▣</button><button id="quality-btn" class="tool quality" aria-label="切换画质">高画质</button></div><div class="bottom-meta"><span id="control-hint">拖动旋转视角 <b>·</b> 滚轮缩放 <b>·</b> 右键平移</span><span>原图轮廓重建 <b>·</b> 尺寸为视觉推定</span></div></div>
+ <div id="crosshair" hidden>＋</div><div id="interaction" hidden><kbd>E</kbd> <span>打开房门</span></div><div id="walk-hint" hidden><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 <span>·</span> 鼠标看向 <span>·</span> Shift 加速 <span>·</span> Esc 释放鼠标</div>
+ <div id="touch-controls" hidden><div id="joystick"><i></i></div><button id="touch-interact">E</button><div class="touch-look">右侧拖动观察</div></div>
+ <div class="minimap ui" id="minimap" hidden><canvas id="map" width="260" height="210"></canvas><span>N ↑ <b>当前位置</b></span></div>
+ <div id="toast" role="status"></div>
+ <dialog id="reference-dialog"><button class="close" data-close="reference-dialog" aria-label="关闭">×</button><div class="eyebrow">FROM PLAN TO PLACE</div><h2>从图纸，到可步入的空间。</h2><div class="reference-layout"><img src="./assets/reference.png" alt="原始蟹形住宅平面图，下方附大闸蟹参考照片"><div><h3>保留图纸的骨架</h3><p>中央交通核、左右对称展开的住宅翼、十户独立空间，以及向外放射的斜向轮廓。</p><h3>补全生活的质感</h3><p>以湖畔度假住宅为设定，加入暖白石墙、橡木地板、铜色屋面、家具、植被与水景。</p><p class="note">原图像素有限，无法可靠读取标注。场景按可辨认的轮廓和空间关系进行概念性重建；尺寸、家具与景观由创作补全。</p><button id="compare-plan" class="solid-btn">查看对应三维平面 ↗</button></div></div></dialog>
+ <dialog id="help-dialog"><button class="close" data-close="help-dialog" aria-label="关闭">×</button><div class="eyebrow">MAKE YOURSELF AT HOME</div><h2>随心走走。</h2><div class="help-grid"><div><h3>自由环绕</h3><p>鼠标左键拖动旋转，滚轮缩放，右键拖动平移。触屏单指旋转、双指缩放。</p></div><div><h3>步行漫游</h3><p>点击场景捕获鼠标。WASD 移动，鼠标看向，Shift 加速；E 开关附近的门或灯。Esc 释放鼠标。触屏使用左侧摇杆与右侧滑动。</p></div><div><h3>建筑与光线</h3><p>切换屋顶查看建筑外观；切换午后、黄昏、夜景。平面鸟瞰会自动打开屋顶。</p></div><div><h3>留下一帧</h3><p>右下角相机按钮保存无界面的 PNG。按 H 隐藏界面，按 R 回到全景。</p></div></div><p class="note">这是可实时交互的 WebGL 建筑场景。桌面浏览器与独立显卡能获得更好的画质和流畅度。</p></dialog>
+ <script type="module" src="./src/main.js"></script>
+</body></html>

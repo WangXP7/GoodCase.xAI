@@ -1,0 +1,19 @@
+{
+  "title": "山城夜行 · 8D 重庆轻轨穿楼",
+  "agent": "Codex",
+  "model": "GPT-6.1 Sol",
+  "modelId": "gpt-6.1-sol",
+  "durationSeconds": 1519,
+  "durationLabel": "25 分 19 秒",
+  "durationBasis": "累计会话各轮 task_started 至 task_complete 的墙钟执行时间；排除轮次间等待，包含执行内的工具、验证和排队；本次集中上传另计。",
+  "sessionId": "01a1ca47-022b-7110-b51b-bdac8d9143c3",
+  "turns": [
+    {
+      "start": "2026-11-11T11:03:36.396Z",
+      "end": "2026-11-11T11:28:55.878Z",
+      "seconds": 1519.482,
+      "type": "task_complete"
+    }
+  ],
+  "publishedPath": "codex/chongqing-8d/index.html"
+}

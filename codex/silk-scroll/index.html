@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#141916">
+  <title>风中长卷 · 碳基生物</title>
+  <style>
+    :root { color-scheme: dark; --ink:#ece9dd; --muted:#9aab9f; --gold:#c7ad77; }
+    * { box-sizing:border-box; }
+    html,body { width:100%; height:100%; margin:0; overflow:hidden; }
+    body { background:#141916; color:var(--ink); font-family:"Segoe UI","Microsoft YaHei",sans-serif; }
+    #stage { position:fixed; inset:0; touch-action:none; cursor:grab; }
+    #stage.dragging { cursor:grabbing; }
+    #stage.cutting { cursor:grab; }
+    #stage.cutting.dragging { cursor:grabbing; }
+    #stage canvas { display:block; width:100%; height:100%; }
+    .vignette { position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at 53% 44%,transparent 35%,#07100b44 100%); }
+    header { position:absolute; top:37px; left:42px; display:flex; align-items:center; gap:13px; pointer-events:none; }
+    .logo { width:30px; height:30px; border:1px solid #bbab7e80; display:grid; place-items:center; color:var(--gold); font-family:serif; font-size:18px; }
+    .brand { font-size:11px; letter-spacing:3px; font-weight:500; }
+    .brand small { display:block; font-size:9px; color:var(--muted); letter-spacing:2px; margin-top:5px; }
+    .intro { position:absolute; top:34%; left:6.3%; pointer-events:none; }
+    .eyebrow { color:var(--gold); font-size:10px; letter-spacing:3px; display:flex; align-items:center; gap:12px; }
+    .eyebrow:before { content:""; display:block; width:27px; height:1px; background:var(--gold); }
+    h1 { font-family:"STSong","SimSun",serif; font-weight:400; font-size:clamp(32px,3.4vw,55px); line-height:1.6; letter-spacing:8px; margin:23px 0 21px; }
+    .intro p { color:#9da99f; font-family:"SimSun",serif; font-size:12px; letter-spacing:2px; line-height:2.2; margin:0; }
+    .number { margin-top:41px; color:#7d8e82; font-size:10px; letter-spacing:2px; }
+    .number b { color:#c9cdbf; font-weight:400; }
+    .panel { position:absolute; top:34px; right:37px; width:244px; padding:22px 23px 20px; background:#202822b8; border:1px solid #a7b39c25; border-radius:3px; backdrop-filter:blur(18px); }
+    .panel-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:25px; }
+    .panel-heading span { color:#c8d0c4; font-size:10px; letter-spacing:2.5px; }
+    .live { display:flex; align-items:center; gap:6px; font-size:9px; color:#9eaf9e; letter-spacing:1px; }
+    .live:before { content:""; width:4px; height:4px; background:#b4c69d; border-radius:50%; box-shadow:0 0 8px #b4c69d55; }
+    .wind-label { display:flex; align-items:center; justify-content:space-between; font-size:12px; }
+    output { color:var(--gold); font-size:11px; font-variant-numeric:tabular-nums; }
+    input[type=range] { --fill:32%; appearance:none; width:100%; height:2px; display:block; margin:22px 0 13px; background:linear-gradient(to right,var(--gold) var(--fill),#69796b55 var(--fill)); cursor:pointer; border-radius:2px; }
+    input[type=range]::-webkit-slider-thumb { appearance:none; width:10px; height:10px; border-radius:50%; background:#e2d2a5; box-shadow:0 0 0 4px #c7ad7712; }
+    input[type=range]::-moz-range-thumb { width:10px; height:10px; border:0; border-radius:50%; background:#e2d2a5; }
+    input:focus-visible,button:focus-visible { outline:2px solid var(--gold); outline-offset:6px; }
+    .scale { display:flex; justify-content:space-between; font-size:9px; color:#899b8d; letter-spacing:1px; }
+    .direction { margin-top:22px; display:flex; align-items:center; justify-content:space-between; font-size:10px; color:#9eada0; }
+    .direction svg { width:17px; height:17px; color:var(--gold); transition:transform .6s linear; }
+    .rule { height:1px; background:#a7b39c20; margin:18px 0 15px; }
+    button { width:100%; padding:8px 0; background:transparent; border:0; color:#d7ddcf; font-family:inherit; font-size:11px; letter-spacing:3px; cursor:pointer; display:flex; justify-content:center; align-items:center; gap:9px; }
+    button:hover { color:var(--gold); }
+    button svg { width:13px; height:13px; }
+    footer { position:absolute; bottom:32px; left:42px; right:38px; display:flex; align-items:flex-end; justify-content:space-between; pointer-events:none; }
+    .instructions { display:flex; gap:25px; color:#b3bdaf; font-size:11px; letter-spacing:1px; }
+    .instructions span { display:flex; align-items:center; gap:9px; }
+    .instructions svg { width:15px; height:18px; color:#c6b58d; }
+    kbd { border:1px solid #83947e55; border-radius:3px; font-size:9px; font-family:inherit; padding:3px 5px; color:#d5d7c6; }
+    .caption { text-align:right; color:#879789; font-size:9px; line-height:2; letter-spacing:2px; }
+    .caption b { color:#c2cbb9; font-weight:400; font-size:10px; }
+    #state { position:absolute; bottom:98px; left:50%; transform:translateX(-50%); color:#c5c9b7; font-size:10px; letter-spacing:3px; pointer-events:none; opacity:0; transition:opacity .3s; white-space:nowrap; }
+    #state.visible { opacity:1; }
+    #cut-cursor { position:fixed; width:24px; height:24px; border:1px solid #e7c598b0; border-radius:50%; pointer-events:none; transform:translate(-50%,-50%); display:none; }
+    #cut-cursor { border-style:dashed; }
+    #loading { position:fixed; inset:0; display:grid; place-items:center; background:#141916; z-index:5; transition:opacity .6s; }
+    #loading p { font-family:serif; letter-spacing:4px; color:#c9bc97; font-size:13px; text-align:center; line-height:2.5; padding:28px; }
+    #loading.ready { opacity:0; pointer-events:none; }
+    @media(max-width:1050px) { .intro { left:4%; } h1 { font-size:34px; letter-spacing:5px; } .panel { width:210px; right:24px; } }
+    @media(max-width:700px) {
+      header { top:23px; left:22px; } .brand { font-size:10px; letter-spacing:2px; } .brand small { font-size:8px; }
+      .intro { top:auto; bottom:94px; left:23px; } .intro .eyebrow,.intro p,.number { display:none; }
+      h1 { font-size:19px; line-height:1.5; margin:0; letter-spacing:4px; } h1 br { display:none; }
+      .panel { top:20px; right:18px; padding:14px 15px 9px; width:158px; }
+      .panel-heading { margin-bottom:16px; } .panel-heading span { font-size:9px; letter-spacing:1px; } .live { font-size:8px; }
+      .wind-label { font-size:11px; } .direction { margin-top:14px; } .rule { margin:10px 0 6px; }
+      input[type=range] { margin-top:16px; } footer { bottom:20px; left:23px; right:19px; }
+      .instructions { gap:10px; flex-direction:column; font-size:10px; } .caption { font-size:8px; letter-spacing:1px; }
+      #state { bottom:144px; font-size:9px; letter-spacing:1px; }
+    }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <main id="stage" aria-label="可拖拽和撕裂的三维丝绸长卷"></main>
+  <div class="vignette"></div>
+  <header><div class="logo">帛</div><div class="brand">SILK & WIND<small>交互材质实验室 / 001</small></div></header>
+  <section class="intro" aria-label="作品介绍">
+    <div class="eyebrow">A STUDY IN SOFTNESS</div>
+    <h1>风过，<br>字有形。</h1>
+    <p>一缕风，一幅帛。<br>让指尖，触碰无形。</p>
+    <div class="number"><b>01</b> / 碳基生物</div>
+  </section>
+  <aside class="panel" aria-label="模拟控制">
+    <div class="panel-heading"><span>风的分寸</span><div class="live">LIVE</div></div>
+    <label class="wind-label" for="wind">风力 <output id="wind-value" for="wind">32%</output></label>
+    <input id="wind" type="range" min="0" max="100" value="32" aria-label="风力">
+    <div class="scale"><span>无风</span><span>强风</span></div>
+    <div class="direction"><span id="wind-description">微风 · 缓慢变向</span><svg id="wind-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></div>
+    <div class="rule"></div>
+    <button id="reset" type="button" title="重新悬挂完整长卷（R）"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 6a7 7 0 1 1-1 7M4 2v5h5"/></svg>重置</button>
+  </aside>
+  <div id="state" role="status" aria-live="polite"></div>
+  <div id="cut-cursor"></div>
+  <footer>
+    <div class="instructions">
+      <span><svg viewBox="0 0 16 20" fill="none" stroke="currentColor"><rect x="3" y="1" width="10" height="16" rx="5"/><path d="M8 2v5"/></svg>拖拽 · 牵动丝绸</span>
+      <span><kbd>Shift</kbd> + 拉扯 · 撕下布片</span>
+    </div>
+    <div class="caption"><b>经纬之间，自有回响</b><br>REAL-TIME CLOTH / 碳基生物</div>
+  </footer>
+  <div id="loading"><p id="loading-text">正在悬挂长卷<br><small>初次打开需从 CDN 加载 Three.js</small></p></div>
+  <script>
+    window.bootTimer = setTimeout(() => { document.querySelector('#loading-text').innerHTML = '加载时间较长，请检查网络后刷新。<br><small>需要访问 cdn.jsdelivr.net；推荐使用最新版 Chrome / Edge。</small>'; }, 20000);
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    const stage = document.querySelector('#stage');
+    const windInput = document.querySelector('#wind');
+    const windValue = document.querySelector('#wind-value');
+    const stateLabel = document.querySelector('#state');
+    const cutCursor = document.querySelector('#cut-cursor');
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'high-performance' });
+    } catch (error) {
+      clearTimeout(window.bootTimer);
+      document.querySelector('#loading-text').textContent = '无法启动 WebGL。请在浏览器设置中启用硬件加速后重试。';
+      throw error;
+    }
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.13;
+    stage.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#19221d');
+    scene.fog = new THREE.Fog('#19221d', 16, 31);
+    const camera = new THREE.PerspectiveCamera(39, 1, .1, 50);
+    camera.position.set(.65, .65, 12.2);
+    camera.lookAt(0, .05, 0);
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const room = new RoomEnvironment();
+    const environment = pmrem.fromScene(room, .06);
+    scene.environment = environment.texture;
+    scene.environmentIntensity = .32;
+    room.dispose(); pmrem.dispose();
+
+    scene.add(new THREE.HemisphereLight('#ecf2df', '#3d473b', 1.05));
+    const key = new THREE.DirectionalLight('#fff0d2', 3.3);
+    key.position.set(-3.6, 5.5, 4.8);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, { left:-6, right:6, top:7, bottom:-6, near:.5, far:18 });
+    key.shadow.bias = -.00025;
+    key.shadow.normalBias = .022;
+    key.shadow.radius = 3;
+    scene.add(key);
+    const rim = new THREE.DirectionalLight('#c9dfd7', 2.4);
+    rim.position.set(4, 2.8, -1.4); scene.add(rim);
+    const fill = new THREE.DirectionalLight('#e8c799', .5);
+    fill.position.set(2,-1,5); scene.add(fill);
+
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(160,160), new THREE.MeshStandardMaterial({color:'#202a22', roughness:.9}));
+    floor.rotation.x = -Math.PI/2; floor.position.y = -3.3; floor.receiveShadow = true; scene.add(floor);
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(100,45), new THREE.MeshStandardMaterial({color:'#26332a', roughness:1}));
+    wall.position.set(0,7,-2.1); wall.receiveShadow = true; scene.add(wall);
+
+    const ROD_Y = 3.08, ROD_R = .092, HALF_ROD = 1.69;
+    const brass = new THREE.MeshStandardMaterial({color:'#89714b',metalness:.82,roughness:.31});
+    const wood = new THREE.MeshStandardMaterial({color:'#30271c',metalness:.22,roughness:.34});
+    function cylinder(radius, length, material, x=0) {
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,length,32), material);
+      mesh.rotation.z = Math.PI/2; mesh.position.set(x,ROD_Y,0); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); return mesh;
+    }
+    cylinder(ROD_R,HALF_ROD*2,wood);
+    for (const side of [-1,1]) {
+      cylinder(.105,.14,brass,side*1.63);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(.115,24,16),brass);
+      cap.scale.x = .55; cap.position.set(side*1.74,ROD_Y,0); cap.castShadow = true; scene.add(cap);
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(.009,.009,4,8),new THREE.MeshStandardMaterial({color:'#857858',roughness:.95}));
+      cord.position.set(side*1.38,ROD_Y+2.02,0); scene.add(cord);
+    }
+
+    // All artwork and silk surface detail are generated here; no image/font downloads.
+    function makeSilkTexture() {
+      const canvas = document.createElement('canvas'); canvas.width=1024; canvas.height=2304;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle='#e8ddc1'; ctx.fillRect(0,0,1024,2304);
+      const wash = ctx.createLinearGradient(0,0,1024,0);
+      wash.addColorStop(0,'#8c73391e'); wash.addColorStop(.14,'#fff6db22'); wash.addColorStop(.5,'#fff9e511'); wash.addColorStop(.84,'#ad96530b'); wash.addColorStop(1,'#8c73392a');
+      ctx.fillStyle=wash; ctx.fillRect(0,0,1024,2304);
+      // Deterministic fine warp/weft with a faint woven brocade border.
+      let seed=3217;
+      const random=()=>((seed=(1664525*seed+1013904223)>>>0)/4294967296);
+      for(let x=0;x<1024;x+=2) { ctx.fillStyle=`rgba(110,91,53,${.012+random()*.026})`; ctx.fillRect(x,0,1,2304); }
+      for(let y=0;y<2304;y+=3) { ctx.fillStyle=`rgba(255,252,231,${.025+random()*.055})`; ctx.fillRect(0,y,1024,1); }
+      ctx.strokeStyle='#8d753b65'; ctx.lineWidth=2; ctx.strokeRect(47,44,930,2216);
+      ctx.strokeStyle='#9c824537'; ctx.lineWidth=1; ctx.strokeRect(57,54,910,2196);
+      ctx.strokeStyle='#a68a482b';
+      for(let y=64;y<2240;y+=28) for(const x of [24,1000]) {
+        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+12,y+14); ctx.lineTo(x,y+28); ctx.lineTo(x-12,y+14); ctx.closePath(); ctx.stroke();
+      }
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      const chars = ['碳','基','生','物'];
+      chars.forEach((char,i)=>{
+        ctx.save(); ctx.translate(514+(i%2 ? 9:-5),440+i*434); ctx.rotate([-.025,.018,-.018,.025][i]);
+        ctx.font='365px "STXingkai", "华文行楷", "STKaiti", "华文楷体", "KaiTi", "楷体", "Kaiti SC", serif';
+        ctx.fillStyle='#20291f'; ctx.fillText(char,0,0,700);
+        // Subtle ink absorption rather than an artificial drop shadow.
+        ctx.globalAlpha=.1; ctx.fillText(char,.8,.9,700); ctx.restore();
+      });
+      ctx.save(); ctx.translate(738,2019); ctx.rotate(-.035);
+      ctx.strokeStyle='#9c3f2d'; ctx.lineWidth=5; ctx.strokeRect(-33,-32,66,66);
+      ctx.fillStyle='#9c3f2d'; ctx.font='24px "STKaiti","KaiTi",serif';
+      ctx.fillText('碳',-15,-14); ctx.fillText('基',15,-14); ctx.fillText('生',-15,14); ctx.fillText('物',15,14); ctx.restore();
+      const tex=new THREE.CanvasTexture(canvas); tex.colorSpace=THREE.SRGBColorSpace;
+      tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy()); return tex;
+    }
+    const bumpCanvas=document.createElement('canvas'); bumpCanvas.width=bumpCanvas.height=128;
+    const bctx=bumpCanvas.getContext('2d'), image=bctx.createImageData(128,128);
+    for(let y=0;y<128;y++) for(let x=0;x<128;x++) {
+      const v=128+22*Math.sin(x*Math.PI)+18*Math.cos(y*Math.PI/2)+12*Math.sin(x*1.57);
+      const i=(y*128+x)*4; image.data[i]=image.data[i+1]=image.data[i+2]=v; image.data[i+3]=255;
+    }
+    bctx.putImageData(image,0,0);
+    const bump=new THREE.CanvasTexture(bumpCanvas); bump.wrapS=bump.wrapT=THREE.RepeatWrapping; bump.repeat.set(14,32);
+    const silk = new THREE.MeshPhysicalMaterial({
+      map:makeSilkTexture(), side:THREE.DoubleSide, roughness:.48, metalness:0,
+      sheen:.95, sheenColor:new THREE.Color('#f5e5b9'), sheenRoughness:.36,
+      anisotropy:.45, anisotropyRotation:Math.PI/2, clearcoat:.06, clearcoatRoughness:.65,
+      specularIntensity:.42, bumpMap:bump, bumpScale:.006
+    });
+
+    // Each material cell owns its four vertices. Neighbouring cells are sewn
+    // together at their shared edge; tearing opens those seams without deleting
+    // artwork or leaving shear/bending springs across the crack.
+    const NX=28, NY=64, CELLS=NX*NY, N=CELLS*4;
+    const WIDTH=2.46, HEIGHT=5.58, TOP=3.045, FRONT=.135, FLOOR=-3.28;
+    const DX=WIDTH/NX, DY=HEIGHT/NY, DT=1/120, DT2=DT*DT, ITERATIONS=7;
+    const p=new Float64Array(N*3), prev=new Float64Array(N*3), rest=new Float64Array(N*3);
+    const invMass=new Float64Array(N), springs=[], seams=[];
+    const cellSeams=Array.from({length:CELLS},()=>[]);
+    const geometry=new THREE.BufferGeometry();
+    const positions=new Float32Array(N*3), uvs=new Float32Array(N*2), normals=new Float32Array(N*3);
+    const indexArray=new Uint16Array(CELLS*6);
+    for(let row=0;row<NY;row++) for(let col=0;col<NX;col++) {
+      const cell=row*NX+col, base=cell*4;
+      for(let corner=0;corner<4;corner++) {
+        const id=base+corner, i=id*3, u=(col+(corner%2))/NX, v=(row+(corner>>1))/NY;
+        rest[i]=(u-.5)*WIDTH; rest[i+1]=TOP-v*HEIGHT; rest[i+2]=FRONT;
+        invMass[id]=(row===0&&corner<2)?0:1;
+        uvs[id*2]=u; uvs[id*2+1]=1-v;
+      }
+      indexArray.set([base,base+2,base+1,base+1,base+2,base+3],cell*6);
+    }
+    function addSpring(a,b,stiffness,seam=-1) {
+      const ia=a*3,ib=b*3;
+      springs.push({a,b,length:Math.hypot(rest[ia]-rest[ib],rest[ia+1]-rest[ib+1],rest[ia+2]-rest[ib+2]),stiffness,seam});
+    }
+    function addSeam(a,b,pairs,bends) {
+      const id=seams.length;
+      seams.push({a,b,pairs,active:true}); cellSeams[a].push(id); cellSeams[b].push(id);
+      for(const [x,y] of bends) addSpring(x,y,.12,id);
+    }
+    for(let row=0;row<NY;row++) for(let col=0;col<NX;col++) {
+      const cell=row*NX+col, b=cell*4;
+      for(const [a,c] of [[0,1],[2,3],[0,2],[1,3]]) addSpring(b+a,b+c,.97);
+      addSpring(b,b+3,.78); addSpring(b+1,b+2,.78);
+      if(col<NX-1) {
+        const c=(cell+1)*4;
+        addSeam(cell,cell+1,[[b+1,c],[b+3,c+2]],[[b,c+1],[b+2,c+3]]);
+      }
+      if(row<NY-1) {
+        const c=(cell+NX)*4;
+        addSeam(cell,cell+NX,[[b+2,c],[b+3,c+1]],[[b,c+2],[b+1,c+3]]);
+      }
+    }
+    geometry.setAttribute('position',new THREE.BufferAttribute(positions,3).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('normal',new THREE.BufferAttribute(normals,3).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));
+    geometry.setIndex(new THREE.BufferAttribute(indexArray,1));
+    const cloth=new THREE.Mesh(geometry,silk); cloth.castShadow=true; cloth.receiveShadow=true; cloth.frustumCulled=false; scene.add(cloth);
+    let cutCount=0, simTime=0, wind=.32, accumulator=0, lastTime=0, nextTearTime=0;
+    let grab=null, pointerDown=false, tearMode=false, messageTimer, activePointer=-1;
+    let componentCount=1, detachedCount=0, lastReleasedCells=[];
+    const normalRoot=new Int32Array(N), componentOf=new Int32Array(N), attachedRoot=new Uint8Array(N);
+    const normalSum=new Float64Array(N*3);
+    const weldSum=new Float64Array(N*3),weldCount=new Uint8Array(N),weldPinned=new Int32Array(N);
+    let weldRoots=[];
+    const mouse=new THREE.Vector2(),raycaster=new THREE.Raycaster(),plane=new THREE.Plane();
+    const world=new THREE.Vector3(),normal=new THREE.Vector3(),target=new THREE.Vector3();
+
+    function makeUnion() {
+      const parent=Int32Array.from({length:N},(_,i)=>i),rank=new Uint8Array(N);
+      function find(a) { let r=a;while(parent[r]!==r) r=parent[r];while(parent[a]!==a){const next=parent[a];parent[a]=r;a=next;}return r; }
+      function join(a,b) {a=find(a);b=find(b);if(a===b)return;if(rank[a]<rank[b])[a,b]=[b,a];parent[b]=a;if(rank[a]===rank[b])rank[a]++;}
+      return {find,join};
+    }
+    function rebuildTopology() {
+      // Normal smoothing joins only vertices that are still sewn together.
+      const weld=makeUnion(),body=makeUnion();
+      for(let c=0;c<CELLS;c++) for(let k=1;k<4;k++) body.join(c*4,c*4+k);
+      for(const seam of seams) if(seam.active) for(const [a,b] of seam.pairs) {weld.join(a,b);body.join(a,b);}
+      attachedRoot.fill(0);weldCount.fill(0);weldPinned.fill(-1);weldRoots=[];componentCount=0;detachedCount=0;
+      for(let id=0;id<N;id++) {
+        const root=weld.find(id);normalRoot[id]=root;
+        if(!weldCount[root])weldRoots.push(root);weldCount[root]++;
+        componentOf[id]=body.find(id);
+        if(!invMass[id]){attachedRoot[componentOf[id]]=1;weldPinned[root]=id;}
+      }
+      const seen=new Uint8Array(N);
+      for(let id=0;id<N;id++) {const root=componentOf[id];if(!seen[root]){seen[root]=1;componentCount++;}if(!attachedRoot[root])detachedCount++;}
+      if(grab) grab.attached=!!attachedRoot[componentOf[grab.nodes[0].id]];
+    }
+    function notify(message,duration=2000) {
+      clearTimeout(messageTimer);stateLabel.textContent=message;stateLabel.classList.add('visible');
+      if(duration)messageTimer=setTimeout(()=>stateLabel.classList.remove('visible'),duration);
+    }
+    function release() {
+      if(grab) {
+        const root=componentOf[grab.nodes[0].id];lastReleasedCells=[];
+        if(!attachedRoot[root]) for(let c=0;c<CELLS;c++) if(componentOf[c*4]===root)lastReleasedCells.push(c);
+      }
+      pointerDown=false;grab=null;stage.classList.remove('dragging');
+      if(activePointer!==-1&&stage.hasPointerCapture(activePointer))stage.releasePointerCapture(activePointer);
+      activePointer=-1;
+    }
+    function reset() {
+      release();lastReleasedCells=[];cutCount=0;simTime=0;accumulator=0;lastTime=0;nextTearTime=0;p.set(rest);
+      for(let id=0;id<N;id++) if(invMass[id]) {
+        const i=id*3,t=(TOP-rest[i+1])/HEIGHT;
+        p[i+2]+=.065*Math.sin((rest[i]/WIDTH+.5)*NX*.65)*Math.sin(t*Math.PI*.88)+.1*t*t;
+      }
+      prev.set(p);for(const seam of seams)seam.active=true;
+      rebuildTopology();updateGeometry();notify('长卷已重新悬挂');
+    }
+    function collide(id) {
+      if(!invMass[id])return;
+      const i=id*3,margin=ROD_R+.052;
+      if(Math.abs(p[i])<HALF_ROD+.025) {
+        let dy=p[i+1]-ROD_Y,dz=p[i+2],d=Math.hypot(dy,dz);
+        if(d<margin){if(d<1e-8){dz=1;d=1;}p[i+1]=ROD_Y+dy/d*margin;p[i+2]=dz/d*margin;}
+      }
+      if(p[i+1]<FLOOR) {p[i+1]=FLOOR;prev[i]=p[i]-(p[i]-prev[i])*.76;prev[i+2]=p[i+2]-(p[i+2]-prev[i+2])*.76;prev[i+1]=FLOOR;}
+      if(p[i+2]<-2.04){p[i+2]=-2.04;prev[i+2]=p[i+2];}
+    }
+    function enforceGrab() {
+      if(!grab)return;
+      for(const g of grab.nodes) {
+        const i=g.id*3,w=g.weight;
+        p[i]+=(grab.target.x+g.dx-p[i])*w;
+        p[i+1]+=(grab.target.y+g.dy-p[i+1])*w;
+        p[i+2]+=(grab.target.z+g.dz-p[i+2])*w;
+      }
+    }
+    function solveWelds() {
+      // Project a whole sewn vertex group at once. Pairwise projection leaves
+      // hairline gaps where four cells meet, even when none of them has torn.
+      weldSum.fill(0);
+      for(let id=0;id<N;id++){const i=id*3,r=normalRoot[id]*3;weldSum[r]+=p[i];weldSum[r+1]+=p[i+1];weldSum[r+2]+=p[i+2];}
+      for(const root of weldRoots) {
+        const r=root*3,pinned=weldPinned[root];
+        for(let axis=0;axis<3;axis++)weldSum[r+axis]=pinned>=0?rest[pinned*3+axis]:weldSum[r+axis]/weldCount[root];
+      }
+      for(let id=0;id<N;id++){const i=id*3,r=normalRoot[id]*3;p[i]=weldSum[r];p[i+1]=weldSum[r+1];p[i+2]=weldSum[r+2];}
+    }
+    function fractureUnderTension() {
+      if(!grab||!tearMode||!grab.attached||simTime<nextTearTime||grab.target.distanceTo(grab.origin)<.16)return;
+      const candidates=[];
+      for(let id=0;id<seams.length;id++) {
+        const s=seams[id];if(!s.active)continue;
+        // The held patch remains whole. Only stressed seams near the hand tear.
+        if(grab.cells.has(s.a)&&grab.cells.has(s.b))continue;
+        const ax=(s.a%NX+.5)*DX,ay=(Math.floor(s.a/NX)+.5)*DY;
+        if(Math.hypot(ax-grab.materialX,ay-grab.materialY)>.95)continue;
+        let gap=0;
+        for(const [a,b] of s.pairs){const i=a*3,j=b*3;gap=Math.max(gap,Math.hypot(p[i]-p[j],p[i+1]-p[j+1],p[i+2]-p[j+2]));}
+        if(gap>.012)candidates.push({id,gap});
+      }
+      candidates.sort((a,b)=>b.gap-a.gap);
+      if(!candidates.length)return;
+      for(const c of candidates.slice(0,2)){seams[c.id].active=false;cutCount++;}
+      nextTearTime=simTime+.025;rebuildTopology();
+      notify(grab.attached?'经纬正被拉开 · 继续拉扯':'布片已撕下 · 松手让它落下',0);
+    }
+    function step() {
+      simTime+=DT;
+      const dir=.4+Math.sin(simTime*.19)*1.15+Math.sin(simTime*.071)*.45;
+      const gust=.68+.2*Math.sin(simTime*.71)+.12*Math.sin(simTime*1.31);
+      const wx=Math.sin(dir)*wind*5.8*gust,wz=Math.cos(dir)*wind*6.3*gust;
+      for(let id=0;id<N;id++) {
+        const i=id*3;
+        if(!invMass[id]){p[i]=prev[i]=rest[i];p[i+1]=prev[i+1]=rest[i+1];p[i+2]=prev[i+2]=rest[i+2];continue;}
+        const x=p[i],y=p[i+1],z=p[i+2];
+        const vx=THREE.MathUtils.clamp((x-prev[i])*.992,-.1,.1),vy=THREE.MathUtils.clamp((y-prev[i+1])*.992,-.1,.1),vz=THREE.MathUtils.clamp((z-prev[i+2])*.992,-.1,.1);
+        prev[i]=x;prev[i+1]=y;prev[i+2]=z;
+        const ripple=wind*(.32*Math.sin(x*4.1+y*2.2+simTime*2.4)+.19*Math.sin(y*5.4-simTime*3));
+        p[i]+=vx+(wx+ripple*.35)*DT2;p[i+1]+=vy+(-7.3+ripple*.12)*DT2;p[i+2]+=vz+(wz+ripple)*DT2;
+      }
+      enforceGrab();
+      for(let iteration=0;iteration<ITERATIONS;iteration++) {
+        for(let j=0;j<springs.length;j++) {
+          const s=springs[iteration%2?springs.length-1-j:j];if(s.seam>=0&&!seams[s.seam].active)continue;
+          const a=s.a*3,b=s.b*3,wa=invMass[s.a],wb=invMass[s.b],sum=wa+wb;if(!sum)continue;
+          const dx=p[b]-p[a],dy=p[b+1]-p[a+1],dz=p[b+2]-p[a+2],length=Math.sqrt(dx*dx+dy*dy+dz*dz);if(length<1e-9)continue;
+          const correction=(length-s.length)/length*s.stiffness/sum,ca=correction*wa,cb=correction*wb;
+          p[a]+=dx*ca;p[a+1]+=dy*ca;p[a+2]+=dz*ca;p[b]-=dx*cb;p[b+1]-=dy*cb;p[b+2]-=dz*cb;
+        }
+        enforceGrab();
+        if(iteration===ITERATIONS-1)fractureUnderTension();
+        solveWelds();for(let id=0;id<N;id++)collide(id);
+      }
+    }
+    function updateGeometry() {
+      positions.set(p);geometry.attributes.position.needsUpdate=true;
+      // Area-weighted normals are shared across intact seams and separate at rips.
+      normalSum.fill(0);
+      for(let t=0;t<indexArray.length;t+=3) {
+        const a=indexArray[t],b=indexArray[t+1],c=indexArray[t+2],i=a*3,j=b*3,k=c*3;
+        const ux=p[j]-p[i],uy=p[j+1]-p[i+1],uz=p[j+2]-p[i+2],vx=p[k]-p[i],vy=p[k+1]-p[i+1],vz=p[k+2]-p[i+2];
+        const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+        for(const id of [a,b,c]){const root=normalRoot[id]*3;normalSum[root]+=nx;normalSum[root+1]+=ny;normalSum[root+2]+=nz;}
+      }
+      for(let id=0;id<N;id++) {
+        const root=normalRoot[id]*3,i=id*3,x=normalSum[root],y=normalSum[root+1],z=normalSum[root+2],length=Math.hypot(x,y,z)||1;
+        normals[i]=x/length;normals[i+1]=y/length;normals[i+2]=z/length;
+      }
+      geometry.attributes.normal.needsUpdate=true;geometry.computeBoundingSphere();
+    }
+    function setRay(x,y){mouse.set(x/innerWidth*2-1,1-y/innerHeight*2);raycaster.setFromCamera(mouse,camera);}
+    function hitCloth(x,y){setRay(x,y);return raycaster.intersectObject(cloth,false)[0];}
+    function beginGrab(x,y) {
+      const hit=hitCloth(x,y);if(!hit)return false;
+      const seed=Math.floor(hit.faceIndex/2),row=Math.floor(seed/NX),col=seed%NX;
+      const materialX=(col+.5)*DX,materialY=(row+.5)*DY,cells=new Set([seed]),queue=[seed];
+      for(let q=0;q<queue.length;q++) for(const id of cellSeams[queue[q]]) {
+        const seam=seams[id];if(!seam.active)continue;
+        const c=seam.a===queue[q]?seam.b:seam.a,r=Math.floor(c/NX),x=c%NX;
+        if(cells.has(c)||(row>0&&r===0)||Math.hypot((x+.5)*DX-materialX,(r+.5)*DY-materialY)>.31)continue;
+        cells.add(c);queue.push(c);
+      }
+      target.copy(hit.point);camera.getWorldDirection(normal);plane.setFromNormalAndCoplanarPoint(normal,target);
+      const nodes=[];
+      for(const c of cells)for(let k=0;k<4;k++) {
+        const id=c*4+k;if(!invMass[id])continue;const i=id*3;
+        const dx=p[i]-target.x,dy=p[i+1]-target.y,dz=p[i+2]-target.z;
+        const weight=Math.max(.012,.97*Math.exp(-(dx*dx+dy*dy+dz*dz)/(.11*.11)));
+        nodes.push({id,dx,dy,dz,weight});
+      }
+      if(!nodes.length)return false;
+      grab={nodes,cells,seed,materialX,materialY,target:target.clone(),origin:target.clone(),attached:!!attachedRoot[componentOf[nodes[0].id]]};
+      stage.classList.add('dragging');notify(tearMode?'已抓住丝绸 · 用力拉扯即可撕开':'指尖牵动 · 松开后自然回落',0);return true;
+    }
+    function setTearMode(value) {
+      if(tearMode===value)return;tearMode=value;stage.classList.toggle('cutting',value);cutCursor.style.display=value?'block':'none';
+      if(grab)notify(value?'保持抓握 · 用力拉扯即可撕开':'继续牵动 · 松开后自然回落',0);
+    }
+    stage.addEventListener('pointerdown',event=>{
+      if(event.button!==0||pointerDown)return;
+      setTearMode(event.shiftKey);if(!beginGrab(event.clientX,event.clientY))return;
+      activePointer=event.pointerId;pointerDown=true;stage.setPointerCapture(event.pointerId);event.preventDefault();
+    });
+    stage.addEventListener('pointermove',event=>{
+      cutCursor.style.left=event.clientX+'px';cutCursor.style.top=event.clientY+'px';
+      if(pointerDown&&event.pointerId!==activePointer)return;
+      setTearMode(event.shiftKey);if(!pointerDown||!grab)return;
+      setRay(event.clientX,event.clientY);
+      if(raycaster.ray.intersectPlane(plane,world)) {
+        grab.target.copy(world);grab.target.x=THREE.MathUtils.clamp(grab.target.x,-5,5);grab.target.y=THREE.MathUtils.clamp(grab.target.y,FLOOR+.03,4.5);
+      }
+    });
+    function endPointer(event) {
+      if(event.pointerId!==activePointer)return;
+      const detached=grab&&!grab.attached;release();notify(detached?'松手了 · 布片随重力落下':'风过留痕，丝绸自有归处');
+    }
+    stage.addEventListener('pointerup',endPointer);stage.addEventListener('pointercancel',endPointer);
+    stage.addEventListener('lostpointercapture',()=>{if(pointerDown)release();});
+    window.addEventListener('keydown',event=>{
+      if(event.key==='Shift')setTearMode(true);
+      if(event.key.toLowerCase()==='r'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.repeat&&event.target!==windInput)reset();
+    });
+    window.addEventListener('keyup',event=>{if(event.key==='Shift')setTearMode(false);});
+    window.addEventListener('blur',()=>{release();setTearMode(false);});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden){release();accumulator=0;lastTime=0;}});
+    windInput.addEventListener('input',()=>{
+      wind=Number(windInput.value)/100; windValue.value=windInput.value+'%'; windInput.style.setProperty('--fill',windInput.value+'%');
+      document.querySelector('#wind-description').textContent=wind===0?'无风 · 逐渐静止':wind<.4?'微风 · 缓慢变向':wind<.72?'和风 · 缓慢变向':'强风 · 缓慢变向';
+    });
+    document.querySelector('#reset').addEventListener('click',reset);
+    function resize() {
+      renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight;
+      if(innerWidth<=700) {
+        camera.position.set(.5,.55,15.4); camera.fov=THREE.MathUtils.radToDeg(2*Math.atan(4.6/13.8)); camera.setViewOffset(innerWidth,innerHeight,0,-innerHeight*.06,innerWidth,innerHeight);
+      } else { camera.position.set(.65,.65,12.2); camera.fov=39; camera.clearViewOffset(); }
+      // Keep the full rod visible on narrow portrait screens.
+      const verticalFov=THREE.MathUtils.degToRad(camera.fov),visibleWidth=2*camera.position.z*Math.tan(verticalFov/2)*camera.aspect;
+      if(visibleWidth<4.2) camera.position.z*=4.2/visibleWidth;
+      camera.lookAt(0,.05,0); camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize',resize); resize(); reset();
+    let frameCounter=0;
+    function animate(ms) {
+      requestAnimationFrame(animate);
+      if(document.hidden) {lastTime=0;return;}
+      const elapsed=lastTime?Math.min((ms-lastTime)/1000,.05):1/60; lastTime=ms;
+      accumulator=Math.min(accumulator+elapsed,DT*6);
+      while(accumulator>=DT) {step();accumulator-=DT;}
+      updateGeometry(); renderer.render(scene,camera);
+      if(++frameCounter%15===0) {
+        const angle=.4+Math.sin(simTime*.19)*1.15+Math.sin(simTime*.071)*.45;
+        document.querySelector('#wind-arrow').style.transform=`rotate(${angle*180/Math.PI}deg)`;
+      }
+    }
+    // Read-only diagnostics for reproducible interaction/physics verification.
+    window.__silk={
+      snapshot() {
+        let maxSpeed=0,rodPenetration=0,pinError=0,minY=Infinity,finite=true,meanMotion=0;
+        for(let id=0;id<N;id++) {
+          const i=id*3; finite=finite&&Number.isFinite(p[i]+p[i+1]+p[i+2]); minY=Math.min(minY,p[i+1]);
+          const v=Math.hypot(p[i]-prev[i],p[i+1]-prev[i+1],p[i+2]-prev[i+2])/DT; maxSpeed=Math.max(maxSpeed,v);meanMotion+=v;
+          if(!invMass[id]) pinError=Math.max(pinError,Math.hypot(p[i]-rest[i],p[i+1]-rest[i+1],p[i+2]-rest[i+2]));
+          if(Math.abs(p[i])<HALF_ROD) rodPenetration=Math.max(rodPenetration,ROD_R-Math.hypot(p[i+1]-ROD_Y,p[i+2]));
+        }
+        const pieces=new Map();
+        for(let c=0;c<CELLS;c++) {
+          const root=componentOf[c*4];
+          if(!pieces.has(root))pieces.set(root,{cells:0,attached:!!attachedRoot[root],meanY:0});
+          const piece=pieces.get(root);piece.cells++;piece.meanY+=(p[c*12+1]+p[c*12+4]+p[c*12+7]+p[c*12+10])/4;
+        }
+        for(const piece of pieces.values())piece.meanY/=piece.cells;
+        const centroid=cells=>{
+          if(!cells.length)return null;let x=0,y=0,z=0;
+          for(const c of cells)for(let k=0;k<4;k++){const i=(c*4+k)*3;x+=p[i];y+=p[i+1];z+=p[i+2];}
+          return {x:x/(cells.length*4),y:y/(cells.length*4),z:z/(cells.length*4),cells:cells.length};
+        };
+        const tipId=((NY-1)*NX+Math.floor(NX/2))*4+2;
+        return {particles:N,springs:springs.length+seams.length*2,activeSprings:springs.filter(s=>s.seam<0||seams[s.seam].active).length+seams.filter(s=>s.active).length*2,triangles:CELLS*2,cutCount,componentCount,detachedCount,wind,simTime,finite,maxSpeed,meanMotion:meanMotion/N,pinError,rodPenetration,minY,dragging:!!grab,heldAttached:grab?.attached??null,heldCenter:grab?centroid([...grab.cells]):null,releasedPiece:centroid(lastReleasedCells),pieces:[...pieces.values()],tip:Array.from(p.slice(tipId*3,tipId*3+3)),frames:frameCounter};
+      },
+      project(u,v) {
+        const col=Math.min(NX-1,Math.floor(u*NX)),row=Math.min(NY-1,Math.floor(v*NY));
+        const corner=(u*NX-col>=.5?1:0)+(v*NY-row>=.5?2:0);
+        const id=(row*NX+col)*4+corner;world.fromArray(p,id*3).project(camera);
+        return {x:(world.x*.5+.5)*innerWidth,y:(-world.y*.5+.5)*innerHeight};
+      }
+    };
+    clearTimeout(window.bootTimer); document.querySelector('#loading').classList.add('ready');
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
+

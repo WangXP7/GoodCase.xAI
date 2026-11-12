@@ -1,0 +1,19 @@
+{
+  "title": "蟹屿 · 从图纸到可漫游建筑",
+  "agent": "Codex",
+  "model": "GPT-6.1 Sol",
+  "modelId": "gpt-6.1-sol",
+  "durationSeconds": 2825,
+  "durationLabel": "47 分 5 秒",
+  "durationBasis": "累计会话各轮 task_started 至 task_complete 的墙钟执行时间；排除轮次间等待，包含执行内的工具、验证和排队；本次集中上传另计。",
+  "sessionId": "01a1ca44-09c7-73b1-9b1e-8721317b35eb",
+  "turns": [
+    {
+      "start": "2026-11-11T11:00:21.301Z",
+      "end": "2026-11-11T11:47:26.696Z",
+      "seconds": 2825.395,
+      "type": "task_complete"
+    }
+  ],
+  "publishedPath": "codex/crab-island-3d/index.html"
+}

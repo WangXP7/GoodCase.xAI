@@ -1,0 +1,19 @@
+{
+  "title": "逐帧映像 · 视频参考帧重建",
+  "agent": "Codex",
+  "model": "GPT-6.1 Sol",
+  "modelId": "gpt-6.1-sol",
+  "durationSeconds": 1834,
+  "durationLabel": "30 分 34 秒",
+  "durationBasis": "累计会话各轮 task_started 至 task_complete 的墙钟执行时间；排除轮次间等待，包含执行内的工具、验证和排队；本次集中上传另计。",
+  "sessionId": "01a1ca47-6d76-7a51-b865-cf91cf652ced",
+  "turns": [
+    {
+      "start": "2026-11-11T11:04:03.270Z",
+      "end": "2026-11-11T11:34:37.091Z",
+      "seconds": 1833.821,
+      "type": "task_complete"
+    }
+  ],
+  "publishedPath": "codex/youtube-frame-reconstruction/index.html"
+}
