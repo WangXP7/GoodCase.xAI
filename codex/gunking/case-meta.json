@@ -31,11 +31,12 @@
   },
   "publishedPath": "codex/gunking/index.html",
   "optimizationImplemented": false,
-  "recordedAt": "2026-11-12T02:41:41.771067+00:00",
-  "durationSeconds": 1475,
-  "durationLabel": "约 25 分钟",
-  "durationBasis": "本轮起始至发布提交准备完成；线上核验完成后回填最终总耗时",
+  "recordedAt": "2026-11-12T02:47:25.504484+00:00",
+  "durationSeconds": 1819,
+  "durationLabel": "约 31 分钟",
+  "durationBasis": "本轮起始至溯源还原、本机与线上验证完成及最终发布登记；不含原作制作、上一轮工作和最终登记后的后台排队",
   "validationChecks": 16,
   "localValidationPassed": true,
-  "liveVerified": false
+  "liveVerified": true,
+  "liveVerifiedAt": "2026-11-12T02:45:55.393Z"
 }
