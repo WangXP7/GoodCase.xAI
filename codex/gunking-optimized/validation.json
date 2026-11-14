@@ -1,150 +1,28 @@
 {
-  "version": "GunKing Chinese restored 2026-11-12",
-  "checkedAt": "2026-11-12T02:36:16.624Z",
-  "checks": [
-    {
-      "name": "还原版首帧与完整模块启动",
-      "passed": true,
-      "initial": {
-        "ready": true,
-        "fatal": null,
-        "errors": [],
-        "title": "枪王 GunKing · 港区突围（中文还原版）",
-        "head": "B4\n枪王突击小队\n枪王港区 · 05:42\n枪王\nGunKing\n\n港区防御系统失控。切断三处中继，突破封锁，登船撤离。\n\n开始行动\n设置\n操作说明\n\n场景、机械、纹理与声音均由浏览器中的代码实时生成。原作：Felix Rieseberg · Claude Fable 5.2。\n\nWASD 移动\n鼠标 视角\n左键 开火\n右键 瞄准\nR 换弹\nE 切断中继\nSPACE 跳跃\nSHIFT 冲刺\nC 蹲伏\nESC 暂停\n触屏操作\n左手拇指移动\n右手拇指转动视角\n屏幕按钮：开火 · 瞄准 · 换弹 · 跳跃",
-        "aboutButtons": 0,
-        "audioStub": false,
-        "quality": "low",
-        "objectives": 3,
-        "colliders": 557
-      }
-    },
-    {
-      "name": "枪王 GunKing 标识与原作署名",
-      "passed": true
-    },
-    {
-      "name": "去除旧改名宣传与额外介绍 UI",
-      "passed": true
-    },
-    {
-      "name": "中文菜单保留",
-      "passed": true
-    },
-    {
-      "name": "无外部字体或资产请求",
-      "passed": true,
-      "external": []
-    },
-    {
-      "name": "中文设置及操作面板",
-      "passed": true
-    },
-    {
-      "name": "真实键盘移动",
-      "passed": true,
-      "before": [
-        -32,
-        0,
-        6
-      ],
-      "after": [
-        -29.648566600023596,
-        0,
-        6
-      ]
-    },
-    {
-      "name": "备用开火与弹药消耗",
-      "passed": true
-    },
-    {
-      "name": "R 换弹",
-      "passed": true
-    },
-    {
-      "name": "暂停及中文暂停界面",
-      "passed": true
-    },
-    {
-      "name": "中文中继提示与真实 E 按住交互",
-      "passed": true,
-      "method": "仅传送至交互范围，按真实 E 完成切断"
-    },
-    {
-      "name": "撤离与中文结算",
-      "passed": true,
-      "method": "原作 debugCut 与传送辅助流程验证"
-    },
-    {
-      "name": "死亡与重试状态",
-      "passed": true,
-      "method": "damage 接口触发死亡，真实点击重试"
-    },
-    {
-      "name": "移动模拟中文首屏布局",
-      "passed": true,
-      "layout": {
-        "ready": true,
-        "fatal": null,
-        "errors": [],
-        "overflow": false,
-        "button": [
-          {
-            "x": 16,
-            "right": 374,
-            "bottom": 643.171875
-          }
-        ]
-      }
-    },
-    {
-      "name": "触屏模式与任务启动",
-      "passed": true
-    },
-    {
-      "name": "全流程无脚本或着色器错误",
-      "passed": true,
-      "errors": []
-    }
+  "scope": "current independent optimization",
+  "browserChecks": [
+    "finite 5 rounds consumed to zero",
+    "infinite ammunition after continuous firing",
+    "zero drones and hounds produces sentry-only mission",
+    "settings persisted after page reload",
+    "actual 30 drones + 17 hounds + 3 sentries",
+    "distinct orange tracked sentry model rendered",
+    "no browser errors during these scenarios"
   ],
-  "desktop": {
-    "fatal": null,
-    "errors": [],
-    "stats": {
-      "calls": 318,
-      "tris": 1944332,
-      "geos": 203,
-      "tex": 143,
-      "programs": 113,
-      "res": [
-        896,
-        560
-      ],
-      "scale": 1,
-      "advanced": true,
-      "softShadows": true,
-      "fps": 60,
-      "state": "playing"
-    },
-    "three": "180"
-  },
-  "mobile": {
-    "ready": true,
-    "fatal": null,
-    "errors": [],
-    "overflow": false,
-    "button": [
-      {
-        "x": 16,
-        "right": 374,
-        "bottom": 643.171875
-      }
-    ]
-  },
-  "notes": [
-    "本轮重新执行；没有复用上一轮验证结果",
-    "真实键鼠与调试辅助测试分别标注，非人工无辅助通关",
-    "移动模拟非实体设备；音频仅验证初始化，未实听验收",
-    "瞬时 FPS 为测试环境记录，非固定分辨率性能基准"
+  "sourceChecks": [
+    "uncapped configuration accepts 1000000 drones",
+    "constant-memory frame-budgeted deployment",
+    "50 actual enemy instances",
+    "sentry 240HP and distinct geometry",
+    "sentry raycast, damage and kill type",
+    "wreck pool reuse",
+    "zero-count reinforcements remain zero",
+    "reinforcements obey configured per-type caps",
+    "enemy update and clear"
+  ],
+  "limits": [
+    "not a formal FPS benchmark",
+    "arbitrary counts depend on hardware; high counts can exhaust resources",
+    "mobile viewport override did not take effect; no mobile layout pass claimed"
   ]
 }

@@ -1,4 +1,38 @@
-// Saltline restored game; Chinese localization only. Provenance: source-audit.json.
+// GunKing independent optimization fork. Original provenance: source-audit.json.
+var GK_RULE_DEFAULTS = { ammoTotal: 180, unlimitedAmmo: false, drones: 2, hounds: 1, sentries: 1 };
+var GK_RULE_LIMITS = { ammoTotal: 999999, drones: Infinity, hounds: Infinity, sentries: Infinity };
+function GK_normalizeRules(value = {}) {
+  const result = { ...GK_RULE_DEFAULTS };
+  for (const key of Object.keys(GK_RULE_LIMITS)) {
+    const n = value[key];
+    if (typeof n === "number" && Number.isFinite(n))
+      result[key] = Math.max(0, Math.min(GK_RULE_LIMITS[key], Math.floor(n)));
+  }
+  result.unlimitedAmmo = value.unlimitedAmmo === true;
+  return result;
+}
+function GK_readRules() {
+  try { return GK_normalizeRules(JSON.parse(localStorage.getItem("gunking.optimized.rules.v1") || "{}") || {}); }
+  catch { return { ...GK_RULE_DEFAULTS }; }
+}
+function GK_saveRules(value) {
+  try { localStorage.setItem("gunking.optimized.rules.v1", JSON.stringify(GK_normalizeRules(value))); } catch {}
+}
+// A constant-size deployment state keeps even very large requests responsive.
+function GK_deployBatch(state, spawn, budgetMs = 3) {
+  const types = ["gull", "hound", "sentry"], started = performance.now();
+  let spawned = 0;
+  for (let attempts = 0; attempts < 12 && spawned < 4; attempts++) {
+    if (spawned && performance.now() - started >= budgetMs) break;
+    const type = types[state.cursor++ % types.length];
+    if (state.remaining[type] <= 0) continue;
+    if (spawn(type)) { state.remaining[type]--; spawned++; }
+  }
+  return spawned;
+}
+function GK_enemyCaps(rules) {
+  return { gull: rules.drones, hound: rules.hounds, sentry: rules.sentries };
+}
 var oi = {
     min: new W(-40, 0, -30),
     max: new W(40, 30, 30),
@@ -31592,8 +31626,9 @@ async function dm(i) {
       },
       muzzleWorld: Re,
       reloadNow: Fe,
+      infiniteAmmo: false,
       addAmmo(Me) {
-        ve.reserve += Me;
+        if (!ve.infiniteAmmo) ve.reserve += Me;
       },
       setWetness(Me) {
         Wv.value = Math.max(0, Math.min(1, +Me || 0));
@@ -31616,8 +31651,10 @@ async function dm(i) {
       },
     };
   function _e() {
-    ((ve.ammo = Gv),
-      (ve.reserve = B_),
+    const rules = i.runRules || GK_readRules();
+    ((ve.infiniteAmmo = rules.unlimitedAmmo),
+      (ve.ammo = rules.unlimitedAmmo ? Gv : Math.min(Gv, rules.ammoTotal)),
+      (ve.reserve = rules.unlimitedAmmo ? 0 : Math.max(0, rules.ammoTotal - Gv)),
       (ve.state = "idle"),
       (ve.ads = 0),
       Object.assign(k, {
@@ -31667,7 +31704,7 @@ async function dm(i) {
     return Pe(mi.muzzle, Me);
   }
   function Fe() {
-    if (k.reload || ve.ammo >= ve.magSize || ve.reserve <= 0) return !1;
+    if (ve.infiniteAmmo || k.reload || ve.ammo >= ve.magSize || ve.reserve <= 0) return !1;
     let Me = ve.ammo <= 0;
     return (
       (k.reload = { t: 0, T: Me ? G_ : W_, empty: Me, f: {} }),
@@ -31685,7 +31722,7 @@ async function dm(i) {
   function Be() {
     let Me = i.player,
       we = i.camera;
-    (ve.ammo--,
+    (ve.infiniteAmmo || ve.ammo--,
       k.burst++,
       (k.lastShot = k.t),
       (k.heat = Math.min(1.3, k.heat + 0.05)));
@@ -33715,7 +33752,32 @@ var Kv = {
 function xa(i, e, t, n, s) {
   return ((i.v += ((e - i.x) * t - i.v * n) * s), (i.x += i.v * s), i.x);
 }
-function iM(i, e, t, n) {
+function GK_sentryDefinition(base) {
+  const rig = new iu();
+  for (const b of base.bones) rig.bone(b.name, b.parent < 0 ? null : base.bones[b.parent].name, ...b.local);
+  const add = (slot, bone, shape, color) => rig.add(slot, bone, shape, color);
+  const orange = [1.15, 0.39, 0.07], dark = [0.16, 0.19, 0.22];
+  // Broad twin tracks and exposed road wheels: a low, rectangular silhouette.
+  for (const side of [-1, 1]) {
+    add("metal", "root", Ce(ft(0.26, 0.34, 1.35, 0.08), side * 0.43, 0.25, 0), dark);
+    for (let z = -0.48; z <= 0.49; z += 0.24)
+      add("shell", "root", Ce(Ro(0.125, 0.125, 0.035, 10), side * 0.57, 0.25, z), [0.5, 0.52, 0.55]);
+    for (let z = -0.56; z <= 0.57; z += 0.14)
+      add("metal", "root", Ce(ft(0.29, 0.045, 0.055), side * 0.43, 0.43, z), [0.42, 0.44, 0.46]);
+  }
+  add("shell", "body", Ce(ft(0.78, 0.36, 1.1, 0.05), 0, -0.1, 0), orange);
+  add("metal", "body", Ce(ft(0.62, 0.08, 0.78), 0, 0.12, -0.04), [0.4, 0.43, 0.45]);
+  add("shell", "turret", Ce(ft(0.54, 0.28, 0.48, 0.04), 0, 0.13, 0), orange);
+  add("metal", "gun", Ce(Si(0.062, 0.074, 0.58, 10), 0, 0.12, 0.22), [0.55, 0.58, 0.6]);
+  add("metal", "gun", Ce(ft(0.19, 0.17, 0.12), 0, 0.12, 0.52), dark);
+  add("shell", "head", Ce(ft(0.32, 0.14, 0.16), 0, 0, -0.12), dark);
+  add("lens", "head", Ce(ft(0.23, 0.065, 0.025), 0, 0, -0.025), [0.2, 1, 1]);
+  add("metal", "antenna", Ce(ds(0.012, 0.012, 0.48, 6), 0, 0.18, 0), [0.6, 0.6, 0.6]);
+  add("glow", "beacon", Ce(Ur(0.055, 8, 6), 0, 0.18, 0), [0.5, 4, 5]);
+  return rig.build();
+}
+function iM(i, e, t, n, kind = "hound") {
+  const tune = kind === "sentry" ? { ...Gt, hp: 240, runSpeed: 2.4, stalkSpeed: 1.5, patrolSpeed: 1.1, lungeRange: 0, shotDamage: 7, burst: 3 } : Gt;
   let s = i.G,
     o = i.rng,
     r = t.lensBase.clone(),
@@ -33733,7 +33795,7 @@ function iM(i, e, t, n) {
     (c.push(l["abd" + ni.legs[T]]),
       u.push(l["thigh" + ni.legs[T]]),
       h.push(l["shin" + ni.legs[T]]));
-  let f = s.mats.label("H-" + String(n + 3).padStart(2, "0"), {
+  let f = s.mats.label((kind === "sentry" ? "S-" : "H-") + String(n + 3).padStart(2, "0"), {
       color: "black",
       font: "stencil",
       distress: 0.3,
@@ -33755,10 +33817,10 @@ function iM(i, e, t, n) {
     })),
     m = {
       id: 0,
-      type: "hound",
+      type: kind,
       pos: a.group.position,
       alive: !1,
-      hp: Gt.hp,
+      hp: tune.hp,
       active: !1,
       rig: a,
       lens: r,
@@ -33828,7 +33890,7 @@ function iM(i, e, t, n) {
       sink: 0,
       loop: null,
       prevSpeed: 0,
-      maxSpeed: Gt.patrolSpeed,
+      maxSpeed: tune.patrolSpeed,
       damage(T, D, C, G) {
         if (!m.alive) return !1;
         if (
@@ -33852,7 +33914,7 @@ function iM(i, e, t, n) {
         ((m.active = !0),
           (m.alive = !0),
           (m.wreck = !1),
-          (m.hp = Gt.hp),
+          (m.hp = tune.hp),
           (m.passive = !!D.passive),
           (m.sink = 0),
           m.pos.copy(T),
@@ -33923,6 +33985,14 @@ function iM(i, e, t, n) {
         }
       },
       _raycast(T, D, C, G) {
+        if (kind === "sentry") {
+          let hit = false;
+          ps.copy(m.pos); ps.y += 0.35;
+          ru.copy(m.pos); ru.y += 0.85;
+          if (nM(T, D, ps, ru, 0.52, C, G)) { G.part = "body"; G.enemy = m; hit = true; }
+          if (sM(T, D, m.headPos, 0.18, C, G)) { G.part = "weak"; G.enemy = m; hit = true; }
+          return hit;
+        }
         let j = !1;
         sM(T, D, m.headPos, 0.155, C, G) &&
           ((G.part = "weak"), (G.enemy = m), (j = !0));
@@ -33956,7 +34026,7 @@ function iM(i, e, t, n) {
       (m.goal.copy(T), (m.hasGoal = !0), (m.planT = 0), (m.stuckT = 0));
   }
   function M() {
-    m.planT = Gt.replan + o() * 0.15;
+    m.planT = tune.replan + o() * 0.15;
     let T = null;
     try {
       T = s.physics.nav.findPath(m.pos, m.goal);
@@ -34004,8 +34074,8 @@ function iM(i, e, t, n) {
       G = (Q, K) => {
         let ie = Math.hypot(Q.x - T.pos.x, Q.z - T.pos.z);
         if (
-          ie < Gt.rangeMin ||
-          ie > Gt.rangeMax ||
+          ie < tune.rangeMin ||
+          ie > tune.rangeMax ||
           (s.physics.nav.isWalkable && !s.physics.nav.isWalkable(Q.x, Q.z))
         )
           return;
@@ -34016,7 +34086,7 @@ function iM(i, e, t, n) {
           if (
             re === m ||
             !re.alive ||
-            re.type !== "hound" ||
+            (re.type !== "hound" && re.type !== "sentry") ||
             re.mode !== "engage"
           )
             continue;
@@ -34037,13 +34107,13 @@ function iM(i, e, t, n) {
       j = s.level && s.level.coverPoints;
     if (j) for (let Q = 0; Q < j.length; Q++) G(j[Q], -2);
     for (let Q = 0; Q < 7; Q++) {
-      let K = s.physics.nav.randomPoint(T.pos, Gt.rangeMax);
+      let K = s.physics.nav.randomPoint(T.pos, tune.rangeMax);
       K && G(K, 0);
     }
     let N = Math.atan2(m.pos.z - T.pos.z, m.pos.x - T.pos.x);
     for (let Q = 0; Q < 5; Q++) {
       let K = N + (o() - 0.5) * 2.6,
-        ie = Gt.rangeMin + 1 + o() * (Gt.rangeMax - Gt.rangeMin - 2);
+        ie = tune.rangeMin + 1 + o() * (tune.rangeMax - tune.rangeMin - 2);
       (Io.set(T.pos.x + Math.cos(K) * ie, T.pos.y, T.pos.z + Math.sin(K) * ie),
         (Io.y = s.physics.groundHeight(Io.x, Io.z, T.pos.y + 1)),
         G(Io, 1));
@@ -34081,7 +34151,7 @@ function iM(i, e, t, n) {
       Q = !1,
       K = D ? Math.hypot(D.pos.x - m.pos.x, D.pos.z - m.pos.z) : 1e9;
     if (m.mode === "patrol") {
-      if (m.hasGoal) E(T, Gt.patrolSpeed) && (m.waitT = 1.5 + o() * 3);
+      if (m.hasGoal) E(T, tune.patrolSpeed) && (m.waitT = 1.5 + o() * 3);
       else if (((m.waitT -= T), m.waitT <= 0))
         if (m.patrolLine)
           ((m.patrolI = (m.patrolI + 1) % m.patrolLine.length),
@@ -34094,7 +34164,7 @@ function iM(i, e, t, n) {
       j = m.lastKnown;
       let I = Math.hypot(m.lastKnown.x - m.pos.x, m.lastKnown.z - m.pos.z);
       I > 2.2
-        ? (_(m.lastKnown), E(T, I < 8 ? Gt.stalkSpeed : Gt.runSpeed))
+        ? (_(m.lastKnown), E(T, I < 8 ? tune.stalkSpeed : tune.runSpeed))
         : ((m.hasGoal = !1),
           (m.scan += T),
           (m.wantYaw = m.yaw + Math.sin(m.scan * 0.8) * 0.9),
@@ -34104,7 +34174,7 @@ function iM(i, e, t, n) {
       let I = Math.atan2(D.pos.x - m.pos.x, D.pos.z - m.pos.z);
       switch (
         ((m.es === "move" || m.es === "aim" || m.es === "cool") &&
-          K < Gt.lungeRange &&
+          K < tune.lungeRange &&
           m.lungeCd <= 0 &&
           D.alive &&
           ((m.es = "wind"),
@@ -34112,7 +34182,7 @@ function iM(i, e, t, n) {
           i.releaseToken(m),
           s.events.emit("enemy:telegraph", {
             enemy: m,
-            type: "hound",
+            type: kind,
             time: 0.28,
             pos: m.pos,
             melee: !0,
@@ -34121,8 +34191,8 @@ function iM(i, e, t, n) {
       ) {
         case "move": {
           m.moveT += T;
-          let se = E(T, Gt.runSpeed),
-            ae = K > Gt.rangeMin - 1 && K < Gt.rangeMax + 2;
+          let se = E(T, tune.runSpeed),
+            ae = K > tune.rangeMin - 1 && K < tune.rangeMax + 2;
           se || (m.moveT > 1.4 && m.los && ae && o() < T * 0.7) || m.moveT > 7
             ? ((m.es = "aim"), (m.esT = 0), (m.hasGoal = !1))
             : D.pos.distanceToSquared(m.firePlayer) > 49 && w();
@@ -34133,18 +34203,18 @@ function iM(i, e, t, n) {
           ((m.wantYaw = I),
             (m.esT += T),
             m.los
-              ? K < Gt.rangeMin - 3 && m.esT > 0.8
+              ? K < tune.rangeMin - 3 && m.esT > 0.8
                 ? w()
                 : m.cool <= 0 &&
                   D.alive &&
                   Math.abs(Mm(I - m.yaw, m.tyaw)) < 0.14 &&
                   i.requestToken(m) &&
                   ((m.es = "tele"),
-                  (m.esT = Gt.telegraph),
+                  (m.esT = tune.telegraph),
                   s.events.emit("enemy:telegraph", {
                     enemy: m,
-                    type: "hound",
-                    time: Gt.telegraph,
+                    type: kind,
+                    time: tune.telegraph,
                     pos: m.pos,
                   }))
               : (m.noSeeT > 1.1 || m.esT > 3) && w());
@@ -34156,7 +34226,7 @@ function iM(i, e, t, n) {
             (m.flare = Math.min(1, m.flare + T * 5)),
             (N = 0.05),
             m.esT <= 0 &&
-              ((m.es = "burst"), (m.shots = Gt.burst), (m.esT = 0)));
+              ((m.es = "burst"), (m.shots = tune.burst), (m.esT = 0)));
           break;
         }
         case "burst": {
@@ -34164,11 +34234,11 @@ function iM(i, e, t, n) {
             (m.esT -= T),
             (m.flare = 1),
             (N = 0.05),
-            m.esT <= 0 && ((m.esT = Gt.burstGap), m.shots--, z(D)),
+            m.esT <= 0 && ((m.esT = tune.burstGap), m.shots--, z(D)),
             m.shots <= 0 &&
               (i.releaseToken(m),
               (m.cool =
-                Gt.cooldown[0] + o() * (Gt.cooldown[1] - Gt.cooldown[0])),
+                tune.cooldown[0] + o() * (tune.cooldown[1] - tune.cooldown[0])),
               m.bursts++,
               m.bursts >= 1 + (o() < 0.4 ? 1 : 0)
                 ? w()
@@ -34183,7 +34253,7 @@ function iM(i, e, t, n) {
             m.esT <= 0 &&
               ((m.es = "lunge"),
               (m.esT = 0.36),
-              (m.speed = Gt.lungeSpeed),
+              (m.speed = tune.lungeSpeed),
               (m.yaw = I)));
           break;
         }
@@ -34191,18 +34261,18 @@ function iM(i, e, t, n) {
           ((Q = !0),
             (m.esT -= T),
             (m.wantYaw = I),
-            (m.maxSpeed = Gt.lungeSpeed),
-            (m.speed = Gt.lungeSpeed),
+            (m.maxSpeed = tune.lungeSpeed),
+            (m.speed = tune.lungeSpeed),
             K < 1.35 &&
               D.alive &&
-              (D.damage(Gt.lungeDamage, m.pos),
+              (D.damage(tune.lungeDamage, m.pos),
               s.events.emit("enemy:melee", { enemy: m, pos: m.pos }),
               (m.esT = 0),
               (m.sP.v -= 4)),
             m.esT <= 0 &&
               ((m.es = "recover"),
               (m.esT = 0.55),
-              (m.lungeCd = Gt.lungeCooldown),
+              (m.lungeCd = tune.lungeCooldown),
               (m.speed *= 0.3)));
           break;
         }
@@ -34213,17 +34283,17 @@ function iM(i, e, t, n) {
       }
     }
     let ie = Mm(m.wantYaw, m.yaw),
-      F = uo(ie * 6, -Gt.turnRate, Gt.turnRate) * (Q ? 2 : 1);
+      F = uo(ie * 6, -tune.turnRate, tune.turnRate) * (Q ? 2 : 1);
     ((m.yawRate += (F - m.yawRate) * (1 - Math.exp(-10 * T))),
       (m.yaw += m.yawRate * T));
-    let X = m.maxSpeed > m.speed ? Gt.accel : -Gt.accel * 1.4;
+    let X = m.maxSpeed > m.speed ? tune.accel : -tune.accel * 1.4;
     ((m.prevSpeed = m.speed),
       (m.speed = Q ? m.speed : uo(m.speed + X * T, 0, Math.max(m.maxSpeed, 0))),
       !Q && X < 0 && m.speed < m.maxSpeed && (m.speed = m.maxSpeed));
     let ne = Math.sin(m.yaw),
       re = Math.cos(m.yaw);
     for (let I of i.list) {
-      if (I === m || I.type !== "hound" || !I.active) continue;
+      if (I === m || (I.type !== "hound" && I.type !== "sentry") || !I.active) continue;
       let se = m.pos.x - I.pos.x,
         ae = m.pos.z - I.pos.z,
         k = Math.hypot(se, ae);
@@ -34310,7 +34380,7 @@ function iM(i, e, t, n) {
       m.lensC[I] += (le[I] - m.lensC[I]) * (1 - Math.exp(-8 * T));
     (r.color.setRGB(m.lensC[0] * R, m.lensC[1] * R, m.lensC[2] * R),
       (m.flare = Math.max(0, m.flare - T * 2)),
-      m.hp < Gt.hp * Gt.smokeBelow &&
+      m.hp < tune.hp * tune.smokeBelow &&
         ((m.smokeT -= T),
         m.smokeT <= 0 &&
           ((m.smokeT = 0.2),
@@ -34334,7 +34404,7 @@ function iM(i, e, t, n) {
       Po.copy(Vf).sub(Io).normalize(),
       m.muzzle.copy(Io).addScaledVector(Po, 0.43));
     let G =
-      (Gt.spreadFar + (Gt.spreadNear - Gt.spreadFar) * m.exposure) *
+      (tune.spreadFar + (tune.spreadNear - tune.spreadFar) * m.exposure) *
       (1 + i.playerSpeed * 0.3);
     ((Po.x += (o() - 0.5) * 2 * G),
       (Po.y += (o() - 0.5) * 2 * G),
@@ -34342,7 +34412,7 @@ function iM(i, e, t, n) {
       Po.normalize());
     let j = s.physics.raycast(m.muzzle, Po, 200),
       Q = s.combat.enemyShot(m.muzzle, Po, {
-        damage: Gt.shotDamage,
+        damage: tune.shotDamage,
         range: 200,
       })
         ? m.muzzle.distanceTo(Vf)
@@ -34359,7 +34429,7 @@ function iM(i, e, t, n) {
         enemy: m,
         pos: m.muzzle,
         dir: Po,
-        type: "hound",
+        type: kind,
       }),
       (m.sP.v += 1.1),
       (m.sY.v -= 0.25));
@@ -34415,7 +34485,7 @@ function iM(i, e, t, n) {
         let Q = b[wm[m.sw][0]];
         (s.events.emit("enemy:step", {
           pos: Q.p,
-          type: "hound",
+          type: kind,
           enemy: m,
           speed: m.speed,
         }),
@@ -34520,7 +34590,7 @@ function iM(i, e, t, n) {
       ps.copy(m.headPos),
       s.fx.sparks(ps, jv, 16),
       s.fx.debris(ps, { count: 4 }),
-      s.events.emit("enemy:killed", { enemy: m, pos: m.pos, type: "hound" }),
+      s.events.emit("enemy:killed", { enemy: m, pos: m.pos, type: kind }),
       i.addWreck(m));
   }
   function U(T) {
@@ -34539,7 +34609,7 @@ function iM(i, e, t, n) {
           m.vy < -1.2 &&
             (s.events.emit("enemy:step", {
               pos: m.pos,
-              type: "hound",
+              type: kind,
               enemy: m,
               speed: 5,
               crash: !0,
@@ -34734,7 +34804,7 @@ async function Em(i) {
       tokens: 0,
       tokenT: -9,
       lastType: "",
-      wantT: { gull: -9, hound: -9 },
+      wantT: { gull: -9, hound: -9, sentry: -9 },
       mergeSimple: (T) => sa(T, !1),
       requestToken(T) {
         if (T.hasToken) return !0;
@@ -34864,7 +34934,9 @@ async function Em(i) {
     f = j_(),
     p = Z_(),
     d = [],
-    v = [];
+    v = [],
+    sentries = [],
+    sentryDefinition = GK_sentryDefinition(p);
   for (let T = 0; T < Ui.poolGulls; T++) {
     let D = Q_(h, f, u, T);
     (d.push(D), s.add(D.rig.group));
@@ -35003,7 +35075,7 @@ async function Em(i) {
       list: t,
       TUNE: Ui,
       spawn(T, D, C = {}) {
-        let G = T === "gull" ? d : T === "hound" ? v : null;
+        let G = T === "gull" ? d : T === "hound" ? v : T === "sentry" ? sentries : null;
         if (!G) return null;
         let j = null;
         for (let N of G)
@@ -35011,9 +35083,14 @@ async function Em(i) {
             j = N;
             break;
           }
-        if (!j && T === "hound" && n.length) {
-          let N = n[0];
+        if (!j && n.some(N => N.type === T)) {
+          let N = n.find(N => N.type === T);
           (h.retire(N), (j = N));
+        }
+        if (!j) {
+          j = T === "gull" ? Q_(h, f, u, G.length)
+            : iM(h, T === "sentry" ? sentryDefinition : p, u, G.length, T);
+          G.push(j); s.add(j.rig.group);
         }
         return j
           ? ((j.id = O++),
@@ -35029,7 +35106,7 @@ async function Em(i) {
           let N = t[j];
           if (!N.alive) continue;
           let Q = N.pos.x - T.x,
-            K = N.pos.y + (N.type === "hound" ? 0.6 : 0) - T.y,
+            K = N.pos.y + (N.type !== "gull" ? 0.6 : 0) - T.y,
             ie = N.pos.z - T.z,
             F = Q * D.x + K * D.y + ie * D.z;
           F < -1.5 ||
@@ -35055,6 +35132,7 @@ async function Em(i) {
       clear() {
         for (let T of d) T.active && T._deactivate();
         for (let T of v) T.active && T._deactivate();
+        for (let T of sentries) T.active && T._deactivate();
         ((t.length = 0), (n.length = 0), (h.tokens = 0));
         for (let T of g) T.on = !1;
         ((m.count = 0), M && M.light && (M.light.intensity = 0));
@@ -35087,6 +35165,7 @@ async function Em(i) {
         ctx: h,
         gulls: d,
         hounds: v,
+        sentries,
         wrecks: n,
         bolts: g,
         mats: u,
@@ -35147,7 +35226,10 @@ async function VC(i) {
     s = [3, 1.45, 3.9],
     o = [0.5, 0.95, 0],
     r = 2.6;
-  if (n === "gull")
+  if (n === "sentry") {
+    e.spawn("sentry", t(0, 0, 0), { passive: true, yaw: 0.15, patrolRadius: 0.01 });
+    s = [2.1, 1.6, 2.5]; o = [0, 0.7, 0]; r = 0.02;
+  } else if (n === "gull")
     (e.spawn("gull", t(0, 1.6, 0), {
       passive: !0,
       hover: 1.6,
@@ -35654,8 +35736,8 @@ function hM(i) {
           (g[3].style.transform = `translate3d(${Oe}px,-50%,0)`)));
     }
     let Ne = Math.max(1, Math.min(60, ve.magSize | 0 || 30)),
-      dt = Math.max(0, ve.ammo | 0),
-      xe = Math.max(0, ve.reserve | 0);
+      dt = ve.infiniteAmmo ? Infinity : Math.max(0, ve.ammo | 0),
+      xe = ve.infiniteAmmo ? Infinity : Math.max(0, ve.reserve | 0);
     if (
       (Ne !== X.mag &&
         ((X.mag = Ne),
@@ -35664,12 +35746,12 @@ function hM(i) {
         (X.ammo = -1)),
       dt !== X.ammo)
     ) {
-      ((X.ammo = dt), (q.textContent = String(dt).padStart(2, "0")));
+      ((X.ammo = dt), (q.textContent = dt === Infinity ? "∞" : String(dt).padStart(2, "0")));
       for (let we = 0; we < ne.length; we++)
         ne[we].className = we < dt ? "" : "off";
     }
     (xe !== X.reserve &&
-      ((X.reserve = xe), (U.textContent = String(xe).padStart(3, "0"))),
+      ((X.reserve = xe), (U.textContent = xe === Infinity ? "无限" : String(xe).padStart(3, "0"))),
       ve.name !== X.name &&
         ((X.name = ve.name), (D.textContent = ve.name || "")));
     let Ie = dt <= Math.ceil(Ne * 0.27),
@@ -35763,7 +35845,7 @@ var fM = "saltline.settings.v1",
   XC = { quality: "auto", sens: 1, invertY: !1, volume: 0.8, fov: Pi.fov },
   dM = ["low", "medium", "high", "ultra"];
 function YC() {
-  let i = { ...XC };
+  let i = { ...XC, ...GK_readRules() };
   try {
     let e = JSON.parse(localStorage.getItem(fM) || "null");
     e &&
@@ -35781,6 +35863,7 @@ function YC() {
 function Wf(i) {
   try {
     localStorage.setItem(fM, JSON.stringify(i));
+    GK_saveRules(i);
   } catch {}
 }
 var $C = `
@@ -35878,6 +35961,16 @@ function pM(i, e) {
         <button class="btn small" data-act="close-panel">关闭</button>
       </header>
       <div class="panel-b" data-pane="settings">
+        <h3>任务配置</h3>
+        <p class="panel-note">自动保存；点击“开始行动”或“重新开始任务”后生效。敌人数量为部署目标及同时存活上限；增援只补充空缺。数量不设固定上限，越多越考验性能；大量敌人会分批入场。</p>
+        <div class="row"><label for="s-ammo-total">初始子弹总数</label><div class="gk-number-line"><input id="s-ammo-total" type="number" min="0" max="999999" step="1" inputmode="numeric"><span>发 · 含弹匣与备弹</span></div></div>
+        <div class="row"><label id="l-unlimited">无限弹药</label><button class="toggle" data-act="unlimited" aria-labelledby="l-unlimited" aria-pressed="false"><i></i><span>关闭</span></button><small class="panel-note">开启后不消耗子弹，无需换弹。</small></div>
+        <div class="row"><label for="s-drones">无人机数量</label><div class="gk-number-line"><input id="s-drones" type="number" min="0" step="1" inputmode="numeric"><span>架 · 不设固定上限</span></div></div>
+        <div class="row"><label for="s-hounds">机器狗数量</label><div class="gk-number-line"><input id="s-hounds" type="number" min="0" step="1" inputmode="numeric"><span>只 · 不设固定上限</span></div></div>
+        <div class="row"><label for="s-sentries">履带哨兵数量</label><div class="gk-number-line"><input id="s-sentries" type="number" min="0" step="1" inputmode="numeric"><span>台 · 不设固定上限</span></div><small class="panel-note">全新重型机器人：双履带、橙色装甲、旋转炮塔与前部感应镜。</small></div>
+        <p class="panel-note" data-f="rules-summary" role="status"></p>
+        <button class="btn small" data-act="reset-rules">恢复默认任务配置</button>
+        <h3>画面与操作</h3>
         <div class="row"><label id="l-q">画面质量</label>
           <div class="seg" role="group" aria-labelledby="l-q">${dM.map((U) => `<button data-q="${U}" aria-pressed="false">${{ low: "低", medium: "中", high: "高", ultra: "极高" }[U]}</button>`).join("")}</div></div>
         <div class="row"><label for="s-sens">鼠标灵敏度</label><div class="slider"><input id="s-sens" type="range" min="0.2" max="3" step="0.05"><output data-o="sens"></output></div></div>
@@ -35944,6 +36037,13 @@ function pM(i, e) {
     }
   }
   function g() {
+    for (const [id, key] of [["s-ammo-total", "ammoTotal"], ["s-drones", "drones"], ["s-hounds", "hounds"], ["s-sentries", "sentries"]])
+      o("#" + id).value = n[key];
+    o("#s-ammo-total").disabled = n.unlimitedAmmo;
+    const unlimited = o('[data-act="unlimited"]');
+    unlimited.setAttribute("aria-pressed", String(n.unlimitedAmmo));
+    unlimited.querySelector("span").textContent = n.unlimitedAmmo ? "开启" : "关闭";
+    c("rules-summary").textContent = `下次行动：${n.unlimitedAmmo ? "无限弹药" : n.ammoTotal + " 发子弹"} · 无人机 ${n.drones} · 机器狗 ${n.hounds} · 履带哨兵 ${n.sentries}`;
     let U = n.quality === "auto" ? i.quality && i.quality.name : n.quality;
     for (let D of r(".seg button"))
       D.setAttribute("aria-pressed", String(D.dataset.q === U));
@@ -35970,6 +36070,16 @@ function pM(i, e) {
     f.addEventListener("input", () => {
       ((n.fov = +f.value), v("fov"), g(), Wf(n));
     }));
+  for (const [id, key] of [["s-ammo-total", "ammoTotal"], ["s-drones", "drones"], ["s-hounds", "hounds"], ["s-sentries", "sentries"]]) {
+    const input = o("#" + id);
+    input.addEventListener("input", () => {
+      if (input.value === "" || !Number.isFinite(input.valueAsNumber)) return;
+      n[key] = GK_normalizeRules({ ...n, [key]: input.valueAsNumber })[key];
+      Wf(n);
+      c("rules-summary").textContent = "任务配置已保存；重新开始后生效。";
+    });
+    input.addEventListener("change", g);
+  }
   let x = o('[data-row="fs"]'),
     y = o("#fs-t"),
     b = () =>
@@ -36043,6 +36153,8 @@ function pM(i, e) {
       return;
     }
     let D = T.dataset.act;
+    if (D === "unlimited") { n.unlimitedAmmo = !n.unlimitedAmmo; g(); Wf(n); return; }
+    if (D === "reset-rules") { Object.assign(n, GK_RULE_DEFAULTS); g(); Wf(n); return; }
     D === "settings"
       ? w("settings")
       : D === "controls"
@@ -36158,7 +36270,7 @@ var Yi = {
   _l = {
     intro:
       "突击队员，这里是指挥中心。港区主控已封锁泊位。切断堆场、仓库、码头的三处中继。",
-    contact: "你已被发现！空中有机械飞鸥，地面有机械猎犬。消灭它们。",
+    contact: "你已被发现！注意空中无人机、地面机器狗与履带哨兵。寻找掩体，瞄准感应镜。",
     cut: [
       "第一处中继已断开。敌方已察觉，机械守卫正在赶来。",
       "第二处中继已断开。敌方正全力围攻，小心应对。",
@@ -36205,6 +36317,20 @@ function mM(i) {
       },
     });
   l.applySettings();
+  const forceReadout = document.createElement("div");
+  forceReadout.className = "gk-force-readout";
+  forceReadout.setAttribute("aria-label", "敌方存活数量与上限");
+  document.getElementById("ui").appendChild(forceReadout);
+  let countText = "";
+  function updateForceReadout() {
+    forceReadout.hidden = _.state !== "playing";
+    if (forceReadout.hidden) return;
+    const counts = { gull: 0, hound: 0, sentry: 0 };
+    for (const enemy of i.enemies.list) if (enemy.alive) counts[enemy.type]++;
+    const deploying = Object.values(c.deployment.remaining).some(count => count > 0);
+    const text = `${deploying ? "部署中" : "敌方存活 / 上限"} · 无人机 ${counts.gull}/${i.runCaps.gull} · 机器狗 ${counts.hound}/${i.runCaps.hound} · 哨兵 ${counts.sentry}/${i.runCaps.sentry}`;
+    if (text !== countText) { forceReadout.textContent = text; countText = text; }
+  }
   let c = {
       time: 0,
       retries: 0,
@@ -36327,6 +36453,8 @@ function mM(i) {
       (e.fade = Math.max(1 - sl(0, 1.8, E.t), sl(V - 1.6, V, E.t))));
   }
   function H() {
+    i.runRules = GK_normalizeRules(l.settings);
+    i.runCaps = GK_enemyCaps(i.runRules);
     (a(i.enemies, "clear"),
       a(i.fx, "clear"),
       a(i.combat, "reset"),
@@ -36552,6 +36680,7 @@ function mM(i) {
     return (P === "gull" && fe.y < 2.5 && (fe.y = 6 + i.rng() * 3), fe);
   }
   function K(P, V, Y) {
+    if (i.runCaps && i.enemies.list.filter(enemy => enemy.alive && enemy.type === P).length >= i.runCaps[P]) return null;
     let L = null;
     try {
       L = i.enemies.spawn(P, V, Y);
@@ -36560,20 +36689,25 @@ function mM(i) {
     }
     return L;
   }
+  function deployBatch() {
+    const start = (s.playerStart && s.playerStart.pos) || n.pos;
+    GK_deployBatch(c.deployment, type => K(type,
+      Q(type, { minDist: 32, from: start, preferHidden: true }), { state: "patrol" }));
+  }
   function ie() {
-    let P = (s.playerStart && s.playerStart.pos) || n.pos;
-    for (let V of ["gull", "hound"])
-      for (let Y = 0; Y < Yi.patrol[V]; Y++)
-        K(V, Q(V, { minDist: 32, from: P, preferHidden: !0 }), {
-          state: "patrol",
-        });
+    c.deployment = { remaining: { ...i.runCaps }, cursor: 0 };
+    deployBatch();
   }
   function F(P) {
     let V = Yi.waves[Math.min(P, Yi.waves.length - 1)],
       Y = [];
-    for (let oe = 0; oe < V.gull; oe++) Y.push("gull");
-    for (let oe = 0; oe < V.hound; oe++)
-      Y.splice(Math.min(Y.length, 1 + oe * 2), 0, "hound");
+    for (const type of ["gull", "hound", "sentry"]) {
+      const alive = i.enemies.list.filter(enemy => enemy.alive && enemy.type === type).length;
+      const queued = c.queue.filter(enemy => enemy.type === type).length + c.deployment.remaining[type];
+      const count = Math.min(V[type] ?? 1, Math.max(0, i.runCaps[type] - alive - queued));
+      for (let k = 0; k < count; k++) Y.push(type);
+    }
+    if (!Y.length) return;
     let L = 0,
       Z = 0;
     (Y.forEach((oe, fe) => {
@@ -36591,11 +36725,15 @@ function mM(i) {
     o.warn && o.warn("发现敌情 · " + jC[Math.round(J / 45) % 8], 3.4);
   }
   function X(P) {
+    deployBatch();
     let V = ne();
     for (let Y = 0; Y < c.queue.length; Y++) {
       let L = c.queue[Y];
       if (c.time < L.at) continue;
-      if (V >= Yi.maxAlive) {
+      if (i.enemies.list.filter(enemy => enemy.alive && enemy.type === L.type).length >= i.runCaps[L.type]) {
+        c.queue.splice(Y--, 1); continue;
+      }
+      if (V >= Object.values(i.runCaps).reduce((sum, count) => sum + count, 0)) {
         L.at = c.time + 1;
         continue;
       }
@@ -36619,8 +36757,12 @@ function mM(i) {
           V < Yi.pursuitMinAlive)
       ) {
         ((c.pursuitT = Yi.pursuitEvery), c.pursuitLeft--);
-        let Y = i.rng() < 0.6 ? "gull" : "hound";
-        c.queue.push({ type: Y, pos: Q(Y), at: c.time + 0.5 });
+        const available = Object.keys(i.runCaps).filter(type =>
+          i.enemies.list.filter(enemy => enemy.alive && enemy.type === type).length + c.deployment.remaining[type] < i.runCaps[type]);
+        if (available.length) {
+          let Y = available[Math.floor(i.rng() * available.length)];
+          c.queue.push({ type: Y, pos: Q(Y), at: c.time + 0.5 });
+        }
       }
       c.pursuitT <= 0 && ((c.pursuitT = 4), a(i.enemies, "alert", n.pos, 90));
     }
@@ -36776,6 +36918,7 @@ function mM(i) {
       M("complete"));
   }
   function B(P) {
+    updateForceReadout();
     switch (((u += P), _.state)) {
       case "title":
         return (z(P), !1);

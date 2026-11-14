@@ -24,11 +24,11 @@ const html = read('src/page.html')
   .replace('<!--GAME_STYLE-->', () => read('src/ui.css'))
   .replace('<!--GAME_CODE-->', () => code);
 if (html.includes('<!--GAME_')) throw Error('Unresolved build placeholder');
-// Default publication copies the audited restored Chinese release.
-// --editable builds a separate preview for future authorized optimizations.
+// Independent fork: always build edited source; keep the audited release immutable.
+// --editable writes a separate preview entry.
 const editable = process.argv.includes('--editable');
 const name = editable ? 'editable.html' : 'index.html';
-const output = editable ? Buffer.from(html) : release;
+const output = Buffer.from(html);
 const target = path.join(root, name);
 if (process.argv.includes('--check')) {
   if (!fs.readFileSync(target).equals(output)) throw Error(`${name} differs: run node tools/build.mjs`);

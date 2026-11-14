@@ -866,7 +866,7 @@
       "dir": "gunking-optimized",
       "entry": "index.html",
       "title": "枪王 GunKing · 独立优化版",
-      "desc": "基于中文还原版建立的独立优化副本，当前为初始基线，后续持续改进。",
+      "desc": "可配置有限或无限弹药，敌人数不设固定上限，支持分批部署；新增橙色装甲履带哨兵。",
       "agent": "Codex + GPT-6.1 Sol",
       "tags": [
         "游戏",
@@ -874,8 +874,8 @@
         "3D",
         "Three.js"
       ],
-      "duration": "约 3 分 27 秒",
-      "durationNote": "独立副本初始化与发布准备的实际执行时间，截至首次提交；部署等待及后续优化另计，不含原案例制作。",
+      "duration": "约 21 分 44 秒",
+      "durationNote": "累计首次初始化完整执行轮次及本轮修改与本地验证截至提交准备的执行时间；扣除轮次间等待；部署复核时间另记，不含原案例或原作制作。",
       "cover": "codex/gunking-optimized/shots/01-title.jpg"
     }
   ]

@@ -1776,3 +1776,13 @@ kbd {
 .tab {
   letter-spacing: 0.08em;
 }
+
+/* Independent mission configuration. */
+.gk-number-line { display:flex; align-items:center; gap:12px; color:var(--steel); font-size:12px; }
+.gk-number-line input { width:112px; min-height:42px; padding:8px 12px; border:1px solid var(--line); border-radius:5px; background:#111a21; color:var(--bone); font:600 19px var(--f-mono); }
+.gk-number-line input:focus-visible { outline:2px solid var(--signal); outline-offset:3px; }
+.gk-number-line input:disabled { opacity:.4; }
+.row .panel-note { margin:0 !important; }
+.gk-force-readout { position:absolute; right:18px; top:72px; max-width:calc(100vw - 36px); padding:7px 10px; border-left:2px solid var(--signal); background:#101923b8; color:#f1e6cf; font:11px/1.6 var(--f-mono); pointer-events:none; }
+.gk-force-readout[hidden] { display:none; }
+@media(max-width:700px) { .gk-force-readout { top:92px; right:10px; max-width:180px; font-size:10px; } }

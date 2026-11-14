@@ -1,12 +1,6 @@
 {
-  "title": "枪王 GunKing · 独立优化版",
-  "agent": "Codex",
-  "model": "GPT-6.1 Sol",
-  "scope": "独立副本初始化；当前未优化玩法，历史资料见原案例说明与原始快照",
-  "startedAt": "2026-11-12T10:17:07+08:00",
   "inputFile": "几猫国产3A大作_V1.html",
   "inputSHA256": "9e55b5200b088adaf8e1152da04efc0d3b25e236e6baf2dee96f81e23e084966",
-  "inputBackupUnmodified": true,
   "releaseFile": "GunKing_中文还原版.html",
   "releaseSHA256": "58271f22250b6cedffeb62104ca367615bc94400db1a9289c22df1e7d249b560",
   "upstream": {
@@ -23,105 +17,17 @@
     "originalBuildTime": "约 8 小时（来源记录转述作者自报，非本次实测）",
     "gameLicense": "镜像未声明独立游戏代码许可证；Three.js MIT 仅覆盖该第三方库"
   },
-  "previousRound": {
-    "date": "2026-11-11",
-    "durationSeconds": 2710,
-    "durationLabel": "约 46 分钟",
-    "scope": "仅流传版解析与发布，未完成溯源；本轮已纠正来源与介绍"
-  },
+  "title": "枪王 GunKing · 独立优化版",
+  "agent": "Codex",
+  "model": "GPT-6.1 Sol",
+  "scope": "独立副本初始化、弹药与敌人数配置、无限弹药、无固定数量上限、分批部署及新履带哨兵",
   "publishedPath": "codex/gunking-optimized/index.html",
-  "optimizationImplemented": false,
-  "recordedAt": "2026-11-12T02:47:25.504484+00:00",
-  "durationSeconds": 207,
-  "durationLabel": "约 31 分钟",
-  "durationBasis": "本轮起始至溯源还原、本机与线上验证完成及最终发布登记；不含原作制作、上一轮工作和最终登记后的后台排队",
-  "validationChecks": 16,
+  "optimizationImplemented": true,
+  "sourceCommit": "3b68355b839bd634f0a22676d6127a78f0bc7fde",
+  "durationSeconds": 1304,
+  "durationLabel": "约 21 分 44 秒",
+  "durationBasis": "累计首次初始化完整执行轮次及本轮修改与本地验证截至提交准备的执行时间；扣除轮次间等待；部署复核时间另记，不含原案例或原作制作。",
   "localValidationPassed": true,
   "liveVerified": false,
-  "liveVerifiedAt": "2026-11-12T02:45:55.393Z",
-  "cumulativeSession": {
-    "durationSeconds": 4851,
-    "durationLabel": "1 小时 20 分 51 秒",
-    "durationBasis": "累计会话各轮 task_started 至 task_complete 的墙钟执行时间；排除轮次间等待，包含执行内的工具、验证和排队；本次集中上传另计。",
-    "sessionId": "01a1ca42-9b3c-7233-960f-e96f7d7ef941",
-    "turns": [
-      {
-        "start": "2026-11-11T10:58:46.741Z",
-        "end": "2026-11-11T11:46:25.188Z",
-        "seconds": 2858.447,
-        "type": "task_complete"
-      },
-      {
-        "start": "2026-11-12T02:17:05.785Z",
-        "end": "2026-11-12T02:50:18.147Z",
-        "seconds": 1992.362,
-        "type": "task_complete"
-      }
-    ]
-  },
-  "originalCaseMetadata": {
-    "title": "枪王 GunKing · 港区突围（中文还原版）",
-    "agent": "Codex",
-    "model": "GPT-6.1 Sol",
-    "scope": "本次溯源、还原与用户授权的枪王标识替换；保留中文汉化，重新解析、验证和发布；不代表原作生成署名",
-    "startedAt": "2026-11-12T10:17:07+08:00",
-    "inputFile": "几猫国产3A大作_V1.html",
-    "inputSHA256": "9e55b5200b088adaf8e1152da04efc0d3b25e236e6baf2dee96f81e23e084966",
-    "inputBackupUnmodified": true,
-    "releaseFile": "GunKing_中文还原版.html",
-    "releaseSHA256": "58271f22250b6cedffeb62104ca367615bc94400db1a9289c22df1e7d249b560",
-    "upstream": {
-      "repository": "https://github.com/realcodebear/saltline-fable-5.2",
-      "kind": "第三方原版镜像，非原作者仓库",
-      "commit": "09d5fc9a5678eb398edfd7d0f0be6ef7754f6538",
-      "file": "index.html",
-      "sha256": "f34e6debbfa7526b72be2daa24595c2f195e102a7aede4f22e59138c99cd6852",
-      "bytes": 1423569,
-      "originalArtifact": "https://claude.ai/artifact/BGY1SztrAYcJQHSsnHHGmp",
-      "author": "Felix Rieseberg",
-      "model": "Claude Fable 5.2",
-      "attributionBasis": "GitHub 镜像 README 的来源记录；原发布 X 页面当前未直接取得正文",
-      "originalBuildTime": "约 8 小时（来源记录转述作者自报，非本次实测）",
-      "gameLicense": "镜像未声明独立游戏代码许可证；Three.js MIT 仅覆盖该第三方库"
-    },
-    "previousRound": {
-      "date": "2026-11-11",
-      "durationSeconds": 2710,
-      "durationLabel": "约 46 分钟",
-      "scope": "仅流传版解析与发布，未完成溯源；本轮已纠正来源与介绍"
-    },
-    "publishedPath": "codex/gunking/index.html",
-    "optimizationImplemented": false,
-    "recordedAt": "2026-11-12T02:47:25.504484+00:00",
-    "durationSeconds": 1819,
-    "durationLabel": "约 31 分钟",
-    "durationBasis": "本轮起始至溯源还原、本机与线上验证完成及最终发布登记；不含原作制作、上一轮工作和最终登记后的后台排队",
-    "validationChecks": 16,
-    "localValidationPassed": true,
-    "liveVerified": true,
-    "liveVerifiedAt": "2026-11-12T02:45:55.393Z",
-    "cumulativeSession": {
-      "durationSeconds": 4851,
-      "durationLabel": "1 小时 20 分 51 秒",
-      "durationBasis": "累计会话各轮 task_started 至 task_complete 的墙钟执行时间；排除轮次间等待，包含执行内的工具、验证和排队；本次集中上传另计。",
-      "sessionId": "01a1ca42-9b3c-7233-960f-e96f7d7ef941",
-      "turns": [
-        {
-          "start": "2026-11-11T10:58:46.741Z",
-          "end": "2026-11-11T11:46:25.188Z",
-          "seconds": 2858.447,
-          "type": "task_complete"
-        },
-        {
-          "start": "2026-11-12T02:17:05.785Z",
-          "end": "2026-11-12T02:50:18.147Z",
-          "seconds": 1992.362,
-          "type": "task_complete"
-        }
-      ]
-    }
-  },
-  "durationNote": "独立副本初始化与发布准备的实际执行时间，截至首次提交；部署等待及后续优化另计，不含原案例制作。",
-  "sourceCommit": "3b68355b839bd634f0a22676d6127a78f0bc7fde",
-  "validationNote": "历史截图、validation.json 与线上验证.json 仅属原案例；新副本的本轮发布验证记录保存在本地 delivery-validation.json。"
+  "validationNote": "本轮线上状态详见发布后的 delivery-validation.json；该文件仅在本地维护根目录保存。"
 }
