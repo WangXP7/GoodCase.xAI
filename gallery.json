@@ -86,7 +86,7 @@
       "desc": "檐下 · UNDER THE EAVES",
       "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
       "duration": null,
-      "cover": "gallery-covers/b707820460a4084b.jpg"
+      "cover": "gallery-covers/eaves-v2.webp"
     },
     {
       "ns": "workbuddy",
@@ -125,7 +125,7 @@
       "desc": "单文件全屏科幻主控界面 · 系统状态、能量核心矩阵、神经接口与终端日志全部实时驱动，零依赖零外部资源",
       "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
       "duration": null,
-      "cover": "gallery-covers/9cde7cbff00ef597.jpg"
+      "cover": "gallery-covers/jarvis-v2.webp"
     },
     {
       "ns": "workbuddy",
@@ -280,7 +280,7 @@
       "desc": "token-dashboard",
       "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
       "duration": null,
-      "cover": "workbuddy/token-dashboard/usage-sessions.png"
+      "cover": "gallery-covers/token-v2.webp"
     },
     {
       "ns": "workbuddy",
@@ -319,7 +319,7 @@
       "desc": "按真实形制全程序化复原的天坛祈年殿：直径 32.72m、总高 38.2m，三层汉白玉圆台基与四出陛、28 根楠木柱（龙井柱鎏金蟠龙）、三重檐蓝琉璃瓦与重昂斗拱、龙凤和玺彩画与鎏金宝顶，昼夜光照切换",
       "agent": "WorkBuddy + Step-5-Preview",
       "duration": "约 1 小时 5 分钟",
-      "cover": "gallery-covers/07a816be68dbfa61.jpg"
+      "cover": "gallery-covers/temple-v2.webp"
     },
     {
       "ns": "workbuddy",
@@ -388,7 +388,7 @@
       "desc": "NEKO PAL · 猫咪掌机",
       "agent": "ZCode",
       "duration": null,
-      "cover": "gallery-covers/891481826dd4a193.jpg"
+      "cover": "gallery-covers/cat-v2.webp"
     },
     {
       "ns": "zcode",
@@ -398,7 +398,7 @@
       "desc": "NEON HEX · 物理沙盒",
       "agent": "ZCode",
       "duration": null,
-      "cover": "gallery-covers/0c5408c4ad02c891.jpg"
+      "cover": "gallery-covers/hex-v2.webp"
     },
     {
       "ns": "zcode",
@@ -408,7 +408,7 @@
       "desc": "NEON TETRIS — SRS · 7-BAG · T-SPIN",
       "agent": "ZCode",
       "duration": null,
-      "cover": "gallery-covers/3cf8a5db34eedf4f.jpg"
+      "cover": "gallery-covers/tetris-v2.webp"
     },
     {
       "ns": "zcode",
@@ -518,7 +518,7 @@
       "desc": "3D 五人制足球对战 · Three.js、Ammo.js 物理与 PixiJS 特效，含 AI 对手、战绩统计及本地排行榜",
       "agent": "Codex",
       "duration": null,
-      "cover": "gallery-covers/34e524db0d540cfc.jpg"
+      "cover": "gallery-covers/football-v2.webp"
     },
     {
       "ns": "codex",
@@ -528,7 +528,7 @@
       "desc": "Vision Pro 空间篮球 · Three.js 3D 投篮挑战（单文件离线版）",
       "agent": "Codex",
       "duration": null,
-      "cover": "gallery-covers/297d5942ca3d441c.jpg"
+      "cover": "gallery-covers/basketball-v2.webp"
     },
     {
       "ns": "codex",
@@ -578,7 +578,7 @@
       "desc": "三国题材文字晋升模拟 · 人物建档、势力经营、任务事件与仕途成长",
       "agent": "Codex + GPT-6 Astra",
       "duration": null,
-      "cover": "gallery-covers/54d483e825a856bc.jpg"
+      "cover": "gallery-covers/hanmo-v2.webp"
     },
     {
       "ns": "codex",
@@ -588,7 +588,7 @@
       "desc": "越南背景文字人生模拟 · 多起点建档、组织关系与人生晋升",
       "agent": "Codex + GPT-6 Astra",
       "duration": null,
-      "cover": "gallery-covers/ee6afe3d97b21567.jpg"
+      "cover": "gallery-covers/honghe-v2.webp"
     },
     {
       "ns": "codex",
@@ -618,7 +618,7 @@
       "desc": "MB园区背景文字模拟 · 生存、人物关系、任务与路线选择",
       "agent": "Codex + GPT-6 Astra",
       "duration": null,
-      "cover": "gallery-covers/e240958a7ea37433.jpg"
+      "cover": "gallery-covers/mb-v2.webp"
     },
     {
       "ns": "codex",
@@ -698,7 +698,7 @@
       "desc": "三体硬科幻题材文字模拟 · 科研、组织经营、晋升与危机抉择",
       "agent": "Codex + GPT-6 Astra",
       "duration": null,
-      "cover": "gallery-covers/d521564bbfa8d66e.jpg"
+      "cover": "gallery-covers/wallfacer-v2.webp"
     },
     {
       "ns": "codex",
@@ -744,7 +744,7 @@
       "ns": "codex",
       "dir": "nanjing-city-atlas",
       "entry": "index.html",
-      "title": "金陵山水城 · 南京 3D 地标图鉴",
+      "title": "金陵山水城 · 中国城市 3D 地标图鉴",
       "desc": "六种城市与 50 处地标精细化 · 扭转幕墙、穿楼单轨、古城砖瓦与水岸细节",
       "agent": "Codex + GPT-6.1-sol",
       "tags": [
