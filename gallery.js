@@ -23,7 +23,7 @@
     let dimension='tags',selected={},query='',sort='committed-desc';
     try { const saved=JSON.parse(sessionStorage.getItem('goodcase-filters')||'null');if(saved){selected=saved.selected||{};query=saved.query||'';sort=saved.sort||'curated';dimension=dimensions[saved.dimension]?saved.dimension:'tags';} }catch{}
     const input=document.querySelector('input');input.value=query;document.querySelector('select').value=sort;
-    const matches=e=>Object.entries(selected).every(([d,v])=>values(e,d).includes(v))&&(!query||[e.title,e.desc,e.credit,...e.tags].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+    const matches=e=>Object.entries(selected).every(([d,v])=>values(e,d).includes(v))&&(!query||[e.title,e.desc,e.credit,e.duration||'',...e.tags].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase()));
     function render(){
       document.querySelectorAll('[data-dim]').forEach(b=>{b.classList.toggle('active',b.dataset.dim===dimension);b.setAttribute('aria-pressed',String(b.dataset.dim===dimension));});
       const facets=Object.entries(globalCounts[dimension]).sort((a,b)=>dimension==='submitted'?(a[0]==='时间未记录'?1:b[0]==='时间未记录'?-1:b[0].localeCompare(a[0])):b[1]-a[1]||a[0].localeCompare(b[0],'zh-CN'));
@@ -38,9 +38,8 @@
         const hues={'游戏':260,'建模':36,'视觉艺术':212,'工具面板':175,'文档研究':315,'科普教育':195,'模拟仿真':225,'国风历史':42};
         const icons={'游戏':'✧','建模':'◇','视觉艺术':'◉','工具面板':'⌘','文档研究':'¶','科普教育':'∑','模拟仿真':'◎','国风历史':'卷'};
         const hue=hues[e.tags[0]]||225;
-        return `<a class="case-card" href="case.html?id=${encodeURIComponent(e.id)}" data-id="${esc(e.id)}" style="--hue:${hue}"><div class="art" aria-hidden="true">${e.cover?`<img src="${esc(e.cover)}" loading="lazy" alt="">`:`<span class="symbol">${icons[e.tags[0]]||'✧'}</span>`}<span class="art-label">${esc(e.tags[0])} / ${String(i+1).padStart(2,'0')}</span></div><div class="card-body"><div class="credit">${esc(e.credit)}</div><h3>${esc(e.title)}</h3><p class="description">${esc(e.desc)}</p><div class="case-tags">${e.tags.map(t=>`<span>${esc(t)}</span>`).join('')}</div><div class="card-foot"><span>${e.format}</span><b>${e.format==='文档阅读'?'阅读文档':'探索作品'} ↗</b></div></div></a>`;
+        return `<a class="case-card" href="case.html?id=${encodeURIComponent(e.id)}" data-id="${esc(e.id)}" style="--hue:${hue}"><div class="art" aria-hidden="true">${e.cover?`<img src="${esc(e.cover)}" loading="lazy" alt="">`:`<span class="symbol">${icons[e.tags[0]]||'✧'}</span>`}<span class="art-label">${esc(e.tags[0])} / ${String(i+1).padStart(2,'0')}</span></div><div class="card-body"><div class="credit">${esc(e.credit)}</div><h3>${esc(e.title)}</h3><p class="description">${esc(e.desc)}</p><div class="case-tags">${e.tags.map(t=>`<span>${esc(t)}</span>`).join('')}</div><dl class="case-metadata"><div><dt>总耗时</dt><dd title="${esc(e.durationNote||'')}">${esc(e.duration||'未记录')}</dd></div><div><dt>最近提交</dt><dd>${e.committedAt?`<time datetime="${esc(e.committedAt)}">${esc(e.commitLabel)}</time>`:'时间未记录'}</dd></div></dl><div class="card-foot"><span>${e.format}</span><b>${e.format==='文档阅读'?'阅读文档':'探索作品'} ↗</b></div></div></a>`;
       }).join('')||'<div class="empty">没有符合这些条件的案例。<br>试试其他关键词，或清除筛选。</div>';
-      document.querySelectorAll('.case-card').forEach(card=>{const e=byId.get(card.dataset.id),row=document.createElement('div');row.className='credit';row.style.marginTop='12px';row.title='案例目录最近一次 Git 提交 · 北京时间';row.append(document.createTextNode('最近提交：'));if(e.committedAt){const time=document.createElement('time');time.dateTime=e.committedAt;time.textContent=e.commitLabel;row.append(time);}else row.append(document.createTextNode('时间未记录'));card.querySelector('.card-foot').before(row);});
       try{sessionStorage.setItem('goodcase-filters',JSON.stringify({selected,query,sort,dimension}));}catch{}
       window.galleryAudit={total:entries.length,counts:globalCounts,visible:filtered.map(e=>e.id)};
     }

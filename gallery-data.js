@@ -123,9 +123,9 @@
       ];
       const tags = [...new Set(meta.tags||e.tags||['其他作品'])];
       return {id:path,key,path,title:meta.title||e.title.replace(/\s*\+\d+ 页$/,''),
-        desc:meta.desc||e.desc,agent,models,credit:agent+' + '+models.join(' / '),
+        desc:(meta.desc||e.desc).replace(/(?:[ ·。；]*)(?:总计耗时|总耗时|制作耗时|总用时)\s*.+$/,'').replace(/；耗时仅统计.+$/,''),duration:e.duration||null,durationNote:e.durationNote||'',agent,models,credit:agent+' + '+models.join(' / '),
         tags,resources,format:resources.some(r=>/\.md$/i.test(r.path))?(resources.length>1?'交互 + 文档':'文档阅读'):'网页体验',
-        cover:covers[key]?key+'/'+covers[key]:null,
+        cover:covers[key]?key+'/'+covers[key]:(e.cover||null),
         combo:agent+' + '+models.join(' / ')};
     });
   }

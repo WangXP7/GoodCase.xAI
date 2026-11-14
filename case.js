@@ -9,6 +9,7 @@
     const entries=GalleryData.normalize(await r.json());const id=new URLSearchParams(location.search).get('id');
     const entry=entries.find(e=>e.id===id);if(!entry)throw Error('没有找到这个案例，请返回主页重新选择。');
     document.title=entry.title+' · GoodCase.xAI';document.querySelector('#title').textContent=entry.title;document.querySelector('#credit').textContent=entry.credit;
+    const duration=document.createElement('small');duration.className='case-duration';duration.textContent='总耗时：'+(entry.duration||'未记录');duration.title=entry.durationNote||'';document.querySelector('#credit').after(duration);
     const nav=document.querySelector('#resources');
     entry.resources.forEach((resource,i)=>{const b=document.createElement('button');b.textContent=resource.label;b.onclick=()=>{nav.querySelectorAll('button').forEach(n=>{n.classList.remove('active');n.setAttribute('aria-pressed','false');});b.classList.add('active');b.setAttribute('aria-pressed','true');show(resource.path);};nav.append(b);if(i===0)b.click();});
     document.querySelector('#fullscreen').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen?.().catch(()=>{});};

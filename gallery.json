@@ -25,7 +25,9 @@
       "title": "极光九号 · 轨道发射 LC-12",
       "desc": "AURORA-9 · Orbital Insertion — Pad LC-12",
       "agent": "Trae",
-      "sort": "aurora-9"
+      "sort": "aurora-9",
+      "duration": null,
+      "cover": "gallery-covers/0dfbbb1ff6580461.jpg"
     },
     {
       "ns": "trae",
@@ -33,7 +35,9 @@
       "entry": "index.html",
       "title": "轨道核心 · 霓虹海报",
       "desc": "ORBITAL CORE · 霓虹轨道海报 — WebGL2 + 原生 GLSL",
-      "agent": "Trae"
+      "agent": "Trae",
+      "duration": null,
+      "cover": "gallery-covers/b04d498684ab5846.jpg"
     },
     {
       "ns": "workbuddy",
@@ -41,7 +45,9 @@
       "entry": "pelican-bicycle-3d-standalone.html",
       "title": "鹈鹕骑行 · 三维独立版",
       "desc": "鹈鹕骑自行车 3D · 正常版",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/c1cd9547df0d6fb6.jpg"
     },
     {
       "ns": "workbuddy",
@@ -49,7 +55,9 @@
       "entry": "index.html",
       "title": "恶魔轮盘 · 初版",
       "desc": "恶魔轮盘——直面天命！ · BUCKSHOT ROULETTE",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/d2526fd9e4f30d60.jpg"
     },
     {
       "ns": "workbuddy",
@@ -57,7 +65,9 @@
       "entry": "index.html",
       "title": "恶魔轮盘 · 第二版",
       "desc": "恶魔轮盘——直面天命！ · BUCKSHOT ROULETTE",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/1d050ad1b668098c.jpg"
     },
     {
       "ns": "workbuddy",
@@ -65,7 +75,8 @@
       "entry": "index.html",
       "title": "冬日微缩展示台 · Frost-Fold Cabin",
       "desc": "全程序化 bpy 建模的冬季微缩景观 · 折纸感小屋压着左右不等高的斜屋脊，整面三角玻璃山墙透出暖光，配扫雪小径、结冰池塘、雪压松与暖光路灯；Cycles 1920×1440 出图，零外部模型 / 贴图 / HDRI",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null
     },
     {
       "ns": "workbuddy",
@@ -73,7 +84,9 @@
       "entry": "index.html",
       "title": "檐下 · UNDER THE EAVES",
       "desc": "檐下 · UNDER THE EAVES",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/b707820460a4084b.jpg"
     },
     {
       "ns": "workbuddy",
@@ -81,15 +94,18 @@
       "entry": "index.html",
       "title": "余烬深渊 Emberfall · 球形开放世界 3D 动作 RPG",
       "desc": "可朝任意方向持续探索的球体地图 · 四类生态区、四档随机装备掉落与区域霸主，含技能循环、成就存档与排行榜（Three.js，全程序化生成）",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/7303d90797c237dc.jpg"
     },
     {
       "ns": "workbuddy",
       "dir": "gummy-bears",
       "entry": "index.html",
       "title": "软糖熊 · 可抓取软体糖果物理",
-      "desc": "抓起 · 甩出 · 堆叠 · 挤变形 · 撞桌沿滑落，16 只程序化软糖熊（隐式曲面网格 + Shape Matching 软体物理，零外部资源）· 总耗时 1 小时 25 分",
-      "agent": "WorkBuddy + Space Bunny"
+      "desc": "抓起 · 甩出 · 堆叠 · 挤变形 · 撞桌沿滑落，16 只程序化软糖熊（隐式曲面网格 + Shape Matching 软体物理，零外部资源）",
+      "agent": "WorkBuddy + Space Bunny",
+      "duration": "1 小时 25 分"
     },
     {
       "ns": "workbuddy",
@@ -97,7 +113,9 @@
       "entry": "index.html",
       "title": "NEXUS BREACH · MCP 驱动射击游戏",
       "desc": "AI 用 19 个 MCP 工具实时改关卡 · 生成竞技场、摆掩体、调光照、自动试玩并截图回看 · Three.js 单页",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "workbuddy/hy4-mcp-shooter/shots/aerial.png"
     },
     {
       "ns": "workbuddy",
@@ -105,31 +123,37 @@
       "entry": "index.html",
       "title": "贾维斯 J.A.R.V.I.S. · 赛博朋克 HUD 控制台",
       "desc": "单文件全屏科幻主控界面 · 系统状态、能量核心矩阵、神经接口与终端日志全部实时驱动，零依赖零外部资源",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/9cde7cbff00ef597.jpg"
     },
     {
       "ns": "workbuddy",
       "dir": "koi-pond",
       "entry": "index.html",
       "title": "锦鲤池 · 倒影与鱼群",
-      "desc": "程序化锦鲤池塘 · 水面波纹与真实倒影 · 点击水面投食 · 总耗时约 110 分钟",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "desc": "程序化锦鲤池塘 · 水面波纹与真实倒影 · 点击水面投食",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": "约 110 分钟",
+      "cover": "workbuddy/koi-pond/shots/01-overview.jpg"
     },
     {
       "ns": "workbuddy",
       "dir": "lol-idle",
       "entry": "index.html",
       "title": "峡谷挂机王 · 15 英雄放置挂机",
-      "desc": "英雄联盟题材放置挂机 · 15 位英雄（3 人上阵、待命仍供 30% 被动）、6 件装备 ×10 级、6 枚符文、10 段位 ×4 星；兵线自动推中路、拆塔破水晶，离线 8 小时按 60% 结算，开小号转生换荣耀点；单文件 Canvas2D 全程序化绘制，零依赖零外部素材 · 总耗时约 30 分钟",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "desc": "英雄联盟题材放置挂机 · 15 位英雄（3 人上阵、待命仍供 30% 被动）、6 件装备 ×10 级、6 枚符文、10 段位 ×4 星；兵线自动推中路、拆塔破水晶，离线 8 小时按 60% 结算，开小号转生换荣耀点；单文件 Canvas2D 全程序化绘制，零依赖零外部素材",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": "约 30 分钟"
     },
     {
       "ns": "workbuddy",
       "dir": "rune-frontline",
       "entry": "index.html",
       "title": "符文战线 · 三路弹幕塔防",
-      "desc": "竖版三路 1v1 弹幕塔防 · 1188 格逐格打碎翻色、5 英雄坐 6 个固定点位、海克斯三选一张张抽，18 张海克斯与 8 件共享装备池撑起 build，打穿一路直捣敌方水晶；零外部资源全程序化绘制，单文件 Canvas2D，另附 82K 字 GDD 与无头 8 局平衡模拟 · 总耗时约 45 分钟",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "desc": "竖版三路 1v1 弹幕塔防 · 1188 格逐格打碎翻色、5 英雄坐 6 个固定点位、海克斯三选一张张抽，18 张海克斯与 8 件共享装备池撑起 build，打穿一路直捣敌方水晶；零外部资源全程序化绘制，单文件 Canvas2D，另附 82K 字 GDD 与无头 8 局平衡模拟",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": "约 45 分钟"
     },
     {
       "ns": "workbuddy",
@@ -137,7 +161,9 @@
       "entry": "index.html",
       "title": "月面运输 · 低重力货运",
       "desc": "月面运输 · 实时 3D 月球车货运任务 — 低重力驾驶、碰撞甩货与三站配送（单文件 Three.js r160 · 全程序化生成）",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "workbuddy/lunar-rover/shots/02-drive.jpg"
     },
     {
       "ns": "workbuddy",
@@ -145,15 +171,18 @@
       "entry": "index.html",
       "title": "方块世界 · 自由探索",
       "desc": "Minecraft 克隆 · 零依赖单文件 WebGL2，全程序化生成的方块世界",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "workbuddy/minecraft-clone/shots/01-forest.jpg"
     },
     {
       "ns": "workbuddy",
       "dir": "minimax-m31-flash-promo",
       "entry": "index.html",
       "title": "瞬光 · MINIMAX M3.1-FLASH 宣传片",
-      "desc": "40 秒程序化产品宣传片 · 单文件 Canvas2D 按确定性时间轴逐帧绘制，点火—标识—能力—闭环—成形—落版六幕，配乐由 numpy 合成，零外部素材 · 制作耗时约 70 分钟",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "desc": "40 秒程序化产品宣传片 · 单文件 Canvas2D 按确定性时间轴逐帧绘制，点火—标识—能力—闭环—成形—落版六幕，配乐由 numpy 合成，零外部素材",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": "约 70 分钟"
     },
     {
       "ns": "workbuddy",
@@ -161,7 +190,9 @@
       "entry": "index.html",
       "title": "鹈鹕骑行 · 动态展示",
       "desc": "鹈鹕骑自行车 · Pelican on a Bicycle",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/7be7950f7a274081.jpg"
     },
     {
       "ns": "workbuddy",
@@ -169,7 +200,9 @@
       "entry": "index.html",
       "title": "鹈鹕骑行 · 三维版",
       "desc": "鹈鹕骑自行车 3D · 正常版",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/052481d85422bb26.jpg"
     },
     {
       "ns": "workbuddy",
@@ -177,7 +210,9 @@
       "entry": "index.html",
       "title": "企鹅生存 · 冰原漂流挑战",
       "desc": "Three.js 3D 生存小游戏 · 操控企鹅在持续漂移的低多边形浮冰之间捕鱼、跳跃、躲避海豹，含生命/得分/计时与三档难度",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/074e77af9fcbdfc9.jpg"
     },
     {
       "ns": "workbuddy",
@@ -185,7 +220,9 @@
       "entry": "src/index.html",
       "title": "火箭发射 · 模拟原型",
       "desc": "火箭发射模拟器 · Rocket Launch Simulator (MVP 原型)",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "workbuddy/rocket-launch-sim/tests/prototype/shot-pad.png"
     },
     {
       "ns": "workbuddy",
@@ -193,15 +230,18 @@
       "entry": "index.html",
       "title": "蛇人幸存者 · 黑暗废墟割草",
       "desc": "俯视角纯割草 Roguelite · 蛇人战士在封闭黑暗废墟生存 10 分钟，尾击/毒瓶/诅咒/蛇人召集四技能真实联动，经验升级三选一与精英敌潮",
-      "agent": "WorkBuddy + Step-5-Preview"
+      "agent": "WorkBuddy + Step-5-Preview",
+      "duration": null,
+      "cover": "workbuddy/snake-survivors/shots/02-battle.jpg"
     },
     {
       "ns": "workbuddy",
       "dir": "solar-year-lab",
       "entry": "index.html",
       "title": "太阳系公转周期 · 一年为什么不一样",
-      "desc": "面向大学生的太阳系互动教学页 · 八大行星角速度按真实周期比（T∝a^1.5，误差 0.076%），轨道亮弧显示过去 60 地球日走过的弧长，周期对数条 + 累计圈数，「1 地球年挑战」冻结在 365.256 天给出水星 4.15 圈 vs 海王星 2.2°；单文件 Canvas2D 零外部资源，桌面与移动双端 · 总耗时约 25 分钟",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "desc": "面向大学生的太阳系互动教学页 · 八大行星角速度按真实周期比（T∝a^1.5，误差 0.076%），轨道亮弧显示过去 60 地球日走过的弧长，周期对数条 + 累计圈数，「1 地球年挑战」冻结在 365.256 天给出水星 4.15 圈 vs 海王星 2.2°；单文件 Canvas2D 零外部资源，桌面与移动双端",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": "约 25 分钟"
     },
     {
       "ns": "workbuddy",
@@ -209,7 +249,9 @@
       "entry": "index.html",
       "title": "太阳系八大行星 · 3D 交互模型",
       "desc": "9 页 Three.js 科普交互 · 总览页 + 八颗行星独立详情页，程序化几何与真实天文数据，行星间互相跳转",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/ac8f31f9eff7064b.jpg"
     },
     {
       "ns": "workbuddy",
@@ -217,7 +259,8 @@
       "entry": "dist/index.html",
       "title": "潮线 · TIDELINE",
       "desc": "潮线 TIDELINE · 测试版 v0.1.0",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null
     },
     {
       "ns": "workbuddy",
@@ -225,7 +268,9 @@
       "entry": "index.html",
       "title": "潮水 · Tidewater 渔业场景",
       "desc": "Tidewater",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "gallery-covers/fd394365305a1855.jpg"
     },
     {
       "ns": "workbuddy",
@@ -233,7 +278,9 @@
       "entry": "README.md",
       "title": "Token 用量 · 分析仪表盘",
       "desc": "token-dashboard",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "workbuddy/token-dashboard/usage-sessions.png"
     },
     {
       "ns": "workbuddy",
@@ -241,7 +288,9 @@
       "entry": "index.html",
       "title": "断裂桥梁 · 列车坠水",
       "desc": "断裂桥梁 · 列车脱轨坠水 — 零依赖单文件 Canvas 物理仿真（XPBD 渐进坍塌 · 入水沉没）",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "workbuddy/train-bridge-collapse/shots/03-derail.jpg"
     },
     {
       "ns": "workbuddy",
@@ -249,7 +298,9 @@
       "entry": "index.html",
       "title": "复古胶片单反 · 1970s Film SLR",
       "desc": "全程序化 bpy 建模的 1970 年代 35mm 单反 · 银顶黑皮机身、五棱镜铭牌、滚花对焦环与多层镜片组，Eevee 摄影棚出图，零外部模型 / 贴图 / HDRI",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null,
+      "cover": "workbuddy/vintage-slr-camera/shots/render-final.png"
     },
     {
       "ns": "workbuddy",
@@ -257,47 +308,57 @@
       "entry": "index.html",
       "title": "宋代中式庭院 · Song Dynasty Courtyard",
       "desc": "全程序化 bpy 建模的宋代庭院 · 南门—中央大殿—西水院—东书院—北后园五路院落，歇山顶九脊与六铺作斗拱按材份制推演，Eevee 三分之四俯视出图，零外部模型 / 贴图 / HDRI",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": null
     },
     {
       "ns": "workbuddy",
       "dir": "temple-of-heaven",
       "entry": "index.html",
       "title": "天坛祈年殿 · 三重檐琉璃大殿",
-      "desc": "按真实形制全程序化复原的天坛祈年殿：直径 32.72m、总高 38.2m，三层汉白玉圆台基与四出陛、28 根楠木柱（龙井柱鎏金蟠龙）、三重檐蓝琉璃瓦与重昂斗拱、龙凤和玺彩画与鎏金宝顶，昼夜光照切换 · 总耗时约 1 小时 5 分钟",
-      "agent": "WorkBuddy + Step-5-Preview"
+      "desc": "按真实形制全程序化复原的天坛祈年殿：直径 32.72m、总高 38.2m，三层汉白玉圆台基与四出陛、28 根楠木柱（龙井柱鎏金蟠龙）、三重檐蓝琉璃瓦与重昂斗拱、龙凤和玺彩画与鎏金宝顶，昼夜光照切换",
+      "agent": "WorkBuddy + Step-5-Preview",
+      "duration": "约 1 小时 5 分钟",
+      "cover": "gallery-covers/07a816be68dbfa61.jpg"
     },
     {
       "ns": "workbuddy",
       "dir": "procedural-city-cn",
       "entry": "index.html",
       "title": "3D 程序化城市生成器 · 中国版",
-      "desc": "对标 OpenAI Showcase 的中国版程序化 3D 城市生成器 · 南京（27 处地标）/ 重庆 8D / 陆家嘴 / 古都西安 / 赛博深圳 / 江南水乡六城实时切换，种子 / 时段 / 密度 / 交通 / 雾实时响应，全程序化生成零外部素材 · 总耗时约 1 小时 30 分钟",
-      "agent": "WorkBuddy + Step-5-Preview"
+      "desc": "对标 OpenAI Showcase 的中国版程序化 3D 城市生成器 · 南京（27 处地标）/ 重庆 8D / 陆家嘴 / 古都西安 / 赛博深圳 / 江南水乡六城实时切换，种子 / 时段 / 密度 / 交通 / 雾实时响应，全程序化生成零外部素材",
+      "agent": "WorkBuddy + Step-5-Preview",
+      "duration": "约 1 小时 30 分钟",
+      "cover": "gallery-covers/6a2e2b41c2ee4717.jpg"
     },
     {
       "ns": "workbuddy",
       "dir": "deepseek-ai-search",
       "entry": "README.md",
       "title": "灵犀搜索 · AI 搜索引擎",
-      "desc": "类秘塔 / Perplexity 的 AI 搜索全栈应用 · DeepSeek Search 全网检索 + Fetch 读正文 + deepseek-flash 流式作答，引用角标跳转原文、思维链可见、多轮追问，Node 零依赖（本地运行需 API Key）· 总耗时约 40 分钟",
-      "agent": "WorkBuddy + Step-5-Preview"
+      "desc": "类秘塔 / Perplexity 的 AI 搜索全栈应用 · DeepSeek Search 全网检索 + Fetch 读正文 + deepseek-flash 流式作答，引用角标跳转原文、思维链可见、多轮追问，Node 零依赖（本地运行需 API Key）",
+      "agent": "WorkBuddy + Step-5-Preview",
+      "duration": "约 40 分钟",
+      "cover": "workbuddy/deepseek-ai-search/test/shots/ui-03-answer.png"
     },
     {
       "ns": "workbuddy",
       "dir": "last-train-rush",
       "entry": "index.html",
       "title": "末班快车 · 3D 地铁跑酷",
-      "desc": "3D 地铁跑酷 · 背电脑包的程序员在末班车离站前追击：换道 / 跳跃 / 翻滚躲避列车与路障、吃金币与擦身加分，越跑越快，3 颗心与受击无敌帧；角色 / 场景 / 音效全程序化生成，Three.js 本地 vendor 零外部素材，附 589KB 单文件离线版 · 总耗时约 3 小时",
-      "agent": "WorkBuddy + Step-5-Preview"
+      "desc": "3D 地铁跑酷 · 背电脑包的程序员在末班车离站前追击：换道 / 跳跃 / 翻滚躲避列车与路障、吃金币与擦身加分，越跑越快，3 颗心与受击无敌帧；角色 / 场景 / 音效全程序化生成，Three.js 本地 vendor 零外部素材，附 589KB 单文件离线版",
+      "agent": "WorkBuddy + Step-5-Preview",
+      "duration": "约 3 小时",
+      "cover": "gallery-covers/e0d568f9b5002dcc.jpg"
     },
     {
       "ns": "workbuddy",
       "dir": "qingming-hongqiao",
       "entry": "index.html",
       "title": "清明上河图 · 全卷汴河活画卷",
-      "desc": "实时 3D 全卷长卷 · 郊野 / 漕运 / 虹桥 / 桥头 / 上善门 / 城内六段首尾相接共 1100 m，21 排贯木拱 + 5 道横木、货船连续放倒桅杆穿桥洞、298 栋屋舍（6 种宋式样式）与 354 名角色、144 个动态物体（飞鸟 / 云 / 车马 / 河船 / 旗幡）、分章大气透视；六段题签展卷 / 3D 漫游 / 20 秒全卷巡览三态，全程序化零外部素材，Three.js r160 本地内置 · 总耗时约 45 分钟",
-      "agent": "WorkBuddy + DeepSeek-V4.1-Flash"
+      "desc": "实时 3D 全卷长卷 · 郊野 / 漕运 / 虹桥 / 桥头 / 上善门 / 城内六段首尾相接共 1100 m，21 排贯木拱 + 5 道横木、货船连续放倒桅杆穿桥洞、298 栋屋舍（6 种宋式样式）与 354 名角色、144 个动态物体（飞鸟 / 云 / 车马 / 河船 / 旗幡）、分章大气透视；六段题签展卷 / 3D 漫游 / 20 秒全卷巡览三态，全程序化零外部素材，Three.js r160 本地内置",
+      "agent": "WorkBuddy + DeepSeek-V4.1-Flash",
+      "duration": "约 45 分钟"
     },
     {
       "ns": "zcode",
@@ -305,7 +366,9 @@
       "entry": "aurora-ocean.html",
       "title": "极光海洋 · 原生着色器",
       "desc": "极光海洋 · WebGL2 原生 GLSL",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/712f0d669ee461c5.jpg"
     },
     {
       "ns": "zcode",
@@ -313,7 +376,9 @@
       "entry": "WebGL2-原生GLSL技术详解.md",
       "title": "WebGL2-原生GLSL技术详解",
       "desc": "WebGL2-原生GLSL技术详解",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/f6c2226f07413313.jpg"
     },
     {
       "ns": "zcode",
@@ -321,7 +386,9 @@
       "entry": "index.html",
       "title": "猫咪掌机 · NEKO PAL",
       "desc": "NEKO PAL · 猫咪掌机",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/891481826dd4a193.jpg"
     },
     {
       "ns": "zcode",
@@ -329,7 +396,9 @@
       "entry": "index.html",
       "title": "霓虹六边形 · 物理沙盒",
       "desc": "NEON HEX · 物理沙盒",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/0c5408c4ad02c891.jpg"
     },
     {
       "ns": "zcode",
@@ -337,7 +406,9 @@
       "entry": "index.html",
       "title": "霓虹俄罗斯方块",
       "desc": "NEON TETRIS — SRS · 7-BAG · T-SPIN",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/3cf8a5db34eedf4f.jpg"
     },
     {
       "ns": "zcode",
@@ -345,7 +416,9 @@
       "entry": "index.html",
       "title": "极光九号 · 轨道发射 LC-17",
       "desc": "AURORA-9 · Orbital Insertion · Pad LC-17",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/e7c638d11232f653.jpg"
     },
     {
       "ns": "zcode",
@@ -353,7 +426,9 @@
       "entry": "index.html",
       "title": "大鲨鱼 · 复古街机",
       "desc": "BIG SHARK · 复古街机鲨鱼",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/e26030d1b948c519.jpg"
     },
     {
       "ns": "zcode",
@@ -361,7 +436,9 @@
       "entry": "index.html",
       "title": "T1密室3D游戏开发33m-74m-61m +3 页",
       "desc": "三重密室 · 3D 密室逃脱",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "zcode/T1密室3D游戏开发33m-74m-61m/shots/04-light-on.png"
     },
     {
       "ns": "zcode",
@@ -369,7 +446,9 @@
       "entry": "调查报告-AI改名SI事实核查.md",
       "title": "T2最新政策SI京都愿景调查54m-12m-7m17s",
       "desc": "T2最新政策SI京都愿景调查54m-12m-7m17s",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/443916c7f8c74b87.jpg"
     },
     {
       "ns": "zcode",
@@ -377,7 +456,9 @@
       "entry": "00-资料来源与事实核查.md",
       "title": "T3诺奖化学科普GPT5.6Sol-65min-Sonnet5.5-12min-GLM5.3F-55min +4 页",
       "desc": "T3诺奖化学科普GPT5.6Sol-65min-Sonnet5.5-12min-GLM5.3F-55min",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/283b56abfc6b44c7.jpg"
     },
     {
       "ns": "zcode",
@@ -385,7 +466,9 @@
       "entry": "index.html",
       "title": "极光海洋 · 共创版",
       "desc": "极光海洋 · WebGL2 原生 GLSL",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/4ea67108d955d2cf.jpg"
     },
     {
       "ns": "zcode",
@@ -393,7 +476,9 @@
       "entry": "index.html",
       "title": "极光海洋 · 性能优化版",
       "desc": "极光海洋 · 性能优化版（4 版本可切换）",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/ecbba0fdc8badee5.jpg"
     },
     {
       "ns": "zcode",
@@ -401,7 +486,9 @@
       "entry": "index.html",
       "title": "路人甲TM1鹈鹕骑自行车3D版 +1 页",
       "desc": "澳洲鹈鹕的海边骑行 · Three.js",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/cdf213680e2f76ee.jpg"
     },
     {
       "ns": "zcode",
@@ -409,7 +496,9 @@
       "entry": "index.html",
       "title": "路人甲TM2星际水族箱 +1 页",
       "desc": "3D 透明水箱交互模拟",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "gallery-covers/33c2c87a5704328b.jpg"
     },
     {
       "ns": "zcode",
@@ -417,7 +506,9 @@
       "entry": "index.html",
       "title": "路人甲TM3平面后室游戏 +3 页",
       "desc": "档案层 B4 · 2D 俯视角恐怖逃生",
-      "agent": "ZCode"
+      "agent": "ZCode",
+      "duration": null,
+      "cover": "zcode/路人甲TM3平面后室游戏/screenshots/03-探索-1920.png"
     },
     {
       "ns": "codex",
@@ -425,7 +516,9 @@
       "entry": "index.html",
       "title": "2066 决战世界杯",
       "desc": "3D 五人制足球对战 · Three.js、Ammo.js 物理与 PixiJS 特效，含 AI 对手、战绩统计及本地排行榜",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "gallery-covers/34e524db0d540cfc.jpg"
     },
     {
       "ns": "codex",
@@ -433,7 +526,9 @@
       "entry": "index.html",
       "title": "空间篮球 · AIR COURT",
       "desc": "Vision Pro 空间篮球 · Three.js 3D 投篮挑战（单文件离线版）",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "gallery-covers/297d5942ca3d441c.jpg"
     },
     {
       "ns": "codex",
@@ -441,7 +536,9 @@
       "entry": "index.html",
       "title": "ASTRA · 科幻飞船驾驶舱 HUD",
       "desc": "原创深空探索驾驶舱 · 飞行、导航、战术与工程四模式，支持雷达扫描、能源分配和跃迁模拟，离线可运行",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "codex/astra-cockpit-hud/docs/preview-desktop.png"
     },
     {
       "ns": "codex",
@@ -449,7 +546,9 @@
       "entry": "index.html",
       "title": "Attention Residuals · 深度调音台",
       "desc": "注意力残差交互科普：逐层动画、权重调节、两种注意力轴与分块实验；单文件离线可用。",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "codex/attention-residuals/artifacts/desktop-1440x900.png"
     },
     {
       "ns": "codex",
@@ -457,7 +556,9 @@
       "entry": "index.html",
       "title": "极蛋农场 · Eggstreme Farming V5",
       "desc": "3D 增量养成农场游戏 · 自动收蛋、GM 调参、旋转视角与实时日志",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "gallery-covers/02278677e49e0548.jpg"
     },
     {
       "ns": "codex",
@@ -465,7 +566,9 @@
       "entry": "index.html",
       "title": "星门纪元：深空放置",
       "desc": "EVE 题材太空挂机游戏 · 舰队派遣、技能训练、工业制造与市场交易",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "gallery-covers/4e56319c726b824d.jpg"
     },
     {
       "ns": "codex",
@@ -473,7 +576,9 @@
       "entry": "index.html",
       "title": "汉末青云",
       "desc": "三国题材文字晋升模拟 · 人物建档、势力经营、任务事件与仕途成长",
-      "agent": "Codex + GPT-6 Astra"
+      "agent": "Codex + GPT-6 Astra",
+      "duration": null,
+      "cover": "gallery-covers/54d483e825a856bc.jpg"
     },
     {
       "ns": "codex",
@@ -481,7 +586,9 @@
       "entry": "index.html",
       "title": "红河青云",
       "desc": "越南背景文字人生模拟 · 多起点建档、组织关系与人生晋升",
-      "agent": "Codex + GPT-6 Astra"
+      "agent": "Codex + GPT-6 Astra",
+      "duration": null,
+      "cover": "gallery-covers/ee6afe3d97b21567.jpg"
     },
     {
       "ns": "codex",
@@ -489,7 +596,9 @@
       "entry": "index.html",
       "title": "墨迹 · Ink Trace V2",
       "desc": "中日汉字书法工作台 · 逐笔动画、毛笔提按、临摹与多格式导出，单文件离线可用",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "gallery-covers/00e7ac751743bce5.jpg"
     },
     {
       "ns": "codex",
@@ -497,7 +606,9 @@
       "entry": "index.html",
       "title": "贾维斯 JARVIS · Windows 动态视觉原型",
       "desc": "WinUI 3 科技管家界面 · 波浪核心、动态声纹、四种模式与独立悬浮窗，含 Windows EXE 下载。",
-      "agent": "Codex + GPT-5.6 Sol / GPT-6.1 Sol"
+      "agent": "Codex + GPT-5.6 Sol / GPT-6.1 Sol",
+      "duration": null,
+      "cover": "codex/jarvis/qa/pages-desktop.png"
     },
     {
       "ns": "codex",
@@ -505,7 +616,9 @@
       "entry": "index.html",
       "title": "MB围城",
       "desc": "MB园区背景文字模拟 · 生存、人物关系、任务与路线选择",
-      "agent": "Codex + GPT-6 Astra"
+      "agent": "Codex + GPT-6 Astra",
+      "duration": null,
+      "cover": "gallery-covers/e240958a7ea37433.jpg"
     },
     {
       "ns": "codex",
@@ -513,7 +626,9 @@
       "entry": "index.html",
       "title": "MIMIC · 潜色行动",
       "desc": "2D 伪装捉迷藏小游戏：吸取环境颜色与纹理，切换姿势躲过探照灯；支持单文件离线运行。",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "gallery-covers/a0c3e201c400f45c.jpg"
     },
     {
       "ns": "codex",
@@ -521,7 +636,9 @@
       "entry": "index.html",
       "title": "MOMENT 即刻 · 互动拍立得",
       "desc": "WebGL2 / GLSL 三维拍立得 · 旋转取景、快门闪光、吐纸显影、胶片风格、本地照片导入与 PNG 导出",
-      "agent": "Codex + GPT-6 Astra"
+      "agent": "Codex + GPT-6 Astra",
+      "duration": null,
+      "cover": "gallery-covers/db91cea44d9af081.jpg"
     },
     {
       "ns": "codex",
@@ -529,7 +646,9 @@
       "entry": "index.html",
       "title": "黄金时刻街景 · Night Street",
       "desc": "纯代码生成的第一人称城市街景 · WASD 行走、鼠标环顾与程序化声音；基于 MIT 开源项目的本地复刻与 Pages 适配",
-      "agent": "Codex + 原始生成模型未记录"
+      "agent": "Codex + 原始生成模型未记录",
+      "duration": null,
+      "cover": "codex/night-street/source/media/01-street.webp"
     },
     {
       "ns": "codex",
@@ -537,7 +656,9 @@
       "entry": "index.html",
       "title": "牛来：梦野逐风",
       "desc": "致敬《牛来》的原创 3D 跑酷冒险 · 三重梦境、云羽收集、踏风破障，支持键盘与触屏，全部资源本地运行",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "gallery-covers/b056a8e2a0a9d227.jpg"
     },
     {
       "ns": "codex",
@@ -545,7 +666,9 @@
       "entry": "index.html",
       "title": "三灯铆卫 · 像素帧动画",
       "desc": "原创铁甲小兵 · 携剑持盾斜劈、固定脚点验证、逐帧播放与素材下载（ACT01 V1.2 待审核）",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "codex/pixel-armored-soldier/assets/demo.png"
     },
     {
       "ns": "codex",
@@ -553,7 +676,9 @@
       "entry": "index.html",
       "title": "蛇裔 · 余烬圣所",
       "desc": "俯视角纯割草 Roguelite · 全高战场与悬浮技能栏、分阶段递增敌潮、10 分钟生存、毒咒爆炸联动、升级三选一与精英黑潮；支持离线游玩",
-      "agent": "Codex + GPT-6.1 Sol"
+      "agent": "Codex + GPT-6.1 Sol",
+      "duration": null,
+      "cover": "gallery-covers/4d78589e1e518bbe.jpg"
     },
     {
       "ns": "codex",
@@ -561,7 +686,9 @@
       "entry": "index.html",
       "title": "三国人物关系图 · 国风鎏金长卷",
       "desc": "514 位人物、562 条关系 · 支持姓名与别称搜索、点击查看人物关联、阵营跳转、长卷缩放和高清图下载",
-      "agent": "Codex + GPT-5 / GPT-6"
+      "agent": "Codex + GPT-5 / GPT-6",
+      "duration": null,
+      "cover": "codex/three-kingdoms-gilded/three-kingdoms-gilded-v3-preview.png"
     },
     {
       "ns": "codex",
@@ -569,7 +696,9 @@
       "entry": "index.html",
       "title": "面壁计划",
       "desc": "三体硬科幻题材文字模拟 · 科研、组织经营、晋升与危机抉择",
-      "agent": "Codex + GPT-6 Astra"
+      "agent": "Codex + GPT-6 Astra",
+      "duration": null,
+      "cover": "gallery-covers/d521564bbfa8d66e.jpg"
     },
     {
       "ns": "codex",
@@ -577,7 +706,9 @@
       "entry": "index.html",
       "title": "晚明县志 V0.1",
       "desc": "原创晚明叙事治理 · 34,717字剧本、38个事件、8名人物与6种结局",
-      "agent": "Codex + GPT-6 Astra"
+      "agent": "Codex + GPT-6 Astra",
+      "duration": null,
+      "cover": "gallery-covers/6844c95074039d2e.jpg"
     },
     {
       "ns": "codex",
@@ -585,7 +716,9 @@
       "entry": "index.html",
       "title": "羊债必须清 · Woolly Debts",
       "desc": "3D 肥羊砸罐增量游戏 · 磁吸拾币、现金技能树、账单构筑与破产轮回，可直接在线游玩",
-      "agent": "Codex"
+      "agent": "Codex",
+      "duration": null,
+      "cover": "codex/woolly-debts/preview.png"
     },
     {
       "ns": "codex",
@@ -593,122 +726,140 @@
       "entry": "index.html",
       "desc": "提示词分类、LoRA 数据构造与 TodoMVC 作业安排 · 含交互演示、可打印教案、Python 速学、提交文件与可复现验证",
       "title": "LMCC 三题学习站 · 题解、教案与编程速学",
-      "agent": "Codex + GPT-6"
+      "agent": "Codex + GPT-6",
+      "duration": null,
+      "cover": "codex/lmcc-2026-round2/tests/preview-desktop.png"
     },
     {
       "ns": "codex",
       "dir": "gif-motion-studies",
       "entry": "index.html",
       "title": "循环动图四例 · 玻璃蝴蝶、SOL 香水、人物与柴犬、峡谷瀑布",
-      "desc": "四支循环 GIF 动画，可在线播放及下载 · 总计耗时 34 分 56 秒",
-      "agent": "Codex + GPT-6 Astra"
+      "desc": "四支循环 GIF 动画，可在线播放及下载",
+      "agent": "Codex + GPT-6 Astra",
+      "duration": "34 分 56 秒",
+      "cover": "gallery-covers/19474c19863959d1.jpg"
     },
     {
       "ns": "codex",
       "dir": "nanjing-city-atlas",
       "entry": "index.html",
       "title": "金陵山水城 · 南京 3D 地标图鉴",
-      "desc": "六种城市与 50 处地标精细化 · 扭转幕墙、穿楼单轨、古城砖瓦与水岸细节 · 总耗时约 45 分钟（四轮累计制作与验证 44 分 41 秒，已扣除等待间隔）",
+      "desc": "六种城市与 50 处地标精细化 · 扭转幕墙、穿楼单轨、古城砖瓦与水岸细节",
       "agent": "Codex + GPT-6.1-sol",
       "tags": [
         "3D / 空间",
         "交互体验"
-      ]
+      ],
+      "duration": "约 45 分钟",
+      "durationNote": "四轮累计制作与验证 44 分 41 秒，已扣除等待间隔",
+      "cover": "gallery-covers/95a042cf2b031c7d.jpg"
     },
     {
       "ns": "workbuddy",
       "dir": "four-stroke-engine-3d",
       "entry": "index.html",
       "title": "四冲程直列四缸发动机 · 3D 交互教学",
-      "desc": "程序化搭建直列四缸 3D 模型：活塞 / 连杆 / 曲轴 / 气门 / 火花塞实时联动，720° 循环与 1-3-4-2 点火顺序可视化，支持角度定格、剖视、部件讲解与课堂讲义，Three.js 本地 vendor 零外部资源 · 总耗时约 30 分钟",
-      "agent": "WorkBuddy + Hy4"
+      "desc": "程序化搭建直列四缸 3D 模型：活塞 / 连杆 / 曲轴 / 气门 / 火花塞实时联动，720° 循环与 1-3-4-2 点火顺序可视化，支持角度定格、剖视、部件讲解与课堂讲义，Three.js 本地 vendor 零外部资源",
+      "agent": "WorkBuddy + Hy4",
+      "duration": "约 30 分钟",
+      "cover": "workbuddy/four-stroke-engine-3d/render/02-playing.png"
     },
     {
       "ns": "workbuddy",
       "dir": "nvidia-b300-teaching-3d",
       "entry": "index.html",
       "title": "NVIDIA DGX B300 · 3D 交互式教学演示",
-      "desc": "程序化重建完整 DGX B300（Blackwell Ultra）整机：双层计算托盘、穿孔通风网、8 组 GPU / Grace CPU / NVLink 与液冷管路；支持模块分解、散热风道、透视外壳、11 类部件点选讲解与四种演示模式，Three.js 本地 vendor 零外部资产 · 总耗时约 28 分钟",
-      "agent": "WorkBuddy + Hy4"
+      "desc": "程序化重建完整 DGX B300（Blackwell Ultra）整机：双层计算托盘、穿孔通风网、8 组 GPU / Grace CPU / NVLink 与液冷管路；支持模块分解、散热风道、透视外壳、11 类部件点选讲解与四种演示模式，Three.js 本地 vendor 零外部资产",
+      "agent": "WorkBuddy + Hy4",
+      "duration": "约 28 分钟",
+      "cover": "workbuddy/nvidia-b300-teaching-3d/render/01-initial.png"
     },
     {
       "ns": "codex",
       "dir": "gunking",
       "entry": "index.html",
       "title": "枪王 GunKing · 港区突围（中文还原版）",
-      "desc": "基于 Saltline 固定源码还原的程序化港区 FPS · 保留中文汉化与上游来源；耗时仅统计本会话解析、溯源、还原、验证与发布，不含原作制作 · 总耗时约 1 小时 20 分 51 秒",
+      "desc": "基于 Saltline 固定源码还原的程序化港区 FPS · 保留中文汉化与上游来源",
       "agent": "Codex + GPT-6.1 Sol",
       "tags": [
         "游戏",
         "动作冒险",
         "3D",
         "Three.js"
-      ]
+      ],
+      "duration": "约 1 小时 20 分 51 秒",
+      "durationNote": "仅统计该会话解析、溯源、还原、验证与发布，不含原作制作。"
     },
     {
       "ns": "codex",
       "dir": "silk-scroll",
       "entry": "index.html",
       "title": "风中长卷 · 碳基生物丝绸物理",
-      "desc": "Verlet 质点弹簧布料 · 风力控制、抓取拖拽与拉扯撕裂 · 总耗时约 32 分 39 秒",
+      "desc": "Verlet 质点弹簧布料 · 风力控制、抓取拖拽与拉扯撕裂",
       "agent": "Codex + GPT-6.1 Sol",
       "tags": [
         "模拟仿真",
         "物理实验",
         "3D",
         "Three.js"
-      ]
+      ],
+      "duration": "约 32 分 39 秒"
     },
     {
       "ns": "codex",
       "dir": "iphone-duo-exhibit",
       "entry": "index.html",
       "title": "双屏构想 · iPhone Duo 3D 展台",
-      "desc": "中英双语概念展台 · 双屏开合、部件拆解、点选解说与自动演示 · 总耗时约 45 分 28 秒",
+      "desc": "中英双语概念展台 · 双屏开合、部件拆解、点选解说与自动演示",
       "agent": "Codex + GPT-6.1 Sol",
       "tags": [
         "3D",
         "交互体验",
         "Three.js"
-      ]
+      ],
+      "duration": "约 45 分 28 秒"
     },
     {
       "ns": "codex",
       "dir": "youtube-frame-reconstruction",
       "entry": "index.html",
       "title": "逐帧映像 · 视频参考帧重建",
-      "desc": "20 秒 / 1080p / 25 FPS · 参考帧素材与 Canvas 时间轴重建，支持逐帧查看和 MP4 下载；非纯代码重绘，未验证与 YouTube 原片完全一致 · 总耗时约 30 分 34 秒",
+      "desc": "20 秒 / 1080p / 25 FPS · 参考帧素材与 Canvas 时间轴重建，支持逐帧查看和 MP4 下载；非纯代码重绘，未验证与 YouTube 原片完全一致",
       "agent": "Codex + GPT-6.1 Sol",
       "tags": [
         "视觉艺术",
         "交互体验"
-      ]
+      ],
+      "duration": "约 30 分 34 秒"
     },
     {
       "ns": "codex",
       "dir": "chongqing-8d",
       "entry": "index.html",
       "title": "山城夜行 · 8D 重庆轻轨穿楼",
-      "desc": "程序化山城夜景 · 穿楼轻轨、跨江车流、江雾与吊脚楼，支持全景与驾驶室视角 · 总耗时约 25 分 19 秒",
+      "desc": "程序化山城夜景 · 穿楼轻轨、跨江车流、江雾与吊脚楼，支持全景与驾驶室视角",
       "agent": "Codex + GPT-6.1 Sol",
       "tags": [
         "3D",
         "视觉艺术",
         "Three.js"
-      ]
+      ],
+      "duration": "约 25 分 19 秒"
     },
     {
       "ns": "codex",
       "dir": "crab-island-3d",
       "entry": "index.html",
       "title": "蟹屿 · 从图纸到可漫游建筑",
-      "desc": "蟹形住宅概念重建 · 十户室内、步行漫游、开门开灯、屋顶拆解与昼夜切换；按原图可辨轮廓重建 · 总耗时约 47 分 5 秒",
+      "desc": "蟹形住宅概念重建 · 十户室内、步行漫游、开门开灯、屋顶拆解与昼夜切换；按原图可辨轮廓重建",
       "agent": "Codex + GPT-6.1 Sol",
       "tags": [
         "3D",
         "交互体验",
         "Three.js"
-      ]
+      ],
+      "duration": "约 47 分 5 秒"
     }
   ]
 }
