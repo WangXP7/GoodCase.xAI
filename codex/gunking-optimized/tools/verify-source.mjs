@@ -1,0 +1,24 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const audit=JSON.parse(read('source-audit.json'));
+const recipe=JSON.parse(read('localization/zh-CN.patches.json'));
+const script=s=>s.match(/<script\b[^>]*>([\s\S]*?)<\/script>/)[1];
+const upstream=read('reference/saltline-upstream.html');
+const release=read(audit.restored.file);
+assert.equal(hash(upstream),audit.upstream.sha256,'Pinned upstream changed');
+assert.equal(hash(release),audit.restored.sha256,'Audited release changed');
+assert.equal(hash(script(upstream)),recipe.upstreamScriptSHA256,'Upstream script changed');
+let restored=script(upstream);let end=-1;
+for(const p of recipe.patches){assert(p.start>=end,'Overlapping patches');assert.equal(restored.slice(p.start,p.end),p.from,'Patch source differs');end=p.end;}
+for(const p of [...recipe.patches].reverse())restored=restored.slice(0,p.start)+p.to+restored.slice(p.end);
+assert.equal(hash(script(release).trim()),hash(restored.trim()),'Release contains unreviewed JavaScript edits');
+assert(!/几猫|自主研发|国产|3A大作|data-act="about"|data-tab="about"/.test(restored),'Removed rebrand remains');
+assert(restored.includes('枪王')&&restored.includes('GunKing'),'Requested branding missing');
+assert.equal(fs.readFileSync(path.join(root,'index.html')).compare(fs.readFileSync(path.join(root,audit.restored.file))),0,'Default entry differs');
+console.log(`PASS: fixed upstream, ${recipe.patches.length} reviewed localization/branding patches, no extra JS changes, release and entry match`);

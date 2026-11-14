@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-12T02:28:24.872Z",
+  "upstream": {
+    "repository": "https://github.com/realcodebear/saltline-fable-5.2",
+    "kind": "第三方原版镜像，非原作者仓库",
+    "commit": "09d5fc9a5678eb398edfd7d0f0be6ef7754f6538",
+    "file": "index.html",
+    "sha256": "f34e6debbfa7526b72be2daa24595c2f195e102a7aede4f22e59138c99cd6852",
+    "bytes": 1423569,
+    "originalArtifact": "https://claude.ai/artifact/BGY1SztrAYcJQHSsnHHGmp",
+    "author": "Felix Rieseberg",
+    "model": "Claude Fable 5.2",
+    "attributionBasis": "GitHub 镜像 README 的来源记录；原发布 X 页面当前未直接取得正文",
+    "originalBuildTime": "约 8 小时（来源记录转述作者自报，非本次实测）",
+    "gameLicense": "镜像未声明独立游戏代码许可证；Three.js MIT 仅覆盖该第三方库"
+  },
+  "supplied": {
+    "file": "几猫国产3A大作_V1.html",
+    "sha256": "9e55b5200b088adaf8e1152da04efc0d3b25e236e6baf2dee96f81e23e084966",
+    "keptUnchanged": true
+  },
+  "restored": {
+    "file": "GunKing_中文还原版.html",
+    "sha256": "58271f22250b6cedffeb62104ca367615bc94400db1a9289c22df1e7d249b560",
+    "bytes": 1424915,
+    "title": "枪王 GunKing · 港区突围（中文还原版）"
+  },
+  "verification": {
+    "localizationPatchCount": 193,
+    "normalizedNonLocalizationASTEqual": true,
+    "normalizedASTSHA256": "6c65df24f07c0c0f61d4c65a058cf2697105b193d41f230eb691ceb99dc0a513",
+    "unchangedGLSLTemplateCount": 153,
+    "embeddedThreeRuntimeEqualAfterEOLNormalization": true,
+    "numericAndControlFlowChangesOutsideLocalization": 0
+  },
+  "removed": [
+    "几猫与国产3A改名",
+    "自称国产自主研发的宣传文案",
+    "额外项目介绍按钮、页签、面板及事件分支",
+    "替换的枪械、厂商、船名和航运公司品牌"
+  ],
+  "retained": [
+    "中文菜单、设置、操作说明与无障碍标签",
+    "中文任务、无线电、结算、提示与 HUD",
+    "中文场景标识与设备铭牌",
+    "中文字体与必要字距、行距适配"
+  ],
+  "knownPresentationMappings": [
+    "敌人击杀名称显示映射",
+    "画质按钮名称映射",
+    "自动画质说明名称映射"
+  ],
+  "authorizedBranding": "按用户本次补充要求，游戏名称和可见标识使用枪王 / GunKing；原作署名单列",
+  "scope": "恢复固定 GitHub 镜像的程序行为，保留中文汉化与用户授权标识；未优化画质、玩法或平衡"
+}

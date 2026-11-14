@@ -1,0 +1,32 @@
+{
+  "checkedAt": "2026-11-12T02:45:55.393Z",
+  "card": "游戏 / 01\nCodex + GPT-6.1 Sol\n枪王 GunKing · 港区突围（中文还原版）\n\n基于 Saltline 固定源码还原的程序化港区 FPS · 保留中文汉化，移除旧改名与自主研发宣传，按要求使用枪王 / GunKing 标识；附上游来源、193 处可重放补丁与技术解析 · 本轮总耗时约 25 分钟（溯源、还原、验证与发布）\n\n游戏\n动作冒险\n3D\nThree.js\nWebGL / GLSL\n最近提交：2026-11-12 10:42\n交互 + 文档\n探索作品 ↗",
+  "resources": "枪王（中文还原版）\n溯源与技术解析\n运行与修改指南\n还原差异证据\n验证记录",
+  "errors": [],
+  "runtime": {
+    "ready": true,
+    "fatal": null,
+    "errors": [],
+    "title": "枪王 GunKing · 港区突围（中文还原版）",
+    "oldAbout": 0,
+    "menu": "B4\n枪王突击小队\n枪王港区 · 05:42\n枪王\nGunKing\n\n港区防御系统失控。切断三处中继，突破封锁，登船撤离。\n\n开始行动\n设置\n操作说明\n\n场景、机械、纹理与声音均由浏览器中的代码实时生成。原作：Felix Rieseberg · Claude Fable 5.2。\n\nWASD 移动\n鼠标 视角\n左键 开火\n右键 瞄准\nR 换弹\nE 切断中继\nSPACE 跳跃\nSHIFT 冲刺\nC 蹲伏\nESC 暂停\n触屏操作\n左手拇指移动\n右手拇指转动视角\n屏幕按钮：开火 · 瞄准 · 换弹 · 跳跃",
+    "stats": {
+      "calls": 307,
+      "tris": 1873764,
+      "geos": 181,
+      "tex": 137,
+      "programs": 107,
+      "res": [
+        1440,
+        930
+      ],
+      "scale": 1,
+      "advanced": true,
+      "softShadows": true,
+      "fps": 21.6,
+      "state": "title"
+    }
+  },
+  "releaseSHA256": "58271f22250b6cedffeb62104ca367615bc94400db1a9289c22df1e7d249b560",
+  "liveBrowserVerified": true
+}
