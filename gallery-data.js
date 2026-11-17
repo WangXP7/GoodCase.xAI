@@ -78,6 +78,7 @@
   set('codex/wanming-xianzhi','晚明县志 · 叙事治理','游戏|文字叙事|国风历史');
   set('codex/woolly-debts','羊债必须清 · 砸罐还债','游戏|经营养成|3D');
   const covers = {
+    "codex/3droom":"shots/cover.jpg",
     "codex/crimson-loong":"stills/v2-01-valley.jpg",
     "codex/abyssal-garden":"shots/cover.jpg",
     "codex/crab-island-3d":"shots/cover.jpg",
