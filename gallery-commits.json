@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "382ef4b0e26820f5200db9bb37b5bdbf461de9d3",
+  "snapshot": "374fd1a8a31da47e5310a8454d7a8e3cb8fbac33",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-11-15T05:15:50Z",
@@ -9,8 +9,8 @@
       "scope": "codex/2066-world-cup"
     },
     "codex/3droom/index.html": {
-      "committedAt": "2026-11-17T02:31:08Z",
-      "commit": "382ef4b0e26820f5200db9bb37b5bdbf461de9d3",
+      "committedAt": "2026-11-17T02:37:57Z",
+      "commit": "374fd1a8a31da47e5310a8454d7a8e3cb8fbac33",
       "scope": "codex/3droom"
     },
     "codex/abyssal-garden/index.html": {
