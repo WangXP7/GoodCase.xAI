@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "5be0359d136353e07d0c4813c7632c370c811410",
+  "snapshot": "13b4fc268ba7c71af61dc66b8a7fbfb9923577b4",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-11-15T05:15:50Z",
@@ -37,6 +37,11 @@
       "committedAt": "2026-11-15T05:15:50Z",
       "commit": "8c68acb5d0282efecca5338899513201142398fd",
       "scope": "codex/crab-island-3d"
+    },
+    "codex/crimson-loong/index.html": {
+      "committedAt": "2026-11-17T02:29:54Z",
+      "commit": "13b4fc268ba7c71af61dc66b8a7fbfb9923577b4",
+      "scope": "codex/crimson-loong"
     },
     "codex/eggstreme-farming/index.html": {
       "committedAt": "2026-11-15T05:15:50Z",
