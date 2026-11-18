@@ -1,0 +1,55 @@
+:root {
+  color-scheme: dark;
+  background: #0b0e14;
+  color: #dfe5ee;
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  line-height: 1.65;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #9ab7ff; text-underline-offset: .22em; }
+a:hover { color: #d2deff; }
+a:focus-visible { outline: 2px solid #7aa2ff; outline-offset: 4px; }
+
+.wrap { width: min(100% - 40px, 1200px); margin-inline: auto; }
+header { padding: 30px 0 28px; border-bottom: 1px solid #1c2230; }
+nav { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: .875rem; }
+h1 { margin: 24px 0 10px; font-size: clamp(1.85rem, 4vw, 2.7rem); line-height: 1.2; }
+header p { max-width: 70ch; margin: 0 0 .5em; color: #a6b0c2; }
+.credit { font-size: .875rem; }
+
+.cases {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 26px 0 50px;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: #11151f;
+  border: 1px solid #222b3d;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.poster { display: block; background: #171e2b; }
+.poster img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.poster:focus-visible { outline-offset: -4px; }
+.content { display: flex; flex-direction: column; flex: 1; padding: 16px; }
+h2 { margin: 0; color: #edf1f8; font-size: 1.14rem; line-height: 1.35; }
+.rank { margin-right: .45em; color: #9ab7ff; font-variant-numeric: tabular-nums; }
+.credit, .description, .visual, .license { margin: .55rem 0 0; }
+.content .credit, .license { color: #a6b0c2; }
+.visual { color: #d2dbed; }
+.license { font-size: .82rem; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: auto; padding-top: 14px; }
+.actions a { display: inline-flex; min-height: 40px; align-items: center; }
+.actions .primary { padding-inline: 12px; border-radius: 6px; background: #273e78; color: #f2f5ff; text-decoration: none; }
+.actions .primary:hover { background: #365298; }
+
+footer { padding: 18px 0 28px; border-top: 1px solid #1c2230; color: #a6b0c2; font-size: .85rem; }
