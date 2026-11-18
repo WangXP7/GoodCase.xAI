@@ -928,17 +928,513 @@
     },
     {
       "ns": "codex",
-      "dir": "threejs-visual-top10",
+      "dir": "threejs-visual-top10/tria-prima-fable-52",
       "entry": "index.html",
-      "title": "Three.js 3D 网页游戏 · 视觉精选 10 例",
-      "desc": "外部作品专题 · 画面点评、原作试玩与开源仓库 · 总耗时约 15 分钟",
-      "agent": "Codex + GPT-6.2 Sol",
+      "title": "三原质 · Tria Prima",
+      "desc": "外部精选 · 在暗黑奇幻岛屿采集材料，投掷药剂改变地形，让藤蔓长成攀爬路径，或把水面冻成冰桥。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + Claude Fable 5.2",
       "tags": [
-        "3D",
         "游戏",
-        "开源",
-        "调研"
-      ]
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/tria-prima-fable-52.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-01"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/x-archive-auth-2094239964162843048-f501587b",
+      "entry": "index.html",
+      "title": "沼泽气垫船 · Emerald Bayou",
+      "desc": "外部精选 · 驾驶气垫船穿行于林木茂密的水道，可以从第一人称头盔视角观察沼泽。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/clear-4bf0d0bfc20774-13613c3c30.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-02"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/graveyard-shift-fable-52",
+      "entry": "index.html",
+      "title": "公路夜班 · Graveyard Shift",
+      "desc": "外部精选 · 驻守公路边的加油站，抵挡一波接一波的僵尸。 · 总耗时约 14 小时（作者自述）",
+      "agent": "原作 Agent 未标注 + Claude Fable 5.2",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/graveyard-shift-fable-52.webp",
+      "duration": "约 14 小时（作者自述）",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-03"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/x-archive-auth-2081716631986983093-fa546a89",
+      "entry": "index.html",
+      "title": "星陨 · Starfall 太空即时战略",
+      "desc": "外部精选 · 在行星与星云之间指挥舰队，体验采用程序化舰体的太空即时战略原型。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-0f0fe6b8caae88-7725be4fd3-fa35cc01bc.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-04"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/x-archive-2090638002003575214-claude-of-tanks-e14f3e12",
+      "entry": "index.html",
+      "title": "坦克作战模拟器 · Claude of Tanks",
+      "desc": "外部精选 · 在车库检视并配置坦克，再进入不同战场体验装甲与弹道系统。 · 总耗时未公开",
+      "agent": "Claude、Codex（作者披露） + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-77c596bcd80c78-743e253230-c6e66edcc1.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-05"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/tidewater-dgreenheck",
+      "entry": "index.html",
+      "title": "海岛钓鱼 · Tidewater",
+      "desc": "外部精选 · 开船前往礁石或深海，控制收线张力，并在入夜前把鱼卖给 Joe。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-de73f4dfab68ba-93c205c8c4-a17900be1d.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-06"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/marco-fugaro-worm-monster",
+      "entry": "index.html",
+      "title": "虫群怪物 · Worm Monster",
+      "desc": "外部精选 · 进入虫群占据的洗手间，点击挥动球棒。适合使用支持 WebGPU 的桌面浏览器。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/marco-fugaro-worm-monster.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-07"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/drcollect-github-io-demolition-derby",
+      "entry": "index.html",
+      "title": "撞车竞技 · Demolition Derby",
+      "desc": "外部精选 · 驾驶五种车型之一，在 8 字赛道或碗形竞技场进行碰撞竞赛。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-453d434671282e-6beca5cae7-b6bc17bdba.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-08"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/vale-dos-vinhedos-lucas579686-chatgpt-site",
+      "entry": "index.html",
+      "title": "自由游戏 · 中世纪村庄经营",
+      "desc": "外部精选 · 在中世纪村庄修路、培养工人，并搭建生产链。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/vale-dos-vinhedos-lucas579686-chatgpt-site.jpg",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-09"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/real-street-tower-defense",
+      "entry": "index.html",
+      "title": "真实街区塔防",
+      "desc": "外部精选 · 把真实地图和三维瓦片载入为战场，在敌人沿街道接近基地前布置防御。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/halfyear-x-archive-auth-2099360155846799862-29b5e464.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-10"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/bruno-simon",
+      "entry": "index.html",
+      "title": "驾车探索作品集 · Bruno Simon",
+      "desc": "外部精选 · 驾驶小车穿过微缩世界，在坡道跳跃、撞动物件，也可以在球场投篮。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/bruno-simon-com.jpg",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-11"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/papertrails",
+      "entry": "index.html",
+      "title": "纸上漫游 · Papertrails",
+      "desc": "外部精选 · 在会向前展开的立体纸雕书中穿过树林、村庄和小路，可查看地图或切换昼夜。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + Claude Fable 5.2",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/papertrails-xikhar.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-12"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/slop-new-york",
+      "entry": "index.html",
+      "title": "曼哈顿漫游 · Slop New York",
+      "desc": "外部精选 · 在曼哈顿街道上步行、驾车或骑行，也可以切换直升机视角与时间氛围。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-e942ca3cb1cde6-95b7b989f7-d7804f44a4.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-13"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/infinity-castle",
+      "entry": "index.html",
+      "title": "无限城 · 立体城堡漫游",
+      "desc": "外部精选 · 随着视角向下移动，穿过不断延伸、错落排列的立体城堡。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/clear-0fb274b7584a5d-3684c96b2a.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-14"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/procedural-tokyo",
+      "entry": "index.html",
+      "title": "三维东京 · Procedural Tokyo",
+      "desc": "外部精选 · 在根据真实城市数据生成的东京地图中浏览街区，可以调节时间、交通、列车和云层。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-43aa3516e22b97-bfc87654e2-5706bd19c3.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-15"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/slop-singapore",
+      "entry": "index.html",
+      "title": "新加坡街景 · Slop Singapore",
+      "desc": "外部精选 · 从车内或车辆跟随视角穿行于新加坡道路，并查看沿途建筑和导航。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-89a86f337807f9-2170be4e62-263fec644b.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-16"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/starter-kit-racing",
+      "entry": "index.html",
+      "title": "赛道幽灵 · Starter Kit Racing",
+      "desc": "外部精选 · 在立体赛道上刷新最佳圈速，用幽灵车辆回放追逐自己的过往路线。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-deece32b0f2464-67ec09fa24-239d32d36b.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-17"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/moon-rover",
+      "entry": "index.html",
+      "title": "月球车驾驶 · Moon Rover",
+      "desc": "外部精选 · 操控轮式月球车穿过灰色月面，观察轮胎、起伏地形和远处天体。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/clear-8bf53e7143c847-c9e22ca30f.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-18"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/hexgl",
+      "entry": "index.html",
+      "title": "极速飞船 · HexGL",
+      "desc": "外部精选 · 驾驶反重力飞船穿过隧道和弯道，挑战高速赛道计时。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/hexgl-bkcore-com.jpg",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-19"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/tiny-world-builder",
+      "entry": "index.html",
+      "title": "微缩世界构建器 · Tiny World Builder",
+      "desc": "外部精选 · 在小地块上拼接道路、树木和建筑，可切换天气、时间与观察方式。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-c93ee5ec2775ce-b27b06e581-f2c06a2015.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-20"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/backroom",
+      "entry": "index.html",
+      "title": "阈限空间漫游 · Backroom",
+      "desc": "外部精选 · 以第一人称在空走廊和反复出现的室内房间之间探索。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/clear-48d6d0028e665b-983d7f6877.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-21"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/threejs-descent",
+      "entry": "index.html",
+      "title": "立体迷宫空战 · Three.js Descent",
+      "desc": "外部精选 · 驾驶飞船穿过由多个方向连通的走廊，借驾驶舱仪表观察行动和战斗。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-578679bccee453-8adfb81eca-eabd98c4d6.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-22"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/threejs-quake",
+      "entry": "index.html",
+      "title": "雷神之锤移植 · Three.js Quake",
+      "desc": "外部精选 · 在浏览器里进入经典 Quake 的低多边形地牢，体验原作风格的第一人称界面。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-f7d1a831a90ab3-22ec508574-78f1187c01.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-23"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/toy-maker",
+      "entry": "index.html",
+      "title": "木制玩具工坊 · Toy Maker",
+      "desc": "外部精选 · 用木块、轮子和球体等部件搭建小玩具，切换到播放模式查看运动效果。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/clear-0405f0267d78e8-c48fcd5eeb.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-24"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/stick-and-steel",
+      "entry": "index.html",
+      "title": "火柴人与钢铁",
+      "desc": "外部精选 · 操控手绘战士在窄桥上对决，可练习挥砍格挡，也可挑战机器人或在线玩家。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-cf2c32ffae8fd5-013644fef3-5562401b18.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-25"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/boba-bar",
+      "entry": "index.html",
+      "title": "珍珠奶茶工坊 · Boba Bar",
+      "desc": "外部精选 · 选茶底、加奶和珍珠，摇匀后插入吸管，观察杯中配料变化。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-152844d4b302cf-0fc1ba78b5-f159293acb.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-26"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/cs-brasil-v2",
+      "entry": "index.html",
+      "title": "巴西街区对战 · CS BRASIL v2",
+      "desc": "外部精选 · 在浏览器进入巴西题材的射击对局，从不同地图和模式中选择一局。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/clear-669551af76d67d-c84530585b.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-27"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/water-ring-toss",
+      "entry": "index.html",
+      "title": "水中套圈 · 三维怀旧玩具",
+      "desc": "外部精选 · 按按钮推动水箱里的彩色圆环，还可以拖动视角观察圆环与立柱。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "交互体验",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/clear-1219639fd6875c-53393b46d3.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-28"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/one-in-300m",
+      "entry": "index.html",
+      "title": "三亿分之一 · 在线竞速",
+      "desc": "外部精选 · 在以微观世界为主题的三维赛道中与其他玩家竞速，争取率先抵达终点。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/cards/clear-bfaa015c608ef0-4dfda8f79a-aba8aec936.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-29"
+    },
+    {
+      "ns": "codex",
+      "dir": "threejs-visual-top10/littlejs-platformer",
+      "entry": "index.html",
+      "title": "三维平台跳跃 · LittleJS",
+      "desc": "外部精选 · 在方块、平台和障碍间移动和跳跃，体验 LittleJS 与 Three.js 结合的玩法示例。 · 总耗时未公开",
+      "agent": "原作 Agent 未标注 + 模型未记录",
+      "tags": [
+        "游戏",
+        "three.js",
+        "开源"
+      ],
+      "cover": "https://threejs.cc/assets/posters/clear-397d151b417b06-ac021666e4.webp",
+      "duration": "未公开",
+      "durationNote": "原作制作耗时",
+      "sort": "threejs-visual-30"
     }
   ]
 }
