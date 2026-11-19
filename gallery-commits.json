@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+  "snapshot": "2a4cfc99a5aa11f7717047a3367de6151b6468f2",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-11-15T05:15:50Z",
@@ -174,8 +174,8 @@
       "scope": "codex/threejs-visual-top10/cs-brasil-v2"
     },
     "codex/threejs-visual-top10/drcollect-github-io-demolition-derby/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T02:28:27Z",
+      "commit": "4f35af147e7dcac0909eb2f7fe09c6891da2db5c",
       "scope": "codex/threejs-visual-top10/drcollect-github-io-demolition-derby"
     },
     "codex/threejs-visual-top10/graveyard-shift-fable-52/index.html": {
