@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "c9cbaa32461a001d43becd05736fe2af82e40ba4",
+  "snapshot": "decdfde25558f405784680f0e1dda802e16a5955",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-11-15T05:15:50Z",
@@ -164,13 +164,13 @@
       "scope": "codex/threejs-visual-top10/boba-bar"
     },
     "codex/threejs-visual-top10/bruno-simon/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/bruno-simon"
     },
     "codex/threejs-visual-top10/cs-brasil-v2/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/cs-brasil-v2"
     },
     "codex/threejs-visual-top10/drcollect-github-io-demolition-derby/index.html": {
@@ -219,13 +219,13 @@
       "scope": "codex/threejs-visual-top10/papertrails"
     },
     "codex/threejs-visual-top10/procedural-tokyo/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/procedural-tokyo"
     },
     "codex/threejs-visual-top10/real-street-tower-defense/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/real-street-tower-defense"
     },
     "codex/threejs-visual-top10/slop-new-york/index.html": {
@@ -234,8 +234,8 @@
       "scope": "codex/threejs-visual-top10/slop-new-york"
     },
     "codex/threejs-visual-top10/slop-singapore/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/slop-singapore"
     },
     "codex/threejs-visual-top10/starter-kit-racing/index.html": {
@@ -244,18 +244,18 @@
       "scope": "codex/threejs-visual-top10/starter-kit-racing"
     },
     "codex/threejs-visual-top10/stick-and-steel/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/stick-and-steel"
     },
     "codex/threejs-visual-top10/threejs-descent/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/threejs-descent"
     },
     "codex/threejs-visual-top10/threejs-quake/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/threejs-quake"
     },
     "codex/threejs-visual-top10/tidewater-dgreenheck/index.html": {
@@ -264,8 +264,8 @@
       "scope": "codex/threejs-visual-top10/tidewater-dgreenheck"
     },
     "codex/threejs-visual-top10/tiny-world-builder/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/tiny-world-builder"
     },
     "codex/threejs-visual-top10/toy-maker/index.html": {
@@ -279,8 +279,8 @@
       "scope": "codex/threejs-visual-top10/tria-prima-fable-52"
     },
     "codex/threejs-visual-top10/vale-dos-vinhedos-lucas579686-chatgpt-site/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/vale-dos-vinhedos-lucas579686-chatgpt-site"
     },
     "codex/threejs-visual-top10/water-ring-toss/index.html": {
@@ -289,8 +289,8 @@
       "scope": "codex/threejs-visual-top10/water-ring-toss"
     },
     "codex/threejs-visual-top10/x-archive-2090638002003575214-claude-of-tanks-e14f3e12/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T10:26:47Z",
+      "commit": "decdfde25558f405784680f0e1dda802e16a5955",
       "scope": "codex/threejs-visual-top10/x-archive-2090638002003575214-claude-of-tanks-e14f3e12"
     },
     "codex/threejs-visual-top10/x-archive-auth-2081716631986983093-fa546a89/index.html": {
