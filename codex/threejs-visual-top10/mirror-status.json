@@ -1,10 +1,10 @@
 {
   "sourceRef": "threejs-source",
-  "sourceCommit": "8dc888b571f44c1805f4b7656490133fe9cdb51a",
+  "sourceCommit": "6bb136635a0de08f2373d95ba2abe82ea481e9e7",
   "sourceProjects": 30,
-  "selfHostedProjects": 17,
-  "sourceOnlyProjects": 13,
-  "publishedSiteBytes": 131146669,
+  "selfHostedProjects": 18,
+  "sourceOnlyProjects": 12,
+  "publishedSiteBytes": 135580145,
   "cases": [
     {
       "slug": "tria-prima-fable-52",
@@ -84,8 +84,9 @@
       "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/drcollect-github-io-demolition-derby",
       "sourceScope": "project-snapshot",
       "upstreamRevision": "f559fc60a7f2ee3a21a4faf77e998ae31ad67c43",
-      "status": "source-only",
-      "note": "Collect 原版车模另行授权，替代车辆的站内构建尚未通过验证。"
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/drcollect-github-io-demolition-derby/app/index.html",
+      "note": "使用上游已有的程序化替代车辆。Collect 原版车模未包含在站内运行包。"
     },
     {
       "slug": "vale-dos-vinhedos-lucas579686-chatgpt-site",
@@ -162,7 +163,7 @@
       "title": "新加坡街景 · Slop Singapore",
       "entry": "codex/threejs-visual-top10/slop-singapore/index.html",
       "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/slop-singapore",
-      "sourceScope": "project-snapshot",
+      "sourceScope": "code-and-eligible-data",
       "upstreamRevision": "3b98b6765a658e7da241f11da569abb8b44d2822",
       "status": "source-only",
       "note": "地图瓦片和树木数据另有来源，完整数据的再发布范围尚未核实。"
