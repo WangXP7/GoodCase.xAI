@@ -1,0 +1,5 @@
+原作 Tiny World Builder，作者 jasonkneen。
+上游源码 https://github.com/jasonkneen/tiny-world-builder/tree/3a2f084ccd487456a648673656d4aced1b71887b
+本目录 index.html 即 GoodCase 可编辑站内版源码，按上游 AGPL-3.0 发行。
+GoodCase 修改：隐藏 AI 生成入口，限制页面网络请求，改用本地 Three.js r128，独立存档键，优化工具栏横向滚动并标注早期版。
+Three.js 使用 MIT 许可，见 THREE-LICENSE。

@@ -1,0 +1,4 @@
+原作 Stick & Steel，作者与上游许可证见 LICENSE。
+上游源码提交 4c8e1d05a1ec47db93b687a81a82878727308b20。对应源码镜像 https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/stick-and-steel
+基于原作 Vite 静态入口，保留训练、机器人对战与装备选择。所用武器模型来自原作程序化网格。站内版为静音单机版。
+修改见 offline-adaptation.patch。使用 Node 22.13 及以上版本，在对应源码版本应用补丁。建立 hosted-public/fonts，将 public/favicon.svg 和 public/fonts 中的 Patrick Hand 字体与 OFL 许可证复制到该发行资源目录。运行 npm ci --ignore-scripts，然后运行 npm run build:game。

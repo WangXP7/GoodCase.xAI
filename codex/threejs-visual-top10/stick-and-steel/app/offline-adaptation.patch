@@ -1,0 +1,418 @@
+--- a/hosted/main.tsx
++++ b/hosted/main.tsx
+@@ -1,7 +1,5 @@
+-import { bootIdentity } from '../lib/duel/embed';
+ import { createRoot } from 'react-dom/client';
+ import Home from '../app/page';
+ import Lab from '../app/lab/page';
+ import '../app/globals.css';
+-bootIdentity();
+ createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).get('view') === 'lab' ? <Lab /> : <Home />);
+--- a/hosted/index.html
++++ b/hosted/index.html
+@@ -1,2 +1,2 @@
+ <!doctype html>
+-<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><meta name="theme-color" content="#efeeeb"/><link rel="icon" href="/favicon.svg"/><link rel="preload" href="/fonts/PatrickHand-Regular.ttf" as="font" type="font/ttf" crossorigin/><meta name="description" content="Stick & Steel — ink-line fighters, real steel, and a very narrow bridge. A physics duel for one or two players."/><title>Stick & Steel · The Splinter Pit</title></head><body style="margin:0;background:#efeeeb"><div id="root"></div><script type="module" src="./main.tsx"></script></body></html>
++<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><meta name="theme-color" content="#efeeeb"/><link rel="icon" href="/favicon.svg"/><link rel="preload" href="/fonts/PatrickHand-Regular.ttf" as="font" type="font/ttf" crossorigin/><meta name="description" content="Stick & Steel — ink-line fighters, real steel, and a very narrow bridge. A physics duel for one or two players."/><title>火柴人与钢铁 · Stick & Steel · The Splinter Pit</title></head><body style="margin:0;background:#efeeeb"><div id="root"></div><script type="module" src="./main.tsx"></script></body></html>
+--- a/app/use-armory-shop.ts
++++ b/app/use-armory-shop.ts
+@@ -1,55 +1,14 @@
+-'use client';
+-import { useCallback, useEffect, useRef, useState } from 'react';
+-import { buy, getEntitlements, getShop, on, waitForPlayer, type ShopItem } from '@genex-ai/embed-sdk';
+-import { bootIdentity } from '@/lib/duel/embed';
+-import { ownsRavenblade, RAVENBLADE_SKU } from '@/lib/duel/armory';
++import type { ShopItem } from '@genex-ai/embed-sdk';
+ 
+-export function useArmoryShop() {
+-  const [guest, setGuest] = useState(true);
+-  const [item, setItem] = useState<ShopItem | null>(null), [owned, setOwned] = useState(false);
+-  const [loading, setLoading] = useState(true), [buying, setBuying] = useState(false), [message, setMessage] = useState('');
+-  const mounted = useRef(false), pending = useRef(false), reading = useRef<Promise<boolean> | null>(null);
+-  const refresh = useCallback((): Promise<boolean> => {
+-    if (reading.current) return reading.current;
+-    const request = async () => {
+-      try {
+-        bootIdentity(); const player = await waitForPlayer();
+-        // The catalog is public to guests; the coin inventory endpoint is account-only.
+-        const [catalog, entitlements] = await Promise.all([getShop(), player.guest ? Promise.resolve([]) : getEntitlements({ excludeConsumed: true })]);
+-        const unlocked = ownsRavenblade(entitlements), sku = catalog.find(s => s.id === RAVENBLADE_SKU) ?? null;
+-        if (mounted.current) { setGuest(player.guest); setItem(sku); setOwned(unlocked); setMessage(sku || unlocked ? '' : 'The coin shop is available in the published game.'); }
+-        return unlocked;
+-      } catch { if (mounted.current) setMessage('The armorer is away. Try again in a moment.'); return false; }
+-      finally { reading.current = null; if (mounted.current) setLoading(false); }
+-    };
+-    return reading.current = request();
+-  }, []);
+-  useEffect(() => {
+-    mounted.current = true;
+-    // Restore durable ownership on every boot, including a purchase completed before a tab closed.
+-    void refresh();
+-    const stop = on('authenticated', () => { if (reading.current) void reading.current.finally(() => { void refresh(); }); else void refresh(); });
+-    const focus = () => { if (!pending.current) void refresh(); };
+-    window.addEventListener('focus', focus);
+-    return () => { mounted.current = false; stop(); window.removeEventListener('focus', focus); };
+-  }, [refresh]);
+-  const purchase = useCallback(() => {
+-    if (!item || guest || owned || pending.current) return;
+-    pending.current = true; setBuying(true); setMessage('Confirm your purchase in the coin window.');
+-    // Call the SDK directly in the click handler; it owns price confirmation and payment.
+-    const outcome = buy({ skuId: item.id, quantity: 1 });
+-    void outcome.then(async result => {
+-      if (!mounted.current) return;
+-      if (result.status === 'succeeded') {
+-        const unlocked = await refresh();
+-        if (mounted.current) setMessage(unlocked ? 'Ravenblade is yours.' : 'Purchase complete. Refresh to restore your weapon.');
+-      } else if (result.status === 'canceled') setMessage('');
+-      else if (result.status === 'insufficient_balance') setMessage('Not enough coins. Your weapon has not been changed.');
+-      else if (result.status === 'expired') setMessage('Confirmation expired. You can try again.');
+-      else setMessage(result.message?.includes('blocked') ? 'Allow the confirmation window, then try again.' : 'Purchase unavailable. Please try again.');
+-    }).catch(() => { if (mounted.current) setMessage('Purchase unavailable. Please try again.'); })
+-      .finally(() => { pending.current = false; if (mounted.current) setBuying(false); });
+-  }, [item, guest, owned, refresh]);
+-  return { item, guest, owned, loading, buying, message, refresh, purchase };
+-}
+-export type ArmoryShop = ReturnType<typeof useArmoryShop>;
++const offlineShop = {
++  item: null as ShopItem | null,
++  guest: true,
++  owned: false,
++  loading: false,
++  buying: false,
++  message: 'The coin shop is available in the original game.',
++  refresh: async () => false,
++  purchase: () => {}
++};
++export const useArmoryShop = () => offlineShop;
++export type ArmoryShop = typeof offlineShop;
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -40,7 +40,6 @@
+   const shop = useArmoryShop(), restoredLoadout = useRef(false);
+   const [status, setStatus] = useState<DuelStatus>(initial);
+   const [touch, setTouch] = useState(false);
+-  const [sfxVolume, setSfxVolume] = useState(.8), [crowdVolume, setCrowdVolume] = useState(.55);
+   const online = status.network.mode !== 'offline', menuOpen = panel !== null || status.paused;
+   useEffect(() => {
+     const media = window.matchMedia('(pointer: coarse)');
+@@ -78,7 +77,7 @@
+     api.current?.exitTutorial();
+   };
+   const replayTraining = () => { setPanel(null); api.current?.startTutorial(); };
+-  const findMatch = () => { setPanel(null); if (status.tutorial) exitTraining(true); api.current?.joinOnline(); };
++  const findMatch = () => { if (status.tutorial) exitTraining(true); begin(); };
+   const playBot = () => { api.current?.leaveOnline(); begin(); };
+   const chooseOpponent = () => { setPanel(null); if (online || status.network.fallbackBot) api.current?.leaveOnline(); else if (status.tutorial) exitTraining(false); else api.current?.reset(); };
+   const tutorial = status.tutorial;
+@@ -108,11 +107,9 @@
+         </header>
+         {!ready && <div className="game-loading" role={error ? 'alert' : 'status'}><Swords size={28} /><p>{error || 'Setting the stage…'}</p>{error && <Button onClick={() => window.location.reload()}>Reload</Button>}</div>}
+         {ready && tutorial && !menuOpen && <TutorialOverlay status={tutorial} touch={touch} findMatch={findMatch} menu={() => exitTraining(true)}/>}
+-        {ready && !tutorial && !menuOpen && status.phase === 'fighting' && <button className="battle-leaderboard" aria-label="Leaderboard" title="Leaderboard" onClick={() => openPanel('leaderboard')}><InkCrown/></button>}
+         {ready && !tutorial && !online && status.phase === 'ready' && !menuOpen && <div className="game-invitation mode-choice">
+-          <nav className="menu-rail" aria-label="Arena menu"><button onClick={() => openPanel('leaderboard')}><InkCrown/><span>Leaderboard</span></button></nav>
+-          <h1>Shall we duel?</h1>
+-          <div className="mode-buttons"><Button className="ink-primary" onClick={findMatch}><Users size={19}/>Online Match</Button><Button className="ink-secondary" onClick={begin}><Bot size={20}/>Play with a Bot</Button></div>
++          <h1>Shall we duel?</h1><p>GoodCase 单机版</p>
++          <div className="mode-buttons"><Button className="ink-secondary" onClick={begin}><Bot size={20}/>Play with a Bot</Button></div>
+           <WeaponTiles equipped={loadoutId(status.options.playerWeapon, status.options.playerSkin)} shop={shop} select={id => { if (canEquip(id, shop.owned)) equipWeapon(id); else { setArmorySelection(id); openPanel('armory'); } }}/>
+           <button className="learn-to-fight" onClick={replayTraining}>Learn to Fight</button>
+         </div>}
+@@ -142,7 +139,7 @@
+         <DialogContent className={"ink-menu" + (panel === 'armory' ? " armory-menu" : "")} finalFocus={false}>
+           <DialogTitle>{panel === 'leaderboard' && <InkCrown/>}{panel === 'armory' ? 'Choose your steel.' : panel === 'leaderboard' ? 'The leaderboard.' : panel === 'controls' ? 'Know your moves.' : status.phase === 'fighting' ? 'Take a breath.' : 'Make it your fight.'}</DialogTitle>
+           <DialogDescription className="sr-only">{panel === 'armory' ? 'Weapon selection' : panel === 'leaderboard' ? 'Duel standings' : panel === 'controls' ? 'Game controls' : 'Game settings'}</DialogDescription>
+-          <nav className="ink-menu-tabs" aria-label="Menu sections"><button aria-pressed={panel === 'armory'} onClick={() => setPanel('armory')}>Weapons</button><button aria-pressed={panel === 'menu' || panel === null} onClick={() => setPanel('menu')}>Arena & sound</button><button aria-pressed={panel === 'controls'} onClick={() => setPanel('controls')}>Controls</button><button aria-pressed={panel === 'leaderboard'} onClick={() => setPanel('leaderboard')}>Leaderboard</button></nav>
++          <nav className="ink-menu-tabs" aria-label="Menu sections"><button aria-pressed={panel === 'armory'} onClick={() => setPanel('armory')}>Weapons</button><button aria-pressed={panel === 'menu' || panel === null} onClick={() => setPanel('menu')}>Arena & sound</button><button aria-pressed={panel === 'controls'} onClick={() => setPanel('controls')}>Controls</button></nav>
+           {panel === 'armory' ? <Armory equipped={loadoutId(status.options.playerWeapon, status.options.playerSkin)} initialSelection={armorySelection} locked={online || !!tutorial} shop={shop} equip={equipWeapon}/> : panel === 'leaderboard' ? <Leaderboard/> : panel === 'controls' ? <div className="ink-controls-list">{controls.map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}<p className="touch-help">Touch: use the left stick to move. Hold and drag the right pad to swing. Tap Guard to keep your guard up; drag the pad to aim it. Tap Guard again to attack. Two fingers on the arena look and zoom. Hold Interact to pick up, stand or climb. Drag down to strike low. Drop releases your weapon or lets go of the ledge.</p></div> : <>
+             <div className="ink-setup">
+               <span id="arena-label">Arena</span><Select value={status.options.arena} onValueChange={v => { if (v) api.current?.configure({ arena: v as ArenaKind }); }} disabled={!ready || online || !!tutorial}><SelectTrigger aria-labelledby="arena-label"><SelectValue>{ARENAS[status.options.arena].name}</SelectValue></SelectTrigger><SelectContent className="ink-select">{Object.values(ARENAS).map(a => <SelectItem key={a.kind} value={a.kind}>{a.name}</SelectItem>)}</SelectContent></Select>
+@@ -151,8 +148,7 @@
+             </div>
+             {online && <p className="ink-menu-note">Loadouts locked during battle.</p>}
+             <div className="ink-mode-row"><ToggleGroup value={[status.practice ? 'practice' : 'duel']} onValueChange={v => { if (v[0]) api.current?.setPractice(v[0] === 'practice'); }} disabled={!ready || online || !!tutorial} aria-label="Game mode"><ToggleGroupItem value="duel">Duel</ToggleGroupItem><ToggleGroupItem value="practice">Practice</ToggleGroupItem></ToggleGroup><Button variant="ghost" disabled={!ready || online || !!tutorial} onClick={() => api.current?.ledgeDrill()}>Ledge drill ↗</Button></div>
+-            <div className="ink-audio">{([['Effects', sfxVolume, setSfxVolume, 'effects'], ['Crowd', crowdVolume, setCrowdVolume, 'crowd']] as const).map(([label, value, setter, channel]) => <label key={channel}><span>{label}</span><input type="range" min="0" max="100" value={Math.round(value * 100)} aria-label={label + ' volume'} onChange={e => { const next = Number(e.target.value) / 100; setter(next); api.current?.setVolume(channel, next); }} /><output>{Math.round(value * 100)}%</output></label>)}</div>
+-            <div className="ink-extras">{!online && <button onClick={replayTraining}>Replay training</button>}<button onClick={() => api.current?.setMuted(!status.muted)}>{status.muted ? 'Unmute all sounds' : 'Mute all sounds'}</button><button disabled={online} aria-pressed={status.slow} onClick={() => api.current?.setSlow(!status.slow)}>{status.slow ? 'Normal speed' : 'Slow motion'}</button><Link href="/lab">Rig lab <ArrowUpRight size={14}/></Link></div>
++            <div className="ink-extras">{!online && <button onClick={replayTraining}>Replay training</button>}<button disabled={online} aria-pressed={status.slow} onClick={() => api.current?.setSlow(!status.slow)}>{status.slow ? 'Normal speed' : 'Slow motion'}</button><Link href="/lab">Rig lab <ArrowUpRight size={14}/></Link></div>
+           </>}
+           <div className="ink-menu-actions"><Button className="ink-primary" disabled={!ready} onClick={panel === 'leaderboard' && !online && status.phase !== 'fighting' ? chooseOpponent : closePanel}><Play size={16}/>{panel === 'leaderboard' ? online || status.phase === 'fighting' ? 'Back to battle' : 'Start battle' : panel === 'armory' ? 'Back to menu' : tutorial ? 'Back to training' : status.phase === 'ready' && !online ? 'Start battle' : 'Back to the arena'}</Button>{panel !== 'leaderboard' && tutorial && <Button variant="ghost" onClick={() => { setPanel(null); api.current?.retryTutorial(); }}>Reset positions</Button>}{panel !== 'leaderboard' && (online || status.phase !== 'ready' || tutorial) && <Button variant="ghost" disabled={!ready} onClick={chooseOpponent}><Users size={16}/>{online ? 'Leave online' : tutorial ? 'Skip training' : 'Back to menu'}</Button>}</div>
+         </DialogContent>
+--- a/app/tutorial-overlay.tsx
++++ b/app/tutorial-overlay.tsx
+@@ -67,7 +67,7 @@
+       </>}
+     </section>}
+     {completed && <section className="lesson-complete" aria-label="Training complete" data-step="complete">
+-      <div className="lesson-finish-card"><Button className="ink-primary" onClick={findMatch}>Find Match {touch ? <ArrowRight size={18}/> : <kbd>↵</kbd>}</Button><button className="lesson-back" onClick={menu}>Back to menu</button></div>
++      <div className="lesson-finish-card"><Button className="ink-primary" onClick={findMatch}>Play with a Bot {touch ? <ArrowRight size={18}/> : <kbd>↵</kbd>}</Button><button className="lesson-back" onClick={menu}>Back to menu</button></div>
+     </section>}
+   </>;
+ }
+--- a/lib/duel/weapon-view.ts
++++ b/lib/duel/weapon-view.ts
+@@ -1,30 +1,12 @@
+ import * as T from 'three';
+-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+ import type { Weapon } from './weapons';
+-import { ALL_WEAPON_ASSETS } from './weapon-assets';
+ import { createWeaponModel } from './weapon-model';
+ 
+ export function createWeaponViews(scene: T.Scene, environment?: T.Texture) {
+-  let disposed = false;
+-  const models = new Map<string, T.Group>();
+-  if (typeof window !== 'undefined') for (const kind of ['sword', 'greatsword', 'mace', 'ravenblade'] as const) {
+-    void new GLTFLoader().loadAsync(ALL_WEAPON_ASSETS[kind]).then(gltf => {
+-      const model = gltf.scene;
+-      if (disposed) { disposeModel(model); return; }
+-      model.traverse(object => { if (object instanceof T.Mesh) { if (!object.geometry.getAttribute('normal')) object.geometry.computeVertexNormals(); object.castShadow = object.receiveShadow = true; if (environment) for (const material of Array.isArray(object.material) ? object.material : [object.material]) { if (material instanceof T.MeshStandardMaterial) { material.envMap = environment; material.envMapIntensity = .8; } } } });
+-      models.set(kind, model);
+-    }).catch(() => { /* The authored mesh remains usable when an asset cannot load. */ });
+-  }
+-  function disposeModel(model: T.Group) {
+-    const maps = new Set<T.Texture>(), materials = new Set<T.Material>(), geometries = new Set<T.BufferGeometry>();
+-    model.traverse(object => { if (object instanceof T.Mesh) { geometries.add(object.geometry); for (const material of Array.isArray(object.material) ? object.material : [object.material]) { materials.add(material); for (const value of Object.values(material)) if (value instanceof T.Texture && value !== environment) maps.add(value); } } });
+-    maps.forEach(m => m.dispose()); materials.forEach(m => m.dispose()); geometries.forEach(g => g.dispose());
+-  }
+-  const loaded = new Set<number>();
+   const views = new Map<number, ReturnType<typeof createWeaponModel> & { kind: string }>();
+   const ringGeo = new T.RingGeometry(.065, .079, 32), ringMat = new T.MeshBasicMaterial({ color: '#aa692d', depthWrite: false, side: T.DoubleSide });
+   const marker = new T.Mesh(ringGeo, ringMat); marker.rotation.x = -Math.PI / 2; marker.visible = false;
+-  function clear() { for (const view of views.values()) { scene.remove(view.group); view.dispose(); } views.clear(); loaded.clear(); scene.remove(marker); }
++  function clear() { for (const view of views.values()) { scene.remove(view.group); view.dispose(); } views.clear(); scene.remove(marker); }
+   return {
+     update(items: Weapon[], highlighted?: number) {
+       const selected = items.find(w => w.id === highlighted && w.holder === null);
+@@ -35,16 +17,12 @@
+         let view = views.get(item.id);
+         if (!view || view.kind !== visual) {
+           if (view) { scene.remove(view.group); view.dispose(); }
+-          loaded.delete(item.id);
+           view = { ...createWeaponModel(item.spec.kind), kind: visual }; scene.add(view.group); views.set(item.id, view);
+-        }
+-        const model = models.get(visual);
+-        if (model && !loaded.has(item.id)) {
+-          view.dispose(); view.group.clear(); view.group.add(model.clone(true)); loaded.add(item.id);
+         }
+         view.group.position.copy(item.body.translation()); view.group.quaternion.copy(item.body.rotation());
+       }
+     },
+-    reset: clear, dispose() { disposed = true; clear(); models.forEach(disposeModel); models.clear(); ringGeo.dispose(); ringMat.dispose(); },
++    reset: clear,
++    dispose() { clear(); ringGeo.dispose(); ringMat.dispose(); },
+   };
+ }
+--- a/app/weapon-tiles.tsx
++++ b/app/weapon-tiles.tsx
+@@ -2,7 +2,7 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { Check, LockKeyhole } from 'lucide-react';
+ import * as T from 'three';
+-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
++import { createWeaponModel } from '@/lib/duel/weapon-model';
+ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+ import { LOADOUTS, type LoadoutId } from '@/lib/duel/armory';
+ import type { ArmoryShop } from './use-armory-shop';
+@@ -29,14 +29,13 @@
+       model.traverse(o => { if (o instanceof T.Mesh) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) { materials.add(m); for (const v of Object.values(m)) if (v instanceof T.Texture) textures.add(v); } } });
+       textures.forEach(t => t.dispose()); materials.forEach(m => m.dispose()); geometries.forEach(g => g.dispose());
+     };
+-    const loader = new GLTFLoader();
+-    LOADOUTS.forEach((weapon, i) => { void loader.loadAsync(weapon.asset).then(gltf => {
+-      if (disposed) { clean(gltf.scene); return; }
+-      const model = gltf.scene, box = new T.Box3().setFromObject(model), size = box.getSize(new T.Vector3());
++    LOADOUTS.forEach((weapon, i) => {
++      const model = createWeaponModel(weapon.kind).group;
++      const box = new T.Box3().setFromObject(model), size = box.getSize(new T.Vector3());
+       model.position.sub(box.getCenter(new T.Vector3())); views[i].model = model; views[i].pivot.add(model); views[i].pivot.rotation.z = -.2;
+       views[i].camera.position.z = Math.max(size.y, size.x) / (2 * Math.tan(T.MathUtils.degToRad(16))) * 1.1;
+-      setLoaded(old => [...old, weapon.id]);
+-    }).catch(() => { /* The labeled tile stays usable if its preview cannot load. */ }); });
++    });
++    setLoaded(LOADOUTS.map(weapon => weapon.id));
+     const resize = () => renderer.setSize(parent.clientWidth, parent.clientHeight);
+     const observer = new ResizeObserver(resize); observer.observe(parent); resize();
+     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+--- a/app/weapon-preview.tsx
++++ b/app/weapon-preview.tsx
+@@ -1,16 +1,17 @@
+ 'use client';
+ import { useEffect, useRef, useState } from 'react';
+ import * as T from 'three';
+-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
++import { createWeaponModel } from '@/lib/duel/weapon-model';
++import type { WeaponKind } from '@/lib/duel/weapons';
+ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+ 
+-export function WeaponPreview({ asset, name }: { asset: string; name: string }) {
++export function WeaponPreview({ kind, name }: { kind: WeaponKind; name: string }) {
+   const host = useRef<HTMLDivElement>(null);
+   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+   useEffect(() => {
+     if (!host.current) return;
+     const parent = host.current;
+-    let disposed = false, frame = 0, dragging = false, pointer = -1, lastX = 0, yaw = -.3;
++    let frame = 0, dragging = false, pointer = -1, lastX = 0, yaw = -.3;
+     setState('loading');
+     const renderer = new T.WebGLRenderer({ alpha: true, antialias: true });
+     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6)); renderer.setClearColor(0, 0);
+@@ -32,13 +33,12 @@
+       camera.position.set(0, 0, length / (2 * Math.tan(T.MathUtils.degToRad(16))) * 1.23); camera.updateProjectionMatrix();
+     };
+     const observer = new ResizeObserver(resize); observer.observe(parent); resize();
+-    void new GLTFLoader().loadAsync(asset).then(gltf => {
+-      if (disposed) { cleanModel(gltf.scene); return; }
+-      model = gltf.scene;
+-      model.traverse(o => { if (o instanceof T.Mesh) { if (!o.geometry.getAttribute('normal')) o.geometry.computeVertexNormals(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m instanceof T.MeshStandardMaterial) m.envMapIntensity = .85; } });
+-      const box = new T.Box3().setFromObject(model), center = box.getCenter(new T.Vector3());
+-      length = box.getSize(new T.Vector3()).y; model.position.sub(center); pivot.add(model); pivot.rotation.z = -.15; resize(); setState('ready');
+-    }).catch(() => { if (!disposed) setState('error'); });
++    model = createWeaponModel(kind).group;
++    const box = new T.Box3().setFromObject(model);
++    length = box.getSize(new T.Vector3()).y;
++    model.position.sub(box.getCenter(new T.Vector3()));
++    pivot.add(model); pivot.rotation.z = -.15;
++    resize(); setState('ready');
+     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+     let previous = 0;
+     const draw = (now: number) => { frame = requestAnimationFrame(draw); if (!dragging && !reduced && previous) yaw += Math.min(.04, (now - previous) / 1000) * .14; previous = now; pivot.rotation.y = yaw; renderer.render(scene, camera); }; frame = requestAnimationFrame(draw);
+@@ -46,7 +46,7 @@
+     const move = (e: PointerEvent) => { if (pointer !== e.pointerId) return; yaw += (e.clientX - lastX) * .012; lastX = e.clientX; };
+     const up = (e: PointerEvent) => { if (pointer !== e.pointerId) return; if (canvas.hasPointerCapture(pointer)) canvas.releasePointerCapture(pointer); pointer = -1; dragging = false; };
+     canvas.addEventListener('pointerdown', down); canvas.addEventListener('pointermove', move); canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up); canvas.addEventListener('lostpointercapture', up);
+-    return () => { disposed = true; cancelAnimationFrame(frame); observer.disconnect(); if (model) cleanModel(model); env.dispose(); renderer.dispose(); canvas.remove(); };
+-  }, [asset]);
++    return () => { cancelAnimationFrame(frame); observer.disconnect(); if (model) cleanModel(model); env.dispose(); renderer.dispose(); canvas.remove(); };
++  }, [kind]);
+   return <figure className="weapon-preview" ref={host} aria-label={name + ', rotating 3D preview'}>{state !== 'ready' && <span>{state === 'error' ? 'Preview unavailable' : 'Setting it on the rack…'}</span>}<small>Drag to turn</small></figure>;
+ }
+--- a/app/armory.tsx
++++ b/app/armory.tsx
+@@ -13,7 +13,7 @@
+   return <div className="armory">
+     <div className="armory-rack" aria-label="Choose a weapon">{LOADOUTS.map((w, index) => <button key={w.id} aria-pressed={selected === w.id} onClick={() => setSelected(w.id)}><span className="rack-number">0{index + 1}</span><span>{w.name}</span>{equipped === w.id ? <Check size={16} aria-label="Equipped"/> : w.id === 'ravenblade' && !shop.owned ? <LockKeyhole size={15}/> : null}</button>)}</div>
+     <div className={'armory-piece' + (premium ? ' is-premium' : '')}>
+-      <WeaponPreview asset={weapon.asset} name={weapon.name}/>
++      <WeaponPreview kind={weapon.kind} name={weapon.name}/>
+       <div className="armory-caption"><h2>{weapon.name}</h2><p>{weapon.detail}</p></div>
+     </div>
+     <div className="armory-bottom">
+--- a/lib/duel/audio.ts
++++ b/lib/duel/audio.ts
+@@ -14,7 +14,6 @@
+   const volumes = { effects: .8, crowd: .55 };
+   const buffers = new Map<Sound | CrowdSound, AudioBuffer>(), voices = new Set<AudioBufferSourceNode>();
+   const bytes = new Map<Sound | CrowdSound, Promise<ArrayBuffer | null>>();
+-  for (const name of SOUNDS) bytes.set(name, fetch('/assets/' + name + '.mp3').then(r => r.ok ? r.arrayBuffer() : null).catch(() => null));
+   const right = new Vector3(), q = new Quaternion();
+   const smooth = (gain: GainNode | undefined, value: number, time = .1) => { if (gain && context && !disposed) gain.gain.setTargetAtTime(value, context.currentTime, time); };
+   function startLoop(name: 'crowd-murmur' | 'crowd-claps') {
+--- a/vite.game.config.ts
++++ b/vite.game.config.ts
+@@ -1,10 +1,26 @@
+-import { defineConfig } from 'vite';
++import { defineConfig, type Plugin } from 'vite';
+ import react from '@vitejs/plugin-react';
+ import tailwindcss from '@tailwindcss/postcss';
+ import { resolve } from 'node:path';
++// Serve the exact Rapier binary as a static file instead of embedding base64.
++function externalRapierWasm(): Plugin {
++  return {
++    name: 'goodcase-external-rapier-wasm',
++    enforce: 'pre',
++    transform(code, id) {
++      if (!id.replaceAll('\\', '/').endsWith('/@dimforge/rapier3d-compat/rapier.mjs')) return;
++      const embedded = /xA\(Lg\.toByteArray\("([A-Za-z0-9+/=]+)"\)\.buffer\)/;
++      if (!embedded.test(code)) throw new Error('Unexpected Rapier 0.19.0 initialization');
++      const source = code.replace(embedded, 'xA({module_or_path: goodcaseRapierWasm})');
++      return 'import goodcaseRapierWasm from "./rapier_wasm3d_bg.wasm?url";\n' + source;
++    },
++  };
++}
++
+ export default defineConfig({
+-  root: resolve('hosted'), envDir: resolve('.'), base: './', publicDir: resolve('public'),
+-  plugins: [react()], css: { postcss: { plugins: [tailwindcss()] } },
++  root: resolve('hosted'), envDir: resolve('.'), base: './', publicDir: resolve('hosted-public'),
++  plugins: [externalRapierWasm(), react()], css: { postcss: { plugins: [tailwindcss()] } },
+   resolve: { alias: { '@': resolve('.'), 'next/link': resolve('hosted/link.tsx') } },
+-  build: { outDir: resolve('dist-game'), emptyOutDir: true, chunkSizeWarningLimit: 1800 },
++  build: { outDir: resolve('dist-game'), emptyOutDir: true,
++    license: 'THIRD-PARTY-LICENSES.md', chunkSizeWarningLimit: 1800 },
+ });
+--- a/lib/duel/network.ts
++++ b/lib/duel/network.ts
+@@ -212,22 +212,13 @@
+     get active() { return active; },
+     get status() { return info; },
+     async join() {
+-      if (active || disposed) return;
++      if (active || disposed || !hooks.join) return;
+       hadHumanRound = false; soloSince = queueSoloSince = null; lastQueueAt = 0; lastSearchTick = clock();
+       active = true; const attempt = ++generation; choice = { weapon: sim.options.playerWeapon, skin: safeSkin(sim.options.playerWeapon, sim.options.playerSkin) ?? null, arena: sim.options.arena, ready: true, focused: focused() };
+       sim.online = true; sim.practice = false; sim.clearInput(); setInfo({ ...OFFLINE_STATUS, mode: 'connecting', label: 'Connecting to the arena…' });
+       if (sim.phase !== 'ready') hooks.reset({ ledgeDrill: false });
+       try {
+-        let match: Matchmaking<Profile>;
+-        if (hooks.join) match = await hooks.join();
+-        else {
+-          // One lazy browser entry with static internal imports. Importing symbols back
+-          // out of the app entry broke when production chunk exports were renamed.
+-          const { joinOnlineSession } = await import('./online-session');
+-          const joined = await joinOnlineSession(() => active && !disposed && attempt === generation);
+-          if (!joined) return;
+-          match = joined;
+-        }
++        const match = await hooks.join();
+         if (!active || disposed || attempt !== generation) { match.cancel(); return; }
+         matchmaking = match;
+         stopQueue.push(match.on('error', value => { queueSoloSince = null; error = value instanceof Error ? value.message : 'Could not find a duel. Leave and try again.'; }),
+--- a/lib/duel/scene.ts
++++ b/lib/duel/scene.ts
+@@ -167,7 +167,7 @@
+   };
+   network = createDuelNetwork(sim, { reset: options => reset(options, true), hit: presentHit, changed: status,
+     canStartBot: () => !paused && !suspended && !contextLost,
+-    finished: result => { void import('./standings').then(s => s.recordOnlineResult(result)).catch(() => { /* The pending result is retained and retried from the leaderboard. */ }); },
++    finished: () => {},
+   });
+   const pendingSteer = new T.Vector2();
+   function queueSteer(x: number, y: number) { if (tutorial?.step === 'move') return; tutorial?.steer(x, y); pendingSteer.add(new T.Vector2(x, y)).clampLength(0, 180); }
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -15,7 +15,6 @@
+ import { TUTORIAL_STORAGE_KEY } from '@/lib/duel/tutorial';
+ import { TutorialOverlay } from './tutorial-overlay';
+ import { CombatControls } from './combat-controls';
+-import { Leaderboard } from './leaderboard';
+ import { Armory } from './armory';
+ import { useArmoryShop } from './use-armory-shop';
+ import { WeaponTiles } from './weapon-tiles';
+@@ -122,7 +121,7 @@
+           <p className="bout-tally">{status.hits} {status.hits === 1 ? 'hit' : 'hits'} · {status.blocks} {status.blocks === 1 ? 'clash' : 'clashes'} · {status.cuts} {status.cuts === 1 ? 'cut' : 'cuts'}</p>
+           {online && status.network.mode !== 'playing' && <p>{status.network.label}</p>}</div>
+           <div className="dock-actions"><Button className="dock-button dock-primary" disabled={online && (status.network.mode !== 'playing' || status.network.label.startsWith('Rematch requested'))} onClick={status.network.fallbackBot ? findMatch : restart}>{status.network.fallbackBot ? <Users size={16}/> : <RotateCcw size={16} />}{status.network.fallbackBot ? 'Online Match' : online ? status.network.label.startsWith('Rematch requested') ? 'Waiting for rival…' : 'Request rematch' : 'One more round'}</Button>
+-          <div className="dock-links">{online && <button aria-label="Leaderboard" onClick={() => openPanel('leaderboard')}><InkCrown/></button>}<button className="dock-link" onClick={chooseOpponent}>Back to menu</button></div></div>
++          <div className="dock-links"><button className="dock-link" onClick={chooseOpponent}>Back to menu</button></div></div>
+         </div>}
+         {!tutorial && status.phase === 'fighting' && !menuOpen && contextualHint && <output className="game-context">{touch ? contextualHint.replace('Hold E', 'Hold Interact').replace(' · G to let go', '').replace('E — pick up', 'Interact — pick up').replace('E to pick it up', 'Interact to pick it up').replace('G to drop · E to take', 'Drop, then Interact to take').replace('C — chop down at the gripping hand', 'Swing down at the gripping hand').replace('right-drag to change', 'drag the guard pad to change').replace('Q to return', 'Menu to return') : contextualHint}</output>}
+         <footer className="game-footer">
+@@ -139,8 +138,8 @@
+         <DialogContent className={"ink-menu" + (panel === 'armory' ? " armory-menu" : "")} finalFocus={false}>
+           <DialogTitle>{panel === 'leaderboard' && <InkCrown/>}{panel === 'armory' ? 'Choose your steel.' : panel === 'leaderboard' ? 'The leaderboard.' : panel === 'controls' ? 'Know your moves.' : status.phase === 'fighting' ? 'Take a breath.' : 'Make it your fight.'}</DialogTitle>
+           <DialogDescription className="sr-only">{panel === 'armory' ? 'Weapon selection' : panel === 'leaderboard' ? 'Duel standings' : panel === 'controls' ? 'Game controls' : 'Game settings'}</DialogDescription>
+-          <nav className="ink-menu-tabs" aria-label="Menu sections"><button aria-pressed={panel === 'armory'} onClick={() => setPanel('armory')}>Weapons</button><button aria-pressed={panel === 'menu' || panel === null} onClick={() => setPanel('menu')}>Arena & sound</button><button aria-pressed={panel === 'controls'} onClick={() => setPanel('controls')}>Controls</button></nav>
+-          {panel === 'armory' ? <Armory equipped={loadoutId(status.options.playerWeapon, status.options.playerSkin)} initialSelection={armorySelection} locked={online || !!tutorial} shop={shop} equip={equipWeapon}/> : panel === 'leaderboard' ? <Leaderboard/> : panel === 'controls' ? <div className="ink-controls-list">{controls.map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}<p className="touch-help">Touch: use the left stick to move. Hold and drag the right pad to swing. Tap Guard to keep your guard up; drag the pad to aim it. Tap Guard again to attack. Two fingers on the arena look and zoom. Hold Interact to pick up, stand or climb. Drag down to strike low. Drop releases your weapon or lets go of the ledge.</p></div> : <>
++          <nav className="ink-menu-tabs" aria-label="Menu sections"><button aria-pressed={panel === 'armory'} onClick={() => setPanel('armory')}>Weapons</button><button aria-pressed={panel === 'menu' || panel === null} onClick={() => setPanel('menu')}>Arena</button><button aria-pressed={panel === 'controls'} onClick={() => setPanel('controls')}>Controls</button></nav>
++          {panel === 'armory' ? <Armory equipped={loadoutId(status.options.playerWeapon, status.options.playerSkin)} initialSelection={armorySelection} locked={online || !!tutorial} shop={shop} equip={equipWeapon}/> : panel === 'controls' ? <div className="ink-controls-list">{controls.map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}<p className="touch-help">Touch: use the left stick to move. Hold and drag the right pad to swing. Tap Guard to keep your guard up; drag the pad to aim it. Tap Guard again to attack. Two fingers on the arena look and zoom. Hold Interact to pick up, stand or climb. Drag down to strike low. Drop releases your weapon or lets go of the ledge.</p></div> : <>
+             <div className="ink-setup">
+               <span id="arena-label">Arena</span><Select value={status.options.arena} onValueChange={v => { if (v) api.current?.configure({ arena: v as ArenaKind }); }} disabled={!ready || online || !!tutorial}><SelectTrigger aria-labelledby="arena-label"><SelectValue>{ARENAS[status.options.arena].name}</SelectValue></SelectTrigger><SelectContent className="ink-select">{Object.values(ARENAS).map(a => <SelectItem key={a.kind} value={a.kind}>{a.name}</SelectItem>)}</SelectContent></Select>
+               <div className="ink-field"><span>Your weapon</span><button className="ink-loadout-link setup-weapon-link" onClick={() => setPanel('armory')}>{loadoutName(status.options.playerWeapon, status.options.playerSkin)}<ArrowUpRight size={16}/></button></div>
+--- a/vite.game.config.ts
++++ b/vite.game.config.ts
+@@ -22,5 +22,5 @@
+   plugins: [externalRapierWasm(), react()], css: { postcss: { plugins: [tailwindcss()] } },
+   resolve: { alias: { '@': resolve('.'), 'next/link': resolve('hosted/link.tsx') } },
+   build: { outDir: resolve('dist-game'), emptyOutDir: true,
+-    license: 'THIRD-PARTY-LICENSES.md', chunkSizeWarningLimit: 1800 },
++    license: { fileName: 'THIRD-PARTY-LICENSES.md' }, chunkSizeWarningLimit: 1800 },
+ });
