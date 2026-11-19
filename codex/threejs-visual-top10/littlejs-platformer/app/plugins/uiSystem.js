@@ -1,0 +1,2114 @@
+/**
+ * LittleJS User Interface Plugin
+ * - call new UISystemPlugin() to setup the UI system
+ * - Gamepad and keyboard navigation support
+ * - Nested Menus
+ * - Text
+ * - Buttons
+ * - Checkboxes
+ * - Images
+ * - Sliders
+ * - Video
+ * @namespace UISystem
+ */
+
+'use strict';
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** Global UI system plugin object
+ *  @type {UISystemPlugin}
+ *  @memberof UISystem */
+let uiSystem;
+// its hooks are added once: one made again, as in a scene's enter, takes the old one's place and its hooks drive it
+let uiSystemPluginAdded = false;
+
+/** Enable UI system debug drawing
+ *  0=off, 1=normal, 2=show invisible
+ *  @type {number}
+ *  @default
+ *  @memberof UISystem */
+let uiDebug = 0;
+
+// the active object's press was let go of in the frame it came, a tap, so it is clicked on the next with no release
+// then; a click needs a release, which the mouse let go of by a window losing focus is not
+let uiActiveReleased = false;
+
+/** Enable UI system debug drawing
+ *  0=off, 1=normal, 2=show invisible
+ *  @param {number|boolean} debugMode
+ *  @memberof UISystem */
+function uiSetDebug(debugMode)
+{ uiDebug = typeof debugMode === 'boolean' ? (debugMode ? 1 : 0) : debugMode; }
+
+/**
+ * @callback DragAndDropCallback - Callback for drag and drop events
+ * @param {DragEvent} event - The drag event
+ * @return {void}
+ * @memberof UISystem
+ */
+
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * UI System Global Object
+ * @memberof UISystem
+ */
+class UISystemPlugin
+{
+    /** Create the global UI system object
+     *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+     *  @example
+     *  // create the ui plugin object
+     *  new UISystemPlugin;
+     */
+    constructor(context=mainContext)
+    {
+        ASSERT(!uiSystem, 'UI system already initialized');
+        ASSERT(context || headlessMode, 'create the UISystemPlugin after engineInit, in gameInit');
+        uiSystem = this;
+
+        // default settings
+        /** @property {boolean} - Activate when mouse is pressed down instead of clicked */
+        this.activateOnPress = false;
+        /** @property {Color} - Default fill color for UI elements */
+        this.defaultColor = WHITE;
+        /** @property {Color} - Default outline color for UI elements */
+        this.defaultLineColor = BLACK;
+        /** @property {Color} - Default text color for UI elements */
+        this.defaultTextColor = BLACK;
+        /** @property {Color} - Default button color for UI elements */
+        this.defaultButtonColor = hsl(0,0,.7);
+        /** @property {Color} - Default hover color for UI elements */
+        this.defaultHoverColor = hsl(0,0,.9);
+        /** @property {Color} - Default color for disabled UI elements */
+        this.defaultDisabledColor = hsl(0,0,.3);
+        /** @property {Color|undefined} - Uses a gradient fill combined with color
+         *  @type {Color|undefined} */
+        this.defaultGradientColor = undefined;
+        /** @property {number} - Default line width for UI elements */
+        this.defaultLineWidth = 4;
+        /** @property {number} - Default rounded rect corner radius for UI elements */
+        this.defaultCornerRadius = 0;
+        /** @property {number} - Default scale to use for fitting text to object */
+        this.defaultTextFitScale = .8;
+        /** @property {string} - Default font for UI elements */
+        this.defaultFont = fontDefault;
+        /** @property {Sound|undefined} - Default sound when interactive UI element is pressed
+         *  @type {Sound|undefined} */
+        this.defaultSoundPress = undefined;
+        /** @property {Sound|undefined} - Default sound when interactive UI element is released
+         *  @type {Sound|undefined} */
+        this.defaultSoundRelease = undefined;
+        /** @property {Sound|undefined} - Default sound when interactive UI element is clicked
+         *  @type {Sound|undefined} */
+        this.defaultSoundClick = undefined;
+        /** @property {Color} - Color for shadow */
+        this.defaultShadowColor = CLEAR_BLACK;
+        /** @property {number} - Size of shadow blur */
+        this.defaultShadowBlur = 5;
+        /** @property {Vector2} - Offset of shadow blur */
+        this.defaultShadowOffset = vec2(5);
+        /** @property {TileSlice|undefined} - Style to draw UI elements with in place of their rectangle, tinted by
+         *  their color, undefined for rectangles; needs the drawUtilities plugin
+         *  @type {TileSlice|undefined} */
+        this.defaultSlice = undefined;
+        /** @property {TileSlice|undefined} - Style to draw slider handles with, undefined for the slider's own slice
+         *  @type {TileSlice|undefined} */
+        this.defaultHandleSlice = undefined;
+        /** @property {number} - If set ui coords will be renormalized to this canvas height */
+        this.nativeHeight = 0;
+
+        // navigation properties
+        /** @property {UIObject|undefined} - Object currently selected by navigation (gamepad or keyboard)
+         *  @type {UIObject|undefined} */
+        this.navigationObject = undefined;
+        /** @property {Timer} - Cool down timer for navigation inputs */
+        this.navigationTimer = new Timer(undefined, true);
+        /** @property {number} - Time between navigation inputs in seconds */
+        this.navigationDelay = .2;
+        /** @property {number} - Which way keys and gamepads move the selection: 0 horizontal, 1 vertical, 2 both */
+        this.navigationDirection = 1;
+        /** @property {boolean} - True if user last used navigation instead of mouse */
+        this.navigationMode = false;
+
+        // system state
+        /** @property {Array<UIObject>} - List of all UI elements
+         *  @type {Array<UIObject>} */
+        this.uiObjects = [];
+        /** @property {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} - Context to render UI elements to */
+        this.uiContext = context;
+        /** @property {UIObject|undefined} - Object user is currently interacting with
+         *  @type {UIObject|undefined} */
+        this.activeObject = undefined;
+        /** @property {UIObject|undefined} - Top most object user is over
+         *  @type {UIObject|undefined} */
+        this.hoverObject = undefined;
+        /** @property {UIObject|undefined} - Hover object at start of update
+         *  @type {UIObject|undefined} */
+        this.lastHoverObject = undefined;
+        /** @property {UIObject|undefined} - Current confirm menu being shown
+         *  @type {UIObject|undefined} */
+        this.confirmDialog = undefined;
+        /** @private
+         *  @type {UIObject|undefined} */
+        this._keyInputObject = undefined;
+        /** @private
+         *  @type {Array<Array<any>>|undefined} */
+        this._dragListeners = undefined;
+        /** @private */
+        this._onKeyDown = (e) =>
+        {
+            // a field that was hidden, disabled or destroyed since it took focus, or is behind a confirm dialog opened
+            // since, does not take the key, the game gets it, and the next UI update ends the edit, so it ends one
+            // way whichever comes first
+            const o = this._keyInputObject;
+            if (!o || !uiObjectIsUsable(o) || uiObjectIsBehindDialog(o)) return;
+
+            // the field has the key, the game's input never sees it; browser shortcuts still work,
+            // and only the keys a field uses lose their default, so F5, F11, F12 and the like still work
+            e.stopPropagation();
+            const key = e.key || '';
+            if (!e.ctrlKey && !e.metaKey && !e.altKey)
+            if (key.length === 1 ||
+                /^(Backspace|Delete|Tab|Arrow(Up|Down|Left|Right)|Home|End|Enter|Escape)$/.test(key))
+                e.preventDefault(); // no scrolling, find as you type or going back
+            e.type === 'keydown' && o.onKeyDown(e);
+        };
+
+        uiSystemPluginAdded || engineAddPlugin(uiUpdate, uiRender);
+        uiSystemPluginAdded = true;
+
+        // set object position based on anchor target (parent box, or canvas for roots),
+        // self-pivot, and localPos offset
+        function updateTransforms(o)
+        {
+            let targetPos, targetSize;
+            if (o.parent)
+            {
+                targetPos = o.parent.nativePos;
+                targetSize = o.parent.size;
+            }
+            else
+            {
+                // anchor to canvas in native coords (handles nativeHeight if set)
+                targetPos = uiSystem.screenToNative(mainCanvasSize.scale(.5));
+                targetSize = uiSystem.nativeHeight
+                    ? vec2(mainCanvasSize.x * uiSystem.nativeHeight / mainCanvasSize.y,
+                           uiSystem.nativeHeight)
+                    : mainCanvasSize;
+            }
+
+            const a = o.anchor;
+            o.nativePos = targetPos
+                .add(targetSize.multiply(a).scale(.5))   // anchor point on target
+                .subtract(o.size.multiply(a).scale(.5))  // pivot shift on self
+                .add(o.localPos);                        // user offset
+        }
+
+        // setup recursive update and render
+        // update in reverse order to detect mouse enter/leave
+        let updatePass = 0; // marks the objects each update has reached, see updateObject
+        function uiUpdate()
+        {
+            ++updatePass;
+            // a held or focused object that can no longer be used, itself or through a parent, lets go,
+            // and one that was hidden or disabled is still released, a destroyed one stays silent
+            const activeObject = uiSystem.activeObject;
+            if (activeObject && !uiObjectIsUsable(activeObject))
+            {
+                // a text field being edited is active without being held, it was released when the press ended
+                uiSystem.activeObject = undefined;
+                activeObject.destroyed || activeObject === uiSystem.keyInputObject || activeObject.onRelease();
+            }
+            // an edit whose field can no longer be used, or is behind a confirm dialog, ends as if it were finished,
+            // so onChange keeps the text
+            const keyInputObject = uiSystem.keyInputObject;
+            if (keyInputObject && (!uiObjectIsUsable(keyInputObject) || uiObjectIsBehindDialog(keyInputObject)))
+            {
+                if (keyInputObject instanceof UITextInput && !keyInputObject.destroyed)
+                    keyInputObject.stopEditing();
+                else
+                    uiSystem.keyInputObject = undefined;
+            }
+
+            // a click off the field being edited ends the edit before anything updates, so the click goes on to
+            // what it lands on, another field or a button, as in a web form
+            const editing = uiSystem.keyInputObject;
+            const clickedOff = editing instanceof UITextInput && mouseWasPressed(0) && !editing.isMouseOverlapping();
+            clickedOff && editing.stopEditing();
+
+            // reset hover object at start of update
+            uiSystem.lastHoverObject = uiSystem.hoverObject;
+            uiSystem.hoverObject = undefined;
+
+            // a hidden object is not updated, so the one whose hover ends by hiding it, itself or through a parent,
+            // is left here; a disabled one still updates and handles its own leave
+            const lastHoverObject = uiSystem.lastHoverObject;
+            if (lastHoverObject && !lastHoverObject.destroyed && uiObjectIsHidden(lastHoverObject))
+            {
+                uiSystem.lastHoverObject = undefined;
+                lastHoverObject.onLeave();
+            }
+
+            if (mouseWasPressed(0))
+            {
+                // exit navigation mode on mouse press
+                uiSystem.navigationMode = false;
+                uiSystem.navigationObject = undefined;
+            }
+            if (uiSystem.keyInputObject)
+            {
+                // handle text input, navigation keeps its place for when the edit ends, and the hover stays where it
+                // was, so an edit started by navigation does not end with an onLeave that had no onEnter
+                uiSystem.activeObject = uiSystem.keyInputObject;
+                uiSystem.hoverObject = uiSystem.lastHoverObject;
+            }
+
+            // navigation with gamepad/keyboard
+            const navigableObjects = uiSystem.getNavigableObjects();
+            if (!navigableObjects.length)
+                uiSystem.navigationObject = undefined;
+            else if (!uiSystem.keyInputObject)
+            {
+                // unselect object if it is no longer navigable
+                if (!navigableObjects.includes(uiSystem.navigationObject))
+                    uiSystem.navigationObject = undefined;
+
+                if (!isTouchDevice)
+                if (uiSystem.navigationMode && !uiSystem.navigationObject)
+                {
+                    // select first auto focus object
+                    uiSystem.navigationObject = navigableObjects.find(o=>o.navigationAutoSelect);
+                }
+                
+                // navigate with dpad or left stick
+                if (!uiSystem.navigationTimer.active())
+                {
+                    // navigate through list with gamepad or keyboard
+                    const direction = sign(uiSystem.getNavigationDirection());
+                    if (direction)
+                    {
+                        let newNavigationObject;
+                        if (!uiSystem.navigationObject)
+                        {
+                            // use auto select object
+                            newNavigationObject = navigableObjects.find(o=>o.navigationAutoSelect);
+
+                            if (!newNavigationObject)
+                            {
+                                // try first or last object
+                                const newIndex = direction > 0 ? 0 : navigableObjects.length-1;
+                                newNavigationObject = navigableObjects[newIndex];
+                            }
+                        }
+                        else
+                        {
+                            const currentIndex = navigableObjects.indexOf(uiSystem.navigationObject);
+                            const newIndex = mod(currentIndex + direction, navigableObjects.length);
+                            newNavigationObject = navigableObjects[newIndex];
+                        }
+                        
+                        if (uiSystem.navigationObject !== newNavigationObject)
+                        {
+                            uiSystem.navigationMode = true;
+                            uiSystem.hoverObject = undefined;
+                            uiSystem.navigationObject = newNavigationObject;
+                            uiSystem.navigationTimer.set(uiSystem.navigationDelay);
+                            newNavigationObject.soundPress &&
+                                newNavigationObject.soundPress.play();
+                        }
+                    }
+                }
+
+                // activate the navigation object when pressed, the press is used up as a mouse click is
+                if (uiSystem.navigationObject)
+                if (uiSystem.getNavigationWasPressed())
+                {
+                    uiSystem.navigationObject.navigatePressed();
+                    if (isUsingGamepad)
+                        inputClearKey(0, gamepadPrimary+1, false, true, false);
+                    else
+                    {
+                        inputClearKey('Space', 0, false, true, false);
+                        inputClearKey('Enter', 0, false, true, false);
+                    }
+                }
+            }
+
+            // update in reverse order so topmost objects get priority, from the list as it was
+            // since a callback may call destroyObjects, which swaps in a shorter one
+            // a confirm dialog is modal, so it goes first however late it was made, and UI made after it opened
+            // can not take the mouse through it
+            const uiObjects = uiSystem.uiObjects, dialog = uiSystem.confirmDialog;
+            dialog && updateObject(dialog);
+            for (let i = uiObjects.length; i--;)
+            {
+                const o = uiObjects[i];
+                o.parent || o === dialog || updateObject(o);
+            }
+
+            // a click off the field that no UI object took is used up, the game does not see the click that ended it
+            clickedOff && mouseWasPressed(0) && inputClearKey(0, 0);
+
+            // remove destroyed objects
+            uiSystem.uiObjects = uiSystem.uiObjects.filter(o=>!o.destroyed);
+
+            function updateObject(o)
+            {
+                // once a pass, though a callback may move it under a parent not yet reached, or detach it to the
+                // top level, where the loop reaches it again
+                if (o.destroyed || !o.visible || o.uiUpdatePass === updatePass) return;
+                o.uiUpdatePass = updatePass;
+
+                // update in reverse order to detect mouse enter/leave, from a copy since a child may destroy
+                // siblings mid-update (e.g. dialog close) and the ones after it would shift under the loop
+                updateTransforms(o);
+                const children = o.children.slice();
+                for (let i=children.length; i--;)
+                    updateObject(children[i]);
+                if (!o.destroyed)
+                    o.update();
+            }
+        }
+        function uiRender()
+        {
+            const context = uiSystem.uiContext;
+            context.save();
+            try // a widget that throws leaves no transform or clip behind
+            {
+                if (uiSystem.nativeHeight)
+                {
+                    // convert to native height
+                    const s = mainCanvasSize.y / uiSystem.nativeHeight;
+                    context.translate(-s*mainCanvasSize.x/2,0);
+                    context.scale(s,s);
+                    context.translate(mainCanvasSize.x/2/s,0);
+                }
+
+                function renderObject(o)
+                {
+                    // a destroyed object stays in the list until the next update, but is gone now
+                    if (o.destroyed || !o.visible) return;
+
+                    // render object and children
+                    updateTransforms(o);
+                    o.render();
+                    for (const c of o.children)
+                        renderObject(c);
+                }
+                // a confirm dialog is drawn over everything, UI made after it opened too
+                const dialog = uiSystem.confirmDialog;
+                uiSystem.uiObjects.forEach(o=> o.parent || o === dialog || renderObject(o));
+                dialog && renderObject(dialog);
+
+                if (uiDebug > 0)
+                {
+                    // debug render all objects
+                    function renderDebug(o, visible=true)
+                    {
+                        visible &&= !!o.visible;
+                        if (o.destroyed || !visible && uiDebug < 2)
+                            return; // only mode 2 shows the invisible ones
+                        updateTransforms(o);
+                        o.renderDebug(visible);
+                        for (const c of o.children)
+                            renderDebug(c, visible);
+                    }
+                    uiSystem.uiObjects.forEach(o=> o.parent || o === dialog || renderDebug(o));
+                    dialog && renderDebug(dialog);
+                }
+            }
+            finally { context.restore(); }
+        }
+    }
+
+    /** Draw a rectangle to the UI context
+    *  @param {Vector2} pos
+    *  @param {Vector2} size
+    *  @param {Color}   [color]
+    *  @param {number}  [lineWidth]
+    *  @param {Color}   [lineColor]
+    *  @param {number}  [cornerRadius]
+    *  @param {Color}   [gradientColor]
+    *  @param {Color}   [shadowColor]
+    *  @param {number}  [shadowBlur]
+    *  @param {Vector2} [shadowOffset] */
+    drawRect(pos, size, color=WHITE, lineWidth=0, lineColor=BLACK, cornerRadius=0, gradientColor, shadowColor=BLACK, shadowBlur=0, shadowOffset=vec2())
+    {
+        ASSERT(isVector2(pos), 'pos must be a vec2');
+        ASSERT(isVector2(size), 'size must be a vec2');
+        ASSERT(isColor(color), 'color must be a color');
+        ASSERT(isNumber(lineWidth), 'lineWidth must be a number');
+        ASSERT(isColor(lineColor), 'lineColor must be a color');
+        ASSERT(isNumber(cornerRadius), 'cornerRadius must be a number');
+        
+        const context = uiSystem.uiContext;
+        if (gradientColor)
+        {
+            const g = context.createLinearGradient(
+                pos.x, pos.y-size.y/2, pos.x, pos.y+size.y/2);
+            const c = color.toString();
+            g.addColorStop(0, c);
+            g.addColorStop(.5, gradientColor.toString());
+            g.addColorStop(1, c);
+            context.fillStyle = g;
+        }
+        else
+            context.fillStyle = color.toString();
+        uiSetShadow(context, shadowColor, shadowBlur, shadowOffset);
+        context.beginPath();
+        if (cornerRadius && context['roundRect'])
+            context['roundRect'](pos.x-size.x/2, pos.y-size.y/2, size.x, size.y, cornerRadius);
+        else
+            context.rect(pos.x-size.x/2, pos.y-size.y/2, size.x, size.y);
+        context.fill();
+        context.shadowColor = '#0000';
+        if (lineWidth && lineColor.a > 0)
+        {
+            context.strokeStyle = lineColor.toString();
+            context.lineWidth = lineWidth;
+            context.stroke();
+        }
+    }
+
+    /** Draw a TileSlice to the UI context, in place of a rectangle
+    *  @param {TileSlice} slice
+    *  @param {Vector2}   pos
+    *  @param {Vector2}   size
+    *  @param {Color}     [color] */
+    drawSlice(slice, pos, size, color=WHITE)
+    {
+        ASSERT(typeof TileSlice === 'function' && slice instanceof TileSlice, 'slice must be a TileSlice, from the drawUtilities plugin');
+        ASSERT(isVector2(pos), 'pos must be a vec2');
+        ASSERT(isVector2(size), 'size must be a vec2');
+        ASSERT(isColor(color), 'color must be a color');
+        if (color.a > 0) // a clear one, like a UIText's, costs a tint of each piece for nothing
+            slice.drawScreen(pos, size, color, undefined, 0, false, uiSystem.uiContext);
+    }
+
+    /** Draw a line to the UI context
+    *  @param {Vector2} posA
+    *  @param {Vector2} posB
+    *  @param {number}  [lineWidth=uiSystem.defaultLineWidth]
+    *  @param {Color}   [lineColor=uiSystem.defaultLineColor] */
+    drawLine(posA, posB, lineWidth=uiSystem.defaultLineWidth, lineColor=uiSystem.defaultLineColor)
+    {
+        ASSERT(isVector2(posA), 'posA must be a vec2');
+        ASSERT(isVector2(posB), 'posB must be a vec2');
+        ASSERT(isNumber(lineWidth), 'lineWidth must be a number');
+        ASSERT(isColor(lineColor), 'lineColor must be a color');
+
+        const context = uiSystem.uiContext;
+        context.strokeStyle = lineColor.toString();
+        context.lineWidth = lineWidth;
+        context.beginPath();
+        context.lineTo(posA.x, posA.y);
+        context.lineTo(posB.x, posB.y);
+        context.stroke();
+    }
+
+    /** Draw a tile to the UI context
+    *  @param {Vector2}  pos
+    *  @param {Vector2}  size
+    *  @param {TileInfo} tileInfo
+    *  @param {Color}    [color=uiSystem.defaultColor]
+    *  @param {number}   [angle]
+    *  @param {boolean}  [mirror]
+    *  @param {Color}    [shadowColor]
+    *  @param {number}   [shadowBlur]
+    *  @param {Vector2}  [shadowOffset] */
+    drawTile(pos, size, tileInfo, color=uiSystem.defaultColor, angle=0, mirror=false, shadowColor=BLACK, shadowBlur=0, shadowOffset=vec2())
+    {
+        const context = uiSystem.uiContext;
+        uiSetShadow(context, shadowColor, shadowBlur, shadowOffset);
+        drawTile(pos, size, tileInfo, color, angle, mirror, CLEAR_BLACK, false, true, context);
+        context.shadowColor = '#0000';
+    }
+
+    /** Draw text to the UI context
+    *  @param {string}  text
+    *  @param {Vector2} pos
+    *  @param {Vector2} size
+    *  @param {Color}   [color=uiSystem.defaultColor]
+    *  @param {number}  [lineWidth=uiSystem.defaultLineWidth]
+    *  @param {Color}   [lineColor=uiSystem.defaultLineColor]
+    *  @param {'left'|'center'|'right'} [align]
+    *  @param {string}  [font=uiSystem.defaultFont]
+    *  @param {string}  [fontStyle]
+    *  @param {boolean} [applyMaxWidth]
+    *  @param {Vector2} [textShadow]
+    *  @param {Color}   [shadowColor]
+    *  @param {number}  [shadowBlur]
+    *  @param {Vector2} [shadowOffset] */
+    drawText(text, pos, size, color=uiSystem.defaultColor, lineWidth=uiSystem.defaultLineWidth, lineColor=uiSystem.defaultLineColor, align='center', font=uiSystem.defaultFont, fontStyle='', applyMaxWidth=true, textShadow=undefined, shadowColor=BLACK, shadowBlur=0, shadowOffset=vec2())
+    {
+        const context = uiSystem.uiContext;
+        if (textShadow && shadowColor.a > 0)
+        {
+            // icons in the text are shapes of the shadow's color in its shadow
+            textIconsSilhouette = true;
+            try { drawTextScreen(text, pos.add(textShadow), size.y, shadowColor, lineWidth, lineColor, align, font, fontStyle, applyMaxWidth ? size.x : undefined, 0, context); }
+            finally { textIconsSilhouette = false; }
+        }
+        uiSetShadow(context, shadowColor, shadowBlur, shadowOffset);
+        drawTextScreen(text, pos, size.y, color, lineWidth, lineColor, align, font, fontStyle, applyMaxWidth ? size.x : undefined, 0, context);
+        context.shadowColor = '#0000';
+    }
+
+    /** Setup drag and drop event handlers
+    *  Automatically prevents defaults and calls the given functions
+    *  @param {DragAndDropCallback} [onDrop] - when a file is dropped
+    *  @param {DragAndDropCallback} [onDragEnter] - when a file is dragged onto the window
+    *  @param {DragAndDropCallback} [onDragLeave] - when a file is dragged off the window
+    *  @param {DragAndDropCallback} [onDragOver] - continuously when dragging over */
+    setupDragAndDrop(onDrop, onDragEnter, onDragLeave, onDragOver)
+    {
+        // remove any prior listeners so repeated setup calls don't stack
+        if (this._dragListeners)
+            for (const [type, listener] of this._dragListeners)
+                document.removeEventListener(type, listener);
+        this._dragListeners = [];
+        const setCallback = (callback, listenerType, when=()=> true)=>
+        {
+            const listener = (e)=> { e.preventDefault(); when() && callback && callback(e); };
+            document.addEventListener(listenerType, listener);
+            this._dragListeners.push([listenerType, listener]);
+        };
+
+        // every element the drag crosses sends its own enter and leave, and a move between two ends with a leave,
+        // so they are counted, and only the first enter and the last leave are the window's
+        let depth = 0;
+        setCallback(onDrop,      'drop',      ()=> { depth = 0; return true; });
+        setCallback(onDragEnter, 'dragenter', ()=> !depth++);
+        setCallback(onDragLeave, 'dragleave', ()=> !!depth && !--depth);
+        setCallback(onDragOver,  'dragover');
+    }
+
+    /** Convert a screen space position to native UI position
+     *  @param {Vector2} pos
+     *  @return {Vector2} */
+    screenToNative(pos)
+    {
+        if (!uiSystem.nativeHeight)
+            return pos;
+    
+        const s = mainCanvasSize.y / uiSystem.nativeHeight;
+        const sInv = 1/s;
+        const p = pos.copy();
+        p.x += s*mainCanvasSize.x/2;
+        p.x *= sInv;
+        p.y *= sInv;
+        p.x -= sInv*mainCanvasSize.x/2;
+        return p;
+    }
+
+    /** Object to send keyboard input to (typically a UITextInput), which keeps the keys from the game while set.
+     *  The keyboard listeners are only attached while this is set,
+     *  so games that never use text input pay no event-handling cost.
+     *  To end typing in a field, call its stopEditing(), which also fires its onChange and release sound
+     *  @type {UIObject|undefined} */
+    get keyInputObject() { return this._keyInputObject; }
+    set keyInputObject(obj)
+    {
+        const had = !!this._keyInputObject;
+        this._keyInputObject = obj;
+        // listen on the window as the event comes down, before the engine's input on the document can see it
+        if (!had && obj)
+        {
+            addEventListener('keydown', this._onKeyDown, true);
+            addEventListener('keyup', this._onKeyDown, true);
+            inputClearKeyboard(); // keys held when editing starts let go, or they would stay down
+
+            // a press that starts the edit, as with activateOnPress, is let go now, the updates skip its release
+            // while the edit goes on; a click on release already had its release
+            const held = this.activeObject;
+            if (held && mouseIsDown(0))
+            {
+                this.activeObject = undefined;
+                held.onRelease();
+                held.soundRelease && held.soundRelease.play();
+            }
+        }
+        else if (had && !obj)
+        {
+            removeEventListener('keydown', this._onKeyDown, true);
+            removeEventListener('keyup', this._onKeyDown, true);
+        }
+    }
+
+    /** Destroy and remove all objects */
+    destroyObjects()
+    {
+        for (const o of this.uiObjects)
+            o.parent || o.destroy();
+        this.uiObjects = this.uiObjects.filter(o=>!o.destroyed);
+        this.activeObject = undefined;
+        this.hoverObject = undefined;
+        this.lastHoverObject = undefined;
+        this.keyInputObject = undefined;
+        this.confirmDialog = undefined;
+    }
+
+    /** Get all navigable UI objects sorted by navigationIndex
+     *  @return {Array<UIObject>} */
+    getNavigableObjects()
+    {
+        function getNavigableRecursive(o)
+        {
+            if (o.destroyed || !o.visible || o.disabled)
+                return; // skip children if parent is destroyed, invisible or disabled
+
+            if (o.isInteractive() && o.navigationIndex !== undefined)
+                objects.push(o);
+            for (const child of o.children)
+                getNavigableRecursive(child);
+        }
+
+        // get all the valid navigable objects recursively
+        // while the confirm dialog is open only its buttons can be navigated
+        const objects = [];
+        if (uiSystem.confirmDialog)
+            getNavigableRecursive(uiSystem.confirmDialog);
+        else for (const o of uiSystem.uiObjects)
+            o.parent || getNavigableRecursive(o);
+
+        // sort by navigationIndex (lower numbers first), ties keep creation and child order
+        objects.sort((a, b)=> a.navigationIndex - b.navigationIndex);
+        return objects;
+    }
+
+    /** Check if the mouse is over a visible UI object that can be hovered, or anywhere while the
+     *  confirm dialog is open, so a game can leave world clicks on the UI alone, on touch too.
+     *  The UI uses up a click before objects update and gameUpdatePost, so read world clicks there,
+     *  or check this in gameUpdate, which runs first. Positions are from the last UI update.
+     *  @return {boolean} */
+    isMouseOverUI()
+    {
+        function isOverRecursive(o)
+        {
+            if (o.destroyed || !o.visible)
+                return false; // a hidden parent hides its children
+            if (o.canBeHover && o.isMouseOverlapping())
+                return true;
+            return o.children.some(isOverRecursive);
+        }
+
+        // a click while a text field is being edited ends the edit, the UI takes it
+        if (uiSystem.keyInputObject)
+            return true;
+
+        // while the confirm dialog is open it blocks everything else
+        if (uiSystem.confirmDialog)
+            return isOverRecursive(uiSystem.confirmDialog);
+        return uiSystem.uiObjects.some(o=> !o.parent && isOverRecursive(o));
+    }
+
+    /** Get navigation direction from gamepad or keyboard
+     *  @return {number} */
+    getNavigationDirection()
+    {
+        const vertical = uiSystem.navigationDirection === 1;
+        const both = uiSystem.navigationDirection === 2;
+        if (isUsingGamepad)
+        {
+            const stick = gamepadStick(0, gamepadPrimary);
+            const dpad = gamepadDpad(gamepadPrimary);
+            if (both)
+                return -(stick.y || dpad.y) || (stick.x || dpad.x);
+            return vertical ? -(stick.y || dpad.y) : (stick.x || dpad.x);
+        }
+        const up = 'ArrowUp', down = 'ArrowDown', left = 'ArrowLeft', right = 'ArrowRight';
+        if (both)
+        {
+            return keyIsDown(up) || keyIsDown(left) ? -1 :
+                keyIsDown(down) || keyIsDown(right) ? 1 : 0;
+        }
+        const back = vertical ? up : left;
+        const forward = vertical ? down : right;
+        return keyIsDown(back) ? -1 : keyIsDown(forward) ? 1 : 0;
+    }
+
+    /** Get other axis navigation direction from gamepad or keyboard
+     *  @return {number} */
+    getNavigationOtherDirection()
+    {
+        if (uiSystem.navigationDirection === 2)
+            return 0; // other direction disabled
+
+        const vertical = uiSystem.navigationDirection === 1;
+        if (isUsingGamepad)
+        {
+            const stick = gamepadStick(0, gamepadPrimary);
+            const dpad = gamepadDpad(gamepadPrimary);
+            return !vertical ? (stick.y || dpad.y) : (stick.x || dpad.x);
+        }
+        // up is positive, as it is on the gamepad
+        if (!vertical)
+            return keyIsDown('ArrowUp') ? 1 : keyIsDown('ArrowDown') ? -1 : 0;
+        return keyIsDown('ArrowLeft') ? -1 : keyIsDown('ArrowRight') ? 1 : 0;
+    }
+
+    /** Get if navigation button was pressed from gamepad or keyboard
+     *  @return {boolean} */
+    getNavigationWasPressed()
+    {
+        return isUsingGamepad ? gamepadWasPressed(0, gamepadPrimary) :
+            keyWasPressed('Space') || keyWasPressed('Enter');
+    }
+        
+    /** Show a confirmation dialog with Yes/No buttons
+     *  Centers the dialog on the screen with darkened background
+     *  @param {string} [text] - The message to display
+     *  @param {Function} [yesCallback] - Called when Yes is clicked
+     *  @param {Function} [noCallback] - Called when No is clicked, or the exit key or gamepad B closes it
+     *  @param {Vector2} [size] - Size of the confirmation dialog, the title and buttons are placed by it
+     *  @param {string} [exitKey] - Key that closes the menu as No, gamepad B (button 1) does too
+     *  @return {UIObject} The confirmation menu object
+     */
+    showConfirmDialog(text='Are you sure?', yesCallback, noCallback, size=vec2(500,250), exitKey='Escape')
+    {
+        ASSERT(!uiSystem.confirmDialog, 'a confirm dialog is already open, check uiSystem.confirmDialog');
+        if (uiSystem.confirmDialog)
+            return uiSystem.confirmDialog; // in a release build, the one open, as a second would break navigation
+
+        const savedNavigationDirection = uiSystem.navigationDirection;
+        const savedNavigationObject = uiSystem.navigationObject;
+
+        // allow both axes for navigation
+        uiSystem.navigationDirection = 2;
+
+        // confirm menu
+        const confirmMenu = new UIObject(vec2(), size);
+        uiSystem.confirmDialog = confirmMenu;
+        confirmMenu.onRender = ()=>
+        {
+            const backgroundColor = hsl(0,0,0,.7);
+            uiSystem.drawRect(vec2(), vec2(1e9), backgroundColor);
+        }
+        let opened = false;
+        confirmMenu.onUpdate = ()=>
+        {
+            // not the press that opened it, a game may open it on the same back button, so its first update is skipped
+            // (not by frame number, which does not advance while paused, where a confirm is usually shown)
+            if (opened && (keyWasPressed(exitKey) || gamepadWasPressed(1)))
+            {
+                closeMenu(); // the exit key or gamepad B answers no
+                noCallback && noCallback();
+            }
+            opened = true;
+        }
+        confirmMenu.isMouseOverlapping = ()=> true; // always hover
+        
+        // the title and buttons are laid out for the default 500 by 250 and scaled to the dialog's size, so a
+        // small or narrow one still fits them
+        const scaleX = size.x/500, scaleY = size.y/250;
+        const gap = 50, y = size.y/5;
+        const textTitle = new UIText(vec2(0,-y), vec2(size.x-gap, 70*scaleY), text);
+        confirmMenu.addChild(textTitle);
+
+        // yes button
+        const buttonSize = vec2(120*scaleX, 70*scaleY);
+        const buttonYes = new UIButton(vec2(-80*scaleX,y), buttonSize, 'Yes');
+        buttonYes.textHeight = 40*scaleY;
+        buttonYes.navigationIndex = 1;
+        buttonYes.hoverColor = hsl(0,1,.5);
+        buttonYes.onClick = ()=> { closeMenu(); yesCallback && yesCallback(); };
+        confirmMenu.addChild(buttonYes);
+        
+        // no button
+        const buttonNo = new UIButton(vec2(80*scaleX,y), buttonSize, 'No');
+        buttonNo.textHeight = 40*scaleY;
+        buttonNo.navigationIndex = 2;
+        buttonNo.navigationAutoSelect = true;
+        buttonNo.onClick = ()=> { closeMenu(); noCallback && noCallback(); };
+        confirmMenu.addChild(buttonNo);
+
+        // return to normal navigation however the menu goes, by its buttons,
+        // destroyObjects or a call to its destroy, with the item that opened it selected again
+        const destroy = confirmMenu.destroy.bind(confirmMenu);
+        confirmMenu.destroy = ()=>
+        {
+            const closing = uiSystem.confirmDialog === confirmMenu;
+            if (closing)
+            {
+                uiSystem.confirmDialog = undefined;
+                uiSystem.navigationDirection = savedNavigationDirection;
+            }
+            destroy(); // its buttons go, and the one selected clears the selection
+            if (closing && savedNavigationObject && !savedNavigationObject.destroyed)
+                uiSystem.navigationObject = savedNavigationObject;
+        };
+
+        // close menu and clear the input that closed it
+        function closeMenu()
+        {
+            ASSERT(uiSystem.confirmDialog === confirmMenu, 'the confirm dialog closing is not the one open');
+            confirmMenu.destroy();
+            inputClear();
+        }
+        return confirmMenu;
+    }
+}
+
+// whether a UI object can still be used: it and every parent visible, enabled and not destroyed
+function uiObjectIsUsable(o)
+{
+    for (; o; o = o.parent)
+        if (o.destroyed || !o.visible || o.disabled)
+            return false;
+    return true;
+}
+
+// set the canvas shadow for the next draw, when it has a color and a blur or an offset; the caller clears it
+function uiSetShadow(context, shadowColor, shadowBlur, shadowOffset)
+{
+    if (shadowColor.a > 0 && (shadowBlur || shadowOffset.x || shadowOffset.y))
+    {
+        context.shadowColor = shadowColor.toString();
+        context.shadowBlur = shadowBlur;
+        context.shadowOffsetX = shadowOffset.x;
+        context.shadowOffsetY = shadowOffset.y;
+    }
+}
+
+// whether an open confirm dialog shuts a UI object out, it is modal: all but the dialog and what is in it
+function uiObjectIsBehindDialog(o)
+{
+    const dialog = uiSystem.confirmDialog;
+    if (!dialog)
+        return false;
+    for (; o; o = o.parent)
+        if (o === dialog)
+            return false;
+    return true;
+}
+
+// whether a UI object is disabled, itself or through a parent
+function uiObjectIsDisabled(o)
+{
+    for (; o; o = o.parent)
+        if (o.disabled)
+            return true;
+    return false;
+}
+
+// whether a UI object is hidden, itself or through a parent
+function uiObjectIsHidden(o)
+{
+    for (; o; o = o.parent)
+        if (!o.visible)
+            return true;
+    return false;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * UI Object - Base level object for all UI elements
+ * @memberof UISystem */
+class UIObject
+{
+    /** Create a UIObject
+     *  @param {Vector2}  [pos=vec2()]
+     *  @param {Vector2}  [size=vec2()]
+     */
+    constructor(pos=vec2(), size=vec2())
+    {
+        ASSERT(uiSystem, 'create the UISystemPlugin before UI objects');
+        ASSERT(isVector2(pos), 'ui object pos must be a vec2');
+        ASSERT(isVector2(size), 'ui object size must be a vec2');
+
+        /** @property {Vector2} - Position you set: an offset from this object's
+         *  anchor point (the parent box, or the canvas for roots). This is the
+         *  input that controls placement — set this, not nativePos. */
+        this.localPos = pos.copy();
+        /** @property {Vector2} - Resolved position in native UI space, recomputed
+         *  every frame from localPos + anchor (and nativeHeight, if set). This is a
+         *  derived output used for drawing and hit-testing; assigning to it has no
+         *  effect since it is overwritten each frame. Set localPos instead. */
+        this.nativePos = pos.copy();
+        /** @property {Vector2} - Screen space size of the object */
+        this.size = size.copy();
+        /** @property {Color} - Color of the object */
+        this.color = uiSystem.defaultColor.copy();
+        /** @property {Color|undefined} - Color of the object when active, uses hoverColor if undefined
+         *  @type {Color|undefined} */
+        this.activeColor = undefined;
+        /** @property {string|undefined} - Text for this ui object
+         *  @type {string|undefined} */
+        this.text = undefined;
+        /** @property {Color} - Color when disabled */
+        this.disabledColor = uiSystem.defaultDisabledColor.copy();
+        /** @property {boolean} - Is this object disabled? */
+        this.disabled = false;
+        /** @property {Color} - Color for text */
+        this.textColor = uiSystem.defaultTextColor.copy();
+        /** @property {Color} - Color used when hovering over the object */
+        this.hoverColor = uiSystem.defaultHoverColor.copy();
+        /** @property {Color} - Color for line drawing */
+        this.lineColor = uiSystem.defaultLineColor.copy();
+        /** @property {Color|undefined} - Uses a gradient fill combined with color
+         *  @type {Color|undefined} */
+        this.gradientColor = uiSystem.defaultGradientColor ? uiSystem.defaultGradientColor.copy() : undefined;
+        /** @property {number} - Width for line drawing */
+        this.lineWidth = uiSystem.defaultLineWidth;
+        /** @property {number} - Corner radius for rounded rects */
+        this.cornerRadius = uiSystem.defaultCornerRadius;
+        /** @property {TileSlice|undefined} - Style to draw with in place of the rectangle, tinted by the color for its
+         *  state; its art has the frame, so the outline, corner radius and shadow are not drawn
+         *  @type {TileSlice|undefined} */
+        this.slice = uiSystem.defaultSlice;
+        /** @property {string} - Font for this object */
+        this.font = uiSystem.defaultFont;
+        /** @property {string|undefined} - Font style for this object or undefined
+         *  @type {string|undefined} */
+        this.fontStyle = undefined;
+        /** @property {number|undefined} - Override for text width
+         *  @type {number|undefined} */
+        this.textWidth = undefined;
+        /** @property {number|undefined} - Override for text height
+         *  @type {number|undefined} */
+        this.textHeight = undefined;
+        /** @property {number} - Scale text to fit in the object */
+        this.textFitScale = uiSystem.defaultTextFitScale;
+        /** @property {Vector2|undefined} - How much to offset the text shadow or undefined.
+         *  UIText draws it in its shadowColor, which is clear by default, so set that too;
+         *  the blurred shadow then shows as well unless shadowBlur and shadowOffset are zero.
+         *  The other widgets draw it in black
+         *  @type {Vector2|undefined} */
+        this.textShadow = undefined;
+        /** @property {Color} - Color for text line drawing  */
+        this.textLineColor = uiSystem.defaultLineColor.copy();
+        /** @property {number} - Width for text line drawing */
+        this.textLineWidth = 0;
+        /** @property {boolean} - Should this object be drawn */
+        this.visible  = true;
+        this.uiUpdatePass = 0; // the UI update that last reached it, so a pass updates it once
+        /** @property {Array<UIObject>} - A list of this object's children
+         *  @type {Array<UIObject>} */
+        this.children = [];
+        /** @property {UIObject|undefined} - This object's parent, position is in parent space
+         *  @type {UIObject|undefined} */
+        this.parent = undefined;
+        /** @property {number} - Added size to make small buttons easier to touch on mobile devices */
+        this.extraTouchSize = 0;
+        /** @property {Sound|undefined} - Sound when interactive element is pressed
+         *  @type {Sound|undefined} */
+        this.soundPress = uiSystem.defaultSoundPress;
+        /** @property {Sound|undefined} - Sound when interactive element is released
+         *  @type {Sound|undefined} */
+        this.soundRelease = uiSystem.defaultSoundRelease;
+        /** @property {Sound|undefined} - Sound when interactive element is clicked
+         *  @type {Sound|undefined} */
+        this.soundClick = uiSystem.defaultSoundClick;
+        /** @property {boolean} - Is this element interactive */
+        this.interactive = false;
+        /** @property {boolean} - Activate when dragged over with mouse held down */
+        this.dragActivate = false;
+        /** @property {boolean} - True if this can be a hover object */
+        this.canBeHover = true;
+        /** @property {Color} - Color for shadow */
+        this.shadowColor = uiSystem.defaultShadowColor?.copy();
+        /** @property {number} - Size of shadow blur */
+        this.shadowBlur = uiSystem.defaultShadowBlur;
+        /** @property {Vector2} - Offset of shadow blur */
+        this.shadowOffset = uiSystem.defaultShadowOffset?.copy();
+        /** @property {number|undefined} - Optional navigation order index, lower values are selected first
+         *  @type {number|undefined} */
+        this.navigationIndex = undefined;
+        /** @property {boolean} - Should this be auto selected by navigation? Must also have valid navigation index. */
+        this.navigationAutoSelect = false;
+        /** @property {Vector2} - Where on parent (or canvas if no parent) this object is anchored.
+         *  Components in [-1, 1]: (0,0)=center, (-1,-1)=top-left, (1,1)=bottom-right.
+         *  Also acts as self-pivot — e.g. (1,-1) puts your top-right corner at the anchor point. */
+        this.anchor = vec2();
+        /** @property {'left'|'center'|'right'} - Horizontal text alignment: left, center, or right
+         *  @type {'left'|'center'|'right'} */
+        this.align = 'center';
+        /** @property {boolean} - Has this object been destroyed? */
+        this.destroyed = false;
+
+        uiSystem.uiObjects.push(this);
+    }
+
+    /** Add a child UIObject to this object, returns child for chaining
+     *  @param {UIObject} child
+     *  @return {UIObject} The child object added */
+    addChild(child)
+    {
+        ASSERT(!child.parent && !this.children.includes(child), 'child already has a parent, removeChild it first');
+        this.children.push(child);
+        child.parent = this;
+        return child;
+    }
+
+    /** Remove a child UIObject from this object
+     *  @param {UIObject} child */
+    removeChild(child)
+    {
+        ASSERT(child.parent === this && this.children.includes(child), 'removeChild: that object is not a child of this one',
+            child);
+        this.children.splice(this.children.indexOf(child), 1);
+        child.parent = undefined;
+    }
+
+    /** Destroy this object, destroy its children, detach its parent, and mark it for removal */
+    destroy()
+    {
+        if (this.destroyed)
+            return;
+
+        // clear ui-system references that point at this object so events
+        // don't keep firing against a destroyed target (especially the
+        // keydown listener attached for keyInputObject)
+        if (uiSystem.activeObject     === this) uiSystem.activeObject     = undefined;
+        if (uiSystem.hoverObject      === this) uiSystem.hoverObject      = undefined;
+        if (uiSystem.lastHoverObject  === this) uiSystem.lastHoverObject  = undefined;
+        if (uiSystem.navigationObject === this) uiSystem.navigationObject = undefined;
+        if (uiSystem.keyInputObject   === this) uiSystem.keyInputObject   = undefined;
+
+        // disconnect from parent and destroy children
+        this.destroyed = true;
+        this.parent?.removeChild(this);
+        for (const child of this.children)
+        {
+            child.parent = undefined;
+            child.destroy();
+        }
+        // clear references so destroyed children can be GC'd
+        this.children.length = 0;
+    }
+
+    /** Check if the mouse is overlapping this ui object
+     *  @return {boolean} - True if overlapping */
+    isMouseOverlapping()
+    {
+        if (!mouseInWindow) return false;
+
+        const size = !isTouchDevice ? this.size :
+                this.size.add(vec2(this.extraTouchSize || 0));
+        const pos = uiSystem.screenToNative(mousePosScreen);
+        return isOverlapping(this.nativePos, size, pos);
+    }
+
+    /** Update the object, called automatically by plugin once each frame
+     *  @return {void} */
+    update()
+    {
+        // call the custom update callback, which may destroy this object
+        this.onUpdate();
+        if (this.destroyed) return;
+
+        // unset active if disabled, itself or through a parent, and let go of it
+        const disabled = uiObjectIsDisabled(this);
+        if (disabled)
+        {
+            if (this === uiSystem.activeObject)
+            {
+                uiSystem.activeObject = undefined;
+                if (this !== uiSystem.keyInputObject) // a field being edited was released when its press ended
+                {
+                    this.onRelease();
+                    if (this.destroyed) return;
+                }
+            }
+            // a field being edited is ended by the next UI update, through stopEditing, so onChange keeps its text
+        }
+
+        if (uiSystem.keyInputObject)
+            return;
+
+        const wasHover = uiSystem.lastHoverObject === this;
+        let isActive = this.isActiveObject();
+        const mouseDown = mouseIsDown(0);
+        // a press and release in one frame is a press too, as it is for a button that is not drag activated
+        const mousePress = mouseWasPressed(0) || this.dragActivate && mouseDown;
+
+        // a new press while this is still active from the one before means that one was let go of in between, by a
+        // second quick tap or a release missed in a hitch: it is clicked and released first, so neither is lost
+        if (isActive && mouseWasPressed(0))
+        {
+            if (!uiSystem.activateOnPress && this.interactive && !disabled)
+                this.click();
+            if (this.destroyed) return;
+            uiSystem.activeObject = undefined;
+            isActive = false;
+            this.onRelease();
+            this.soundRelease && this.soundRelease.play();
+            if (this.destroyed) return;
+        }
+        if (this.canBeHover)
+        if (!uiSystem.navigationMode) // no mouse hover in navigation mode
+        if (mousePress || isActive || (!mouseDown && !isTouchDevice))
+        if (!uiSystem.hoverObject && this.isMouseOverlapping())
+            uiSystem.hoverObject = this;
+        if (this.isHoverObject())
+        {
+            if (!disabled)
+            {
+                if (mousePress)
+                {
+                    if (this.interactive)
+                    {
+                        // drag activate sees the held mouse as a press every frame, only a new one counts
+                        const newPress = !this.dragActivate || !wasHover || mouseWasPressed(0);
+                        if (newPress)
+                        {
+                            this.onPress();
+                            if (this.destroyed) // the press took it away, and the press is used up
+                                return void inputClearKey(0, 0, false, true, false);
+                            this.soundPress && this.soundPress.play();
+                            if (uiSystem.activeObject && !isActive)
+                                uiSystem.activeObject.onRelease();
+                        }
+                        if (uiSystem.keyInputObject && uiSystem.keyInputObject !== this)
+                        {
+                            // its onPress started an edit elsewhere, the updates skip its release while it goes on
+                            this.onRelease();
+                            this.soundRelease && this.soundRelease.play();
+                        }
+                        else
+                        {
+                            uiSystem.activeObject = this;
+                            uiActiveReleased = !mouseDown;
+                        }
+
+                        if (newPress && uiSystem.activateOnPress)
+                            this.click(!this.soundPress);
+                        if (this.destroyed)
+                            return void inputClearKey(0, 0, false, true, false);
+                    }
+                }
+                // the object that was the active one going into this update: one pressed and let go inside a
+                // frame is clicked on the next, with its release, not on both
+                if (!uiSystem.activateOnPress)
+                if (!mouseDown && isActive && this.isActiveObject() && this.interactive)
+                if (mouseWasReleased(0) || uiActiveReleased)
+                    this.click();
+                if (this.destroyed) return;
+            }
+
+            // clear mouse was pressed state even when disabled
+            mousePress && inputClearKey(0, 0, false, true, false);
+        }
+        if (isActive)
+        if (!mouseDown || (this.dragActivate && !this.isHoverObject()))
+        {
+            this.onRelease();
+            this.soundRelease && this.soundRelease.play();
+            uiSystem.activeObject = undefined;
+        }
+
+        // call enter/leave events
+        if (this.isHoverObject() !== wasHover)
+            this.isHoverObject() ? this.onEnter() : this.onLeave();
+    }
+
+    /** Render the object, called automatically by plugin once each frame */
+    render()
+    {
+        // call the custom render callback
+        this.onRender();
+
+        if (!this.size.x || !this.size.y) return;
+
+        const isNavigationObject = this.isNavigationObject();
+        const disabled = this.interactive ? uiObjectIsDisabled(this) : this.disabled;
+        const lineColor = isNavigationObject ? this.color :
+            this.interactive && this.isActiveObject() && !disabled ?
+            this.color : this.lineColor;
+        const color = isNavigationObject ? this.hoverColor :
+            disabled ? this.disabledColor :
+            this.interactive ?
+                this.isActiveObject() ? this.activeColor || this.hoverColor :
+                this.isHoverObject() ? this.hoverColor :
+                this.color : this.color;
+        const lineWidth = this.lineWidth * (isNavigationObject ? 1.5 : 1);
+        
+        if (this.slice)
+            uiSystem.drawSlice(this.slice, this.nativePos, this.size, color);
+        else
+            uiSystem.drawRect(this.nativePos, this.size, color, lineWidth, lineColor, this.cornerRadius, this.gradientColor, this.shadowColor || CLEAR_BLACK, this.shadowBlur, this.shadowOffset);
+    }
+
+    /** Get the size for text with overrides and scale
+     *  @return {Vector2} */
+    getTextSize()
+    {
+        // text fitted to the size shares its height between its lines, a set textHeight is the height of each line
+        const lines = this.textHeight ? 1 : textLineCount(this.text + '');
+        return vec2(
+            this.textWidth  || this.textFitScale * this.size.x,
+            this.textHeight || this.textFitScale * this.size.y / lines);
+    }
+
+    /** Get where the text is drawn, the center, or the edge of the text area its align puts it against
+     *  @param {Vector2} textSize - From getTextSize
+     *  @return {Vector2} */
+    getTextPos(textSize)
+    {
+        const side = this.align === 'left' ? -1 : this.align === 'right' ? 1 : 0;
+        return this.nativePos.add(vec2(side * textSize.x / 2, 0));
+    }
+
+    /** Called when the navigation button is pressed on this object */
+    navigatePressed() { this.click(); }
+
+    /** Is the mouse hovering over this element
+     *  @return {boolean} */
+    isHoverObject() { return uiSystem.hoverObject === this; }
+
+    /** Is the mouse held onto this element
+     *  @return {boolean} */
+    isActiveObject() { return uiSystem.activeObject === this; }
+
+    /** Is the gamepad or keyboard navigation object
+     *  @return {boolean} */
+    isNavigationObject() { return uiSystem.navigationObject === this; }
+
+    /** Is this object in keyboard input mode
+     *  @return {boolean} */
+    isKeyInputObject() { return uiSystem.keyInputObject === this; }
+
+    /** Can it be interacted with, it and every parent visible and enabled
+     *  @return {boolean} */
+    isInteractive() { return this.interactive && uiObjectIsUsable(this); }
+
+    /** Returns string containing info about this object for debugging
+     *  @return {string} */
+    toString()
+    {
+        let text = 'type = ' + this.constructor.name;
+        if (this.text)
+            text += '\ntext = ' + this.text;
+        if (this.nativePos.x || this.nativePos.y)
+            text += '\nnativePos = ' + this.nativePos;
+        if (this.localPos.x || this.localPos.y)
+            text += '\nlocalPos = ' + this.localPos;
+        if (this.size.x || this.size.y)
+            text += '\nsize = ' + this.size;
+        if (this.color)
+            text += '\ncolor = ' + this.color;
+        return text;
+    }
+
+    /** Called if uiDebug is enabled
+     *  @param {boolean} [visible] */
+    renderDebug(visible=true)
+    {
+        // apply color based on state
+        const color =
+            !visible ? GREEN :
+            this.isHoverObject() ? YELLOW :
+            uiObjectIsDisabled(this) ? PURPLE :
+            this.interactive ? RED : BLUE;
+        uiSystem.drawRect(this.nativePos, this.size, CLEAR_BLACK, 4, color);
+    }
+
+    /** Internal function called when object is clicked
+     *  @param {boolean} [playSound] */
+    click(playSound=true)
+    {
+        this.onClick(); 
+        if (playSound && this.soundClick)
+            this.soundClick.play();
+    }
+
+    /** Called each frame before object updates */
+    onUpdate() {}
+
+    /** Called each frame before object renders */
+    onRender() {}
+
+    /** Called when the mouse enters the object */
+    onEnter() {}
+
+    /** Called when the mouse leaves the object */
+    onLeave() {}
+
+    /** Called when the mouse is pressed while over the object */
+    onPress() {}
+
+    /** Called when a press on it ends, wherever the mouse is let go, or when it is disabled or hidden while held, or
+     *  an edit takes the press; onClick is the one for a press let go over it */
+    onRelease() {}
+
+    /** Called when user clicks on this object */
+    onClick() {}
+
+    /** Called when the state of this object changes */
+    onChange() {}
+
+    /** Called with each key while this is the keyInputObject
+     *  @param {KeyboardEvent} e */
+    onKeyDown(e) {}
+};
+
+///////////////////////////////////////////////////////////////////////////////
+/** 
+ * UIText - A UI object that displays text
+ * @extends UIObject
+ * @memberof UISystem
+ */
+class UIText extends UIObject
+{
+    /** Create a UIText object
+     *  @param {Vector2} [pos]
+     *  @param {Vector2} [size]
+     *  @param {string}  [text]
+     *  @param {'left'|'center'|'right'} [align]
+     *  @param {string}  [font=uiSystem.defaultFont]
+     */
+    constructor(pos, size, text='', align='center', font=uiSystem.defaultFont)
+    {
+        super(pos, size);
+
+        ASSERT(isStringLike(text), 'ui text must be a string');
+        ASSERT(['left','center','right'].includes(align), 'ui text align must be left, center, or right');
+        ASSERT(isStringLike(font), 'ui text font must be a string');
+
+        // set properties
+        /** @property {string} - The text shown */
+        this.text = text;
+        this.align = align;
+        this.font = font;
+
+        // text can not be a hover object by default
+        this.canBeHover = false;
+        
+        // no background by default
+        this.color = CLEAR_BLACK.copy();
+        this.shadowColor = CLEAR_BLACK.copy();
+        /** @type {Color|undefined} */
+        this.gradientColor = undefined;
+        this.lineWidth = 0;
+
+        // use max fit scale by default
+        this.textFitScale = 1;
+    }
+    render()
+    {
+        super.render();
+
+        // render the text
+        const textSize = this.getTextSize();
+        uiSystem.drawText(this.text, this.getTextPos(textSize), textSize, this.textColor, this.textLineWidth, this.textLineColor, this.align, this.font, this.fontStyle, true, this.textShadow, this.shadowColor || CLEAR_BLACK, this.shadowBlur, this.shadowOffset);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/** 
+ * UITextInput - An editable text input field
+ * - A simple text entry field that supports basic editing
+ * - Suitable for short text input like names or numbers
+ * - Reads a physical keyboard: no on-screen keyboard opens on touch devices, and IME composition and paste do not type,
+ *   use an HTML input element for those
+ * @extends UIObject
+ * @memberof UISystem
+ */
+class UITextInput extends UIObject
+{
+    /** Create a UITextInput object
+     *  @param {Vector2} [pos]
+     *  @param {Vector2} [size]
+     *  @param {string}  [text]
+     */
+    constructor(pos, size, text='')
+    {
+        super(pos, size);
+
+        ASSERT(isStringLike(text), 'ui text must be a string');
+
+        /** @property {number} - Max length of input in characters as a reader counts them (0 = no limit) */
+        this.maxLength = 0;
+
+        // set properties, as a string, which typing adds to
+        /** @property {string} - The text typed in it */
+        this.text = text + '';
+        this.interactive = true;
+        this.canBeHover = true;
+    }
+
+    /** Start editing the text, called when it is clicked
+     *  @param {boolean} [playSound] */
+    click(playSound=true)
+    {
+        // an edit in another field ends first, with its onChange, as a click away from it ends it
+        const editing = uiSystem.keyInputObject;
+        if (editing !== this && editing instanceof UITextInput)
+            editing.stopEditing();
+
+        // start editing the text, the gamepad press that started it is used up so it does not stop it too
+        uiSystem.keyInputObject = this;
+        inputClearKey(0, gamepadPrimary+1, false, true, false);
+        this.onClick();
+        playSound && this.soundClick && this.soundClick.play();
+    }
+
+    /** Stop editing the text */
+    stopEditing()
+    {
+        if (!this.isKeyInputObject())
+            return;
+
+        if (this.soundRelease)
+            this.soundRelease.play();
+        uiSystem.activeObject = undefined;
+        uiSystem.keyInputObject = undefined;
+        this.onChange();
+    }
+
+    /** Key down event handler if this object is being edited
+     *  @param {KeyboardEvent} e */
+    onKeyDown(e)
+    {
+        // named keys by key, so numpad Enter works as Enter
+        const code = e.code, key = e.key || ''; // autofill sends a keydown with no key
+        if (e.repeat && (key === 'Enter' || code === 'Space'))
+            return; // a key held when editing began repeats, it should not type or stop editing
+        this.text += ''; // a game may have set a number
+        if (key === 'Backspace')
+            this.text = textGraphemes(this.text).slice(0, -1).join(''); // a whole character, an emoji family too
+        else if (key === 'Enter' || key === 'Escape')
+            this.stopEditing();
+        else if (key.length === 1) // printable characters
+        {
+            // ctrl and cmd shortcuts do not type, but AltGr reports ctrl and alt and types characters like @
+            if ((e.ctrlKey || e.metaKey) && !e.getModifierState?.('AltGraph'))
+                return;
+            if (!this.maxLength || textGraphemes(this.text).length < this.maxLength)
+                this.text += key;
+        }
+    }
+
+    update()
+    {
+        super.update();
+
+        if (!this.isKeyInputObject())
+            return;
+
+        // the gamepad's press stops editing and is used up, a click off the field is handled by the UI update
+        if (gamepadWasPressed(0, gamepadPrimary))
+        {
+            this.stopEditing();
+            inputClearKey(0, gamepadPrimary+1, false, true, false);
+        }
+        else if (mouseWasPressed(0))
+            inputClearKey(0, 0, false, true, false); // a click inside is used up like any click on the UI
+    }
+
+    render()
+    {
+        super.render();
+
+        // draw the text scaled to fit
+        const textSize = this.getTextSize();
+        let text = this.text;
+        if (this.isKeyInputObject()) // add a cursor to end of text
+            text += timeReal%1 < .5 ?  '█' : '░';
+        // typed text shows as typed, a :name: of an icon too
+        textIconsOff = true;
+        try
+        {
+            uiSystem.drawText(text, this.getTextPos(textSize), textSize,
+                this.textColor, this.textLineWidth, this.textLineColor, this.align, this.font, this.fontStyle, true, this.textShadow);
+        }
+        finally { textIconsOff = false; }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/** 
+ * UITile - A UI object that displays a tile image
+ * @extends UIObject
+ * @memberof UISystem
+ */
+class UITile extends UIObject
+{
+    /** Create a UITile object
+     *  @param {Vector2}  pos
+     *  @param {Vector2}  size
+     *  @param {TileInfo} tileInfo
+     *  @param {Color}    [color=WHITE]
+     *  @param {number}   [angle]
+     *  @param {boolean}  [mirror]
+     */
+    constructor(pos, size, tileInfo, color=WHITE, angle=0, mirror=false)
+    {
+        super(pos, size);
+
+        ASSERT(tileInfo instanceof TileInfo, 'ui tile tileInfo must be a TileInfo');
+        ASSERT(isColor(color), 'ui tile color must be a color');
+        ASSERT(isNumber(angle), 'ui tile angle must be a number');
+
+        /** @property {TileInfo} - Tile image to use */
+        this.tileInfo = tileInfo;
+        /** @property {number} - Angle to rotate in radians */
+        this.angle = angle;
+        /** @property {boolean} - Should it be mirrored? */
+        this.mirror = mirror;
+        // set properties
+        this.color = color.copy();
+
+        // no shadow by default
+        this.shadowColor = CLEAR_BLACK.copy();
+    }
+    render()
+    {
+        // call the custom render callback
+        this.onRender();
+
+        uiSystem.drawTile(this.nativePos, this.size, this.tileInfo, this.color, this.angle, this.mirror, this.shadowColor || CLEAR_BLACK, this.shadowBlur, this.shadowOffset);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/** 
+ * UIButton - A UI object that acts as a button
+ * @extends UIObject
+ * @memberof UISystem
+ */
+class UIButton extends UIObject
+{
+    /** Create a UIButton object
+     *  @param {Vector2} [pos]
+     *  @param {Vector2} [size]
+     *  @param {string}  [text]
+     *  @param {Color}   [color=uiSystem.defaultButtonColor]
+     */
+    constructor(pos, size, text='', color=uiSystem.defaultButtonColor)
+    {
+        super(pos, size);
+
+        ASSERT(isStringLike(text), 'ui button must be a string');
+        ASSERT(isColor(color), 'ui button color must be a color');
+
+        /** @property {Vector2} - Text offset for the button */
+        this.textOffset = vec2();
+
+        // set properties
+        /** @property {string} - The label shown on the button */
+        this.text = text;
+        this.color = color.copy();
+        this.interactive = true;
+    }
+    render()
+    {
+        super.render();
+        
+        // draw the text scaled to fit
+        const textSize = this.getTextSize();
+        uiSystem.drawText(this.text, this.getTextPos(textSize).add(this.textOffset), textSize, 
+            this.textColor, this.textLineWidth, this.textLineColor, this.align, this.font, this.fontStyle, true, this.textShadow);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/** 
+ * UICheckbox - A UI object that acts as a checkbox
+ * @extends UIObject
+ * @memberof UISystem
+ */
+class UICheckbox extends UIObject
+{
+    /** Create a UICheckbox object
+     *  @param {Vector2} [pos]
+     *  @param {Vector2} [size]
+     *  @param {boolean} [checked]
+     *  @param {string}  [text]
+     *  @param {Color}   [color=uiSystem.defaultButtonColor]
+     */
+    constructor(pos, size, checked=false, text='', color=uiSystem.defaultButtonColor)
+    {
+        super(pos, size);
+
+        ASSERT(isStringLike(text), 'ui checkbox must be a string');
+        ASSERT(isColor(color), 'ui checkbox color must be a color');
+
+        /** @property {boolean} - Is the checkbox currently checked? */
+        this.checked = checked;
+        // set properties
+        /** @property {string} - The label shown beside the box */
+        this.text = text;
+        this.color = color.copy();
+        this.interactive = true;
+    }
+    /** Toggle the checkbox, called when it is clicked
+     *  @param {boolean} [playSound] */
+    click(playSound=true)
+    {
+        this.checked = !this.checked;
+        super.click(playSound); // the click callback and sound, as every UI object has
+        this.onChange();
+    }
+    render()
+    {
+        super.render();
+        if (this.checked && min(this.size.x, this.size.y) > 0) // a box of no size, as one growing in, has no mark
+        {
+            const p = this.cornerRadius / min(this.size.x, this.size.y) * 2;
+            const length = lerp(1, 2**.5/2, p) / 2;
+            let s = this.size.scale(length);
+            uiSystem.drawLine(this.nativePos.add(s.multiply(vec2(-1))), this.nativePos.add(s.multiply(vec2(1))), this.lineWidth, this.lineColor);
+            uiSystem.drawLine(this.nativePos.add(s.multiply(vec2(-1,1))), this.nativePos.add(s.multiply(vec2(1,-1))), this.lineWidth, this.lineColor);
+        }
+        
+        // draw the text next to the checkbox
+        const textSize = this.getTextSize();
+        const pos = this.nativePos.add(vec2(this.size.x,0));
+        uiSystem.drawText(this.text, pos, textSize, 
+            this.textColor, this.textLineWidth, this.textLineColor, 'left', this.font, this.fontStyle, false, this.textShadow);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/** 
+ * UISlider - A UI object that acts as a slider or scrollbar
+ * @extends UIObject
+ * @memberof UISystem
+ */
+class UISlider extends UIObject
+{
+    /** Create a UISlider object
+     *  @param {Vector2} [pos]
+     *  @param {Vector2} [size]
+     *  @param {number}  [value]
+     *  @param {string}  [text]
+     *  @param {Color}   [color=uiSystem.defaultButtonColor]
+     *  @param {Color}   [handleColor=WHITE]
+     */
+    constructor(pos, size, value=.5, text='', color=uiSystem.defaultButtonColor, handleColor=WHITE)
+    {
+        super(pos, size);
+
+        ASSERT(isNumber(value), 'ui slider value must be a number');
+        ASSERT(isStringLike(text), 'ui slider must be a string');
+        ASSERT(isColor(color), 'ui slider color must be a color');
+        ASSERT(isColor(handleColor), 'ui slider handleColor must be a color');
+
+        /** @property {number} - Current percentage value of this slider 0-1 */
+        this.value = value;
+        /** @property {Color} - Color for the handle part of the slider */
+        this.handleColor = handleColor.copy();
+        /** @property {TileSlice|undefined} - Style to draw the handle, or the fill, with; undefined for the slider's own
+         *  slice, or a rectangle when it has none
+         *  @type {TileSlice|undefined} */
+        this.handleSlice = uiSystem.defaultHandleSlice;
+        /** @property {boolean} - Should it fill up like a progress bar? */
+        this.fillMode = false;
+
+        // set properties
+        /** @property {string} - The label shown on the slider */
+        this.text = text;
+        this.color = color.copy();
+        this.interactive = true;
+    }
+    update()
+    {
+        // held when the frame began, so a release in the same frame as the last move still reads it
+        const wasActive = this.isActiveObject();
+        super.update();
+        if (!this.interactive || this.destroyed)
+            return; // destroyed by its onUpdate, it no longer follows the mouse or calls onChange
+
+        const oldValue = this.value;
+        if (wasActive || this.isActiveObject())
+        {
+            // handle horizontal or vertical slider
+            const isHorizontal = this.size.x > this.size.y;
+            const handleSize = isHorizontal ? this.size.y : this.size.x;
+            const barSize = isHorizontal ? this.size.x : this.size.y;
+            const centerPos = isHorizontal ? this.nativePos.x : this.nativePos.y;
+
+            // check if value changed
+            const handleWidth = barSize - handleSize;
+            const p1 = centerPos - handleWidth/2;
+            const p2 = centerPos + handleWidth/2;
+            const p = uiSystem.screenToNative(mousePosScreen);
+            this.value = isHorizontal ? 
+                percent(p.x, p1, p2) :
+                percent(p.y, p2, p1);
+        }
+        else if (this.isNavigationObject())
+        {
+            // gamepad/keyboard navigation adjustment
+            const direction = uiSystem.getNavigationOtherDirection();
+            if (!uiSystem.navigationTimer.active())
+                this.value = clamp(this.value + direction*.01);
+        }
+        this.value === oldValue || this.onChange();
+    }
+
+    /** Draw the handle, or the fill of a fill mode slider, with the handle slice, the slider's own, or a rectangle
+     *  @param {Vector2} pos
+     *  @param {Vector2} size
+     *  @param {Color}   color */
+    drawHandle(pos, size, color)
+    {
+        const slice = this.handleSlice || this.slice;
+        if (slice)
+            uiSystem.drawSlice(slice, pos, size, color);
+        else
+            uiSystem.drawRect(pos, size, color, this.lineWidth, this.lineColor, this.cornerRadius, this.gradientColor);
+    }
+    render()
+    {
+        super.render();
+
+        // handle horizontal or vertical slider
+        const isHorizontal = this.size.x > this.size.y;
+        const barWidth = isHorizontal ? this.size.x : this.size.y;
+        const handleWidth = isHorizontal ? this.size.y : this.size.x;
+        const color = uiObjectIsDisabled(this) ? this.disabledColor : this.handleColor;
+        if (this.fillMode)
+        {
+            // draw progress bar
+            const minWidth = min(handleWidth, this.cornerRadius * 2);
+            const progressWidth = lerp(minWidth, barWidth, this.value);
+            const p = (progressWidth - barWidth) * (isHorizontal ? .5 : -.5);
+            const pos = this.nativePos.add(isHorizontal ? vec2(p, 0) : vec2(0, p));
+            const drawSize = isHorizontal ? 
+                vec2(progressWidth, this.size.y) : vec2(this.size.x, progressWidth);
+            this.drawHandle(pos, drawSize, color);
+        }
+        else
+        {
+            // draw the slider handle
+            const value = clamp(isHorizontal ? this.value : 1 - this.value);
+            const p = (barWidth - handleWidth) * (value - .5);
+            const pos = this.nativePos.add(isHorizontal ? vec2(p, 0) : vec2(0, p));
+            const drawSize = vec2(handleWidth);
+            this.drawHandle(pos, drawSize, color);
+        }
+
+        // draw the text scaled to fit on the slider
+        const textSize = this.getTextSize();
+        uiSystem.drawText(this.text, this.getTextPos(textSize), textSize, 
+            this.textColor, this.textLineWidth, this.textLineColor, this.align, this.font, this.fontStyle, true, this.textShadow);
+    }
+    navigatePressed()
+    {
+        // toggle value between 0 and 1
+        this.value = this.value ? 0 : 1;
+        this.onChange();
+        this.onRelease();
+        super.navigatePressed();
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * UIVideo - A UI object that plays video
+ * @extends UIObject
+ * @example
+ * // Create a video player UI object, in the middle of the canvas
+ * const video = new UIVideo(vec2(), vec2(320, 240), 'video.mp4', true);
+ * video.play();
+ * @memberof UISystem
+ */
+class UIVideo extends UIObject
+{
+    /** Create a video player UI object
+     *  @param {Vector2} pos
+     *  @param {Vector2} size
+     *  @param {string} src - Video file path or URL
+     *  @param {boolean} [autoplay] - Start playing immediately?
+     *  @param {boolean} [loop] - Loop the video?
+     *  @param {number} [volume] - Volume percent scaled by global volume (0-1)
+     */
+    constructor(pos, size, src, autoplay=false, loop=false, volume=1)
+    {
+        super(pos, size || vec2());
+        
+        ASSERT(isStringLike(src), 'video src must be a string');
+        ASSERT(isNumber(volume), 'video volume must be a number');
+
+        this.color = BLACK.copy(); // default to black background
+        this.cornerRadius = 0; // default to no corner radius
+
+        /** @property {number} - The video volume */
+        this.volume = volume;
+
+        // create video element
+        /** @property {HTMLVideoElement} - The video player */
+        this.video = document.createElement('video');
+        this.video.loop = loop;
+        this.video.volume = audioFinite(clamp(volume * soundVolume), 0);
+        this.video.muted = !soundEnable;
+        /** @private */
+        this._soundEnabled = soundEnable; // the sound setting the mute last followed
+        this.video.style.display = 'none';
+        this.video.playsInline = true; // an iPhone would play it fullscreen and block its muted autoplay
+        this.video.src = src;
+        document.body.appendChild(this.video);
+        uiVideos.add(this);
+        uiVideosListening || document.addEventListener?.('visibilitychange', uiVideosPageChange);
+        uiVideosListening = true;
+        autoplay && this.play();
+    }
+    
+    /** Play or resume the video
+     *  @return {Promise<boolean>} Resolves true once playback starts, false if the browser refused it */
+    async play()
+    {
+        // try to play the video, catch any errors (autoplay may be blocked)
+        try { await this.video.play(); return true; }
+        catch(e) { return false; }
+    }
+    
+    /** Pause the video */
+    pause() { this.video.pause(); }
+    
+    /** Stop and reset the video */
+    stop() { this.video.pause(); this.video.currentTime = 0; }
+    
+    /** Check if video is currently loading
+     *  @return {boolean} */
+    isLoading()
+    { return this.video.readyState < this.video.HAVE_CURRENT_DATA; }
+    
+    /** Check if video is currently paused
+     *  @return {boolean} */
+    isPaused() { return this.video.paused; }
+    
+    /** Check if video is currently playing
+     *  @return {boolean} */
+    isPlaying()
+    { return !this.isPaused() && !this.hasEnded() && !this.isLoading(); }
+    
+    /** Check if video has ended playing
+     *  @return {boolean} */
+    hasEnded() { return this.video.ended; }
+    
+    /** Set volume (0-1)
+     *  @param {number} volume - Volume level (0-1) */
+    setVolume(volume)
+    {
+        this.volume = volume;
+        this.video.volume = audioFinite(clamp(volume * soundVolume), 0);
+    }
+    
+    /** Set playback speed
+     *  @param {number} rate - Playback rate multiplier */
+    setPlaybackRate(rate) { this.video.playbackRate = rate; }
+    
+    /** Get current time in seconds
+     *  @return {number} Current playback time */
+    getCurrentTime() { return this.video.currentTime || 0; }
+    
+    /** Get duration in seconds
+     *  @return {number} Total video duration */
+    getDuration() { return this.video.duration || 0; }
+    
+    /** Get the native video dimensions 
+     *  @return {Vector2} Video dimensions (may be 0,0 if metadata not loaded) */
+    getVideoSize()
+    { return vec2(this.video.videoWidth, this.video.videoHeight); }
+    
+    /** Seek to time in seconds
+     *  @param {number} time - Time in seconds to seek to */
+    setTime(time)
+    {
+        // before the metadata loads there is no duration to clamp to, and the time set is where it starts
+        const duration = this.video.duration;
+        this.video.currentTime = duration ? clamp(time, 0, duration) : max(time, 0);
+    }
+
+    update()
+    {
+        super.update();
+
+        // update volume based on global sound volume, and the mute when sound is turned on or off,
+        // so a game's own mute stays until then
+        this.video.volume = audioFinite(clamp(this.volume * soundVolume), 0);
+        if (this._soundEnabled !== soundEnable)
+            this.video.muted = !(this._soundEnabled = soundEnable);
+    }
+    
+    /** Render video to UI canvas */
+    render()
+    {
+        super.render();
+
+        if (this.isLoading())
+            return;
+        const context = uiSystem.uiContext;
+        const s = this.size;
+        context.save();
+        context.translate(this.nativePos.x, this.nativePos.y);
+        context.drawImage(this.video, -s.x/2, -s.y/2, s.x, s.y);
+        context.restore();
+    }
+    
+    /** Clean up video on destroy */
+    destroy()
+    {
+        if (this.destroyed)
+            return;
+
+        // let go of the media too, a paused video keeps what it has loaded
+        this.video.pause();
+        this.video.removeAttribute?.('src');
+        this.video.load?.();
+        this.video.remove();
+        uiVideos.delete(this);
+        uiVideosPaused.delete(this);
+        super.destroy();
+    }
+}
+
+// the videos there are, and those paused while the page is hidden, which soundPauseWhenHidden pauses as it does the
+// game's sound, and plays again when the page shows
+const uiVideos = /* @__PURE__ */ new Set, uiVideosPaused = /* @__PURE__ */ new Set;
+let uiVideosListening = false;
+function uiVideosPageChange()
+{
+    if (soundPauseWhenHidden && document.hidden)
+    {
+        for (const video of uiVideos)
+            video.isPaused() || (video.pause(), uiVideosPaused.add(video));
+    }
+    else
+    {
+        for (const video of uiVideosPaused)
+            video.play();
+        uiVideosPaused.clear();
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * UILayout - A container that auto-arranges children in a vertical list, horizontal list, or grid
+ * - Set columns to 1 for a vertical list (default)
+ * - Set columns to children.length for a horizontal list
+ * - Set columns to N (1 < N < children.length) for a grid with N columns
+ * - Per-child sizing: each row's height = max child.size.y in that row, each column's width = max child.size.x in that column
+ * - Children are positioned centered in their cell
+ * - Container auto-sizes to fit children plus padding
+ * - Hidden children take no cell, call relayout after showing or hiding one
+ * @extends UIObject
+ * @memberof UISystem
+ */
+class UILayout extends UIObject
+{
+    /** Create a UILayout container that auto-arranges children
+     *  @param {Vector2} [pos]
+     *  @param {number}  [columns]     - Number of columns (1 = vertical list)
+     *  @param {number}  [gap]        - Space between children
+     *  @param {number}  [padding]    - Space between container border and children
+     *  @param {boolean} [transparent] - If true, draws no background, outline, or shadow
+     */
+    constructor(pos, columns=1, gap=10, padding=10, transparent=false)
+    {
+        super(pos);
+
+        ASSERT(isNumber(columns) && columns >= 1, 'ui layout columns must be a number >= 1');
+        ASSERT(isNumber(gap), 'ui layout gap must be a number');
+        ASSERT(isNumber(padding), 'ui layout padding must be a number');
+
+        /** @property {number} - Number of columns in the layout */
+        this.columns = columns;
+        /** @property {number} - Space between children */
+        this.gap = gap;
+        /** @property {number} - Space between container border and children */
+        this.padding = padding;
+
+        if (transparent)
+        {
+            // pure positioning helper - skip background, outline, and shadow,
+            // and leave clicks in its gaps and padding to the game
+            this.color = CLEAR_BLACK.copy();
+            this.gradientColor = undefined;
+            this.lineWidth = 0;
+            this.shadowColor = CLEAR_BLACK.copy();
+            this.canBeHover = false;
+        }
+        this.relayout();
+    }
+
+    /** Add a child UIObject and re-layout
+     *  @param {UIObject} child
+     *  @return {UIObject} The child object added */
+    addChild(child)
+    {
+        super.addChild(child);
+        this.relayout();
+        return child;
+    }
+
+    /** Remove a child UIObject and re-layout
+     *  @param {UIObject} child */
+    removeChild(child)
+    {
+        super.removeChild(child);
+        this.relayout();
+    }
+
+    /** Recompute child positions and container size based on per-child sizes.
+     *  Called automatically by addChild and removeChild. Call manually if you
+     *  mutate a child's size, show or hide one, or change columns, gap, or padding. */
+    relayout()
+    {
+        // a hidden child leaves no gap, like a Continue button hidden when there is nothing to continue
+        const children = this.children.filter(child=> child.visible);
+        const n = children.length;
+        if (!n)
+        {
+            this.size = vec2(this.padding * 2);
+            this.parent instanceof UILayout && this.parent.relayout(); // a layout it is in takes its new size
+            return;
+        }
+
+        // whole columns, at least one, and no empty ones, they would push it off center
+        const cols = clamp(floor(this.columns), 1, n);
+        const rows = ceil(n / cols);
+        const colWidths = new Array(cols).fill(0);
+        const rowHeights = new Array(rows).fill(0);
+
+        // first pass: compute column widths and row heights from child sizes
+        for (let i = 0; i < n; ++i)
+        {
+            const col = i % cols;
+            const row = floor(i / cols);
+            const child = children[i];
+            colWidths[col] = max(colWidths[col], child.size.x);
+            rowHeights[row] = max(rowHeights[row], child.size.y);
+        }
+
+        // total content size (sum of column widths/row heights plus gaps between them)
+        let contentWidth = this.gap * (cols - 1);
+        for (const w of colWidths) contentWidth += w;
+        let contentHeight = this.gap * (rows - 1);
+        for (const h of rowHeights) contentHeight += h;
+
+        // cumulative column/row offsets so positioning is O(n) not O(n^2)
+        const colOffsets = new Array(cols);
+        let xAcc = 0;
+        for (let c = 0; c < cols; ++c)
+        {
+            colOffsets[c] = xAcc;
+            xAcc += colWidths[c];
+        }
+        const rowOffsets = new Array(rows);
+        let yAcc = 0;
+        for (let r = 0; r < rows; ++r)
+        {
+            rowOffsets[r] = yAcc;
+            yAcc += rowHeights[r];
+        }
+
+        // second pass: position each child centered in its cell
+        for (let i = 0; i < n; ++i)
+        {
+            const col = i % cols;
+            const row = floor(i / cols);
+            const x = -contentWidth/2 + colOffsets[col] + this.gap * col + colWidths[col] / 2;
+            const y = -contentHeight/2 + rowOffsets[row] + this.gap * row + rowHeights[row] / 2;
+            children[i].localPos = vec2(x, y);
+        }
+
+        // container size = content + padding on all sides
+        this.size = vec2(contentWidth + this.padding * 2, contentHeight + this.padding * 2);
+        this.parent instanceof UILayout && this.parent.relayout(); // a layout it is in takes its new size
+    }
+}

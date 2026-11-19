@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ambient Occlusion</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #dddddd;
+      }
+      canvas {
+        display: block;
+        touch-action: none;
+      }
+      #hint {
+        position: fixed;
+        left: 50%;
+        bottom: 16px;
+        width: max-content;
+        max-width: calc(100vw - 32px);
+        box-sizing: border-box;
+        margin: 0;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.55);
+        box-shadow: 0 1px 8px rgba(60, 50, 40, 0.08);
+        backdrop-filter: blur(8px);
+        color: #6f685f;
+        font: 12px/1.4 system-ui, sans-serif;
+        text-align: center;
+        transform: translateX(-50%);
+        pointer-events: none;
+      }
+    </style>
+    <script src="../../utils/importmap.js"></script>
+  </head>
+  <body>
+    <p id="hint">Something moves beneath the pins · point to press · drag to orbit</p>
+    <script type="module">
+      import * as THREE from 'three/webgpu'
+      import {
+        Break,
+        Fn,
+        If,
+        Loop,
+        abs,
+        builtinAOContext,
+        clamp,
+        color,
+        context,
+        exp,
+        float,
+        instanceIndex,
+        instancedArray,
+        length,
+        max,
+        min,
+        mix,
+        mrt,
+        normalViewGeometry,
+        packNormalToRGB,
+        pass,
+        positionLocal,
+        renderOutput,
+        sample,
+        sin,
+        smoothstep,
+        uniform,
+        unpackRGBToNormal,
+        varying,
+        vec2,
+        vec3,
+        vec4,
+      } from 'three/tsl'
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+      import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+      import GUI from 'lil-gui'
+      import Stats from 'stats-gl'
+      import { xeGTAO } from './XeGTAONode.js'
+
+      // ---- A bright, plain studio: white clay under a soft key light, so the occlusion reads ----
+
+      const PAPER = new THREE.Color('#dde0e4')
+      const ORANGE = '#ff8a1a'
+
+      const renderer = new THREE.WebGPURenderer({ antialias: true })
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      renderer.setSize(window.innerWidth, window.innerHeight)
+      renderer.toneMapping = THREE.AgXToneMapping
+      renderer.shadowMap.enabled = true
+      renderer.shadowMap.type = THREE.PCFShadowMap
+      document.body.appendChild(renderer.domElement)
+      await renderer.init()
+
+      const stats = new Stats({ trackGPU: renderer.hasFeature('timestamp-query') })
+      document.body.appendChild(stats.dom)
+      stats.init(renderer)
+
+      const scene = new THREE.Scene()
+      scene.background = PAPER
+      scene.fog = new THREE.Fog(PAPER)
+
+      const pmrem = new THREE.PMREMGenerator(renderer)
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+      scene.environmentIntensity = 1.35
+      pmrem.dispose()
+
+      const key = new THREE.DirectionalLight('#fff6ee', 1.1)
+      key.position.set(-3.5, 7, 2.5)
+      key.castShadow = true
+      key.shadow.mapSize.setScalar(2048)
+      key.shadow.camera.left = key.shadow.camera.bottom = -3.8
+      key.shadow.camera.right = key.shadow.camera.top = 3.8
+      key.shadow.camera.near = 2
+      key.shadow.camera.far = 16
+      key.shadow.bias = -0.0004
+      key.shadow.normalBias = 0.01
+      key.shadow.radius = 3
+      scene.add(key)
+
+      const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 80)
+      const controls = new OrbitControls(camera, renderer.domElement)
+      controls.target.set(0.3, -0.25, 0.75)
+      controls.enableDamping = true
+      controls.minDistance = 1.5
+      controls.maxDistance = 26
+      controls.maxPolarAngle = THREE.MathUtils.degToRad(80)
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight
+        camera.updateProjectionMatrix()
+        renderer.setSize(window.innerWidth, window.innerHeight)
+      })
+
+      // ---- A pin-art board: pins pushed up by shapes moving beneath it ----
+
+      const SIDE = 72 // pins per side
+      const COUNT = SIDE * SIDE
+      const PITCH = 0.064
+      const PIN = 0.027 // radius
+      const DOME = 0.55 * PIN // height of the pin's rounded head
+      const TRAVEL = 0.6 // the highest a pin rises
+      const REST = 0.016 // a resting pin's top above the plate
+      const BOARD = SIDE * PITCH
+      const DEPTH = 0.8 // of the board, down to the floor
+
+      // Close in on the pins; a narrow screen backs off to keep the same width in view.
+      const halfWidth = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect)
+      const distance = THREE.MathUtils.clamp(2.25 / Math.tan(halfWidth), 4, 24)
+      camera.position.set(3.4, 6, 6.85).setLength(distance).add(controls.target)
+      scene.fog.near = distance + 4
+      scene.fog.far = distance + 22
+      controls.update()
+
+      const params = { ao: true, view: 'beauty', shape: 'cycle', speed: 1, memory: 0.8, peakColor: true }
+
+      // The pins' lifts: the shapes' top surface beneath each one, falling back over `memory` seconds.
+      const lifts = instancedArray(COUNT, 'float')
+      const pinXZ = (index) => vec2(float(index.mod(SIDE)), float(index.div(SIDE))).add(0.5).mul(PITCH).sub(BOARD / 2)
+
+      // Floor, frame and plate.
+      const floor = new THREE.Mesh(
+        new THREE.CircleGeometry(60, 96).rotateX(-Math.PI / 2).translate(0, -DEPTH, 0),
+        new THREE.MeshStandardNodeMaterial({ color: PAPER, roughness: 0.9 }),
+      )
+      floor.receiveShadow = true
+
+      const roundedRect = (half, radius, path = new THREE.Shape()) => {
+        const h = half - radius
+        path.moveTo(-h, -half)
+        path.lineTo(h, -half)
+        path.absarc(h, -h, radius, -Math.PI / 2, 0)
+        path.lineTo(half, h)
+        path.absarc(h, h, radius, 0, Math.PI / 2)
+        path.lineTo(-h, half)
+        path.absarc(-h, h, radius, Math.PI / 2, Math.PI)
+        path.lineTo(-half, -h)
+        path.absarc(-h, -h, radius, Math.PI, Math.PI * 1.5)
+        return path
+      }
+      const outline = roundedRect(BOARD / 2 + 0.18, 0.14)
+      outline.holes.push(roundedRect(BOARD / 2 + 0.012, 0.02, new THREE.Path()))
+      const RIM = 0.06
+      const frameGeometry = new THREE.ExtrudeGeometry(outline, {
+        depth: DEPTH + RIM - 0.024,
+        bevelEnabled: true,
+        bevelThickness: 0.012,
+        bevelSize: 0.012,
+        bevelSegments: 4,
+        curveSegments: 12,
+      })
+        .rotateX(-Math.PI / 2)
+        .translate(0, -DEPTH + 0.012, 0)
+      const clay = new THREE.MeshStandardNodeMaterial({ color: '#f1f2f4', roughness: 0.55 })
+      const frame = new THREE.Mesh(frameGeometry, clay)
+      const plate = new THREE.Mesh(
+        new THREE.BoxGeometry(BOARD + 0.03, DEPTH, BOARD + 0.03).translate(0, -DEPTH / 2, 0),
+        new THREE.MeshStandardNodeMaterial({ color: '#c9cdd3', roughness: 0.8 }),
+      )
+      frame.castShadow = frame.receiveShadow = plate.receiveShadow = true
+      scene.add(floor, frame, plate)
+
+      // The pins: one lathed pin drawn COUNT times, placed on the grid and lifted in its vertex shader.
+      const profile = [new THREE.Vector2(PIN, -TRAVEL - 0.12)]
+      for (let i = 0; i <= 3; i++) {
+        const angle = (i / 3) * (Math.PI / 2)
+        profile.push(new THREE.Vector2(PIN * Math.cos(angle), DOME * (Math.sin(angle) - 1)))
+      }
+      const pinMaterial = new THREE.MeshStandardNodeMaterial({ roughness: 0.42 })
+      const lift = lifts.element(instanceIndex)
+      const xz = pinXZ(instanceIndex)
+      pinMaterial.positionNode = positionLocal.add(vec3(xz.x, lift.add(REST), xz.y))
+      // white at rest, a hint of orange where they're pushed highest
+      const uPeakColor = uniform(1)
+      const raised = smoothstep(0.04, 0.5, varying(lift))
+      pinMaterial.colorNode = mix(color('#f8f8f7'), color(ORANGE), raised.mul(0.5).mul(uPeakColor))
+      const pins = new THREE.Mesh(new THREE.LatheGeometry(profile, 10), pinMaterial)
+      pins.count = COUNT
+      pins.frustumCulled = false
+      pins.castShadow = pins.receiveShadow = true
+      scene.add(pins)
+
+      // The shapes beneath, as signed distances in board space: three pebbles that merge, a wobbling ring, a tumbling
+      // cube, dunes and the pointer's fingertip. A sunk shape sits below the pins' reach.
+      const PEBBLES = [
+        { radius: 0.6, top: 0.42, phase: 0 },
+        { radius: 0.46, top: 0.36, phase: 2.1 },
+        { radius: 0.34, top: 0.3, phase: 4.2 },
+      ]
+      const SHAPES = ['pebbles', 'ring', 'cube', 'dunes']
+      const SINK = 1.9
+      const FINGER = 0.24 // radius
+      const uPebbles = PEBBLES.map(() => uniform(new THREE.Vector3(0, -SINK, 0)))
+      const uRingCenter = uniform(new THREE.Vector3(0, -SINK, 0))
+      const uRingRotation = uniform(new THREE.Matrix3()) // board → ring space
+      const uCubeCenter = uniform(new THREE.Vector3(0, -SINK, 0))
+      const uCubeRotation = uniform(new THREE.Matrix3())
+      const uFinger = uniform(new THREE.Vector3(0, -SINK, 0))
+      const uDunes = uniform(0)
+      const uTime = uniform(0)
+      const uDelta = uniform(0)
+      const uMemory = uniform(params.memory)
+
+      const sphere = (p, center, radius) => length(p.sub(center)).sub(radius)
+      const smin = (a, b, k) => {
+        const h = max(float(k).sub(abs(a.sub(b))), 0).div(k)
+        return min(a, b).sub(h.mul(h).mul(k / 4))
+      }
+      const field = (p) => {
+        const [a, b, c] = PEBBLES.map(({ radius }, i) => sphere(p, uPebbles[i], radius))
+        const pebbles = smin(smin(a, b, 0.35), c, 0.35)
+        const q = uRingRotation.mul(p.sub(uRingCenter))
+        const ring = length(vec2(length(q.xz).sub(1.05), q.y)).sub(0.26)
+        const r = abs(uCubeRotation.mul(p.sub(uCubeCenter))).sub(0.62 - 0.12)
+        const cube = length(max(r, 0)).add(min(max(r.x, max(r.y, r.z)), 0)).sub(0.12)
+        // a pin rises once any part of a shape is under its footprint
+        return smin(min(pebbles, min(ring, cube)), sphere(p, uFinger, FINGER), 0.25).sub(PIN)
+      }
+
+      // Per pin: march down from above its reach to the shapes' top surface.
+      const updatePins = Fn(() => {
+        const at = pinXZ(instanceIndex)
+        const y = float(TRAVEL + 0.1).toVar()
+        const top = float(0).toVar()
+        Loop(48, () => {
+          const d = field(vec3(at.x, y, at.y))
+          If(d.lessThan(0.002), () => {
+            top.assign(y)
+            Break()
+          })
+          y.subAssign(max(d, 0.003))
+          If(y.lessThan(0), () => {
+            Break()
+          })
+        })
+        const wave = sin(at.x.mul(2.3).add(sin(at.y.mul(1.1).add(uTime.mul(0.4))).mul(1.6)).sub(uTime.mul(0.9)))
+        const dunes = wave.mul(0.5).add(0.5).pow(3).mul(0.34).mul(uDunes)
+        const target = clamp(max(top, dunes), 0, TRAVEL)
+        const current = lifts.element(instanceIndex)
+        // pushed up at once, settling back as the shapes move on
+        const settled = mix(target, current, exp(uDelta.negate().div(max(uMemory, 0.01))))
+        current.assign(max(target, settled))
+      })().compute(COUNT)
+
+      // CPU side: which shape is up, and where each one is.
+      const level = Object.fromEntries(SHAPES.map((name) => [name, 0]))
+      const ease = (x) => x * x * (3 - 2 * x)
+      const euler = new THREE.Euler()
+      const rotation = new THREE.Matrix4()
+      const axis = new THREE.Vector3(1, 1, 0.4).normalize()
+      const finger = { target: new THREE.Vector3(), position: new THREE.Vector3(), over: false, press: 0 }
+      let time = 0
+
+      function animate(delta) {
+        time += delta * params.speed
+        uTime.value = time
+        uDelta.value = delta
+        uMemory.value = params.memory
+        const active = params.shape === 'cycle' ? SHAPES[Math.floor(time / 8) % SHAPES.length] : params.shape
+        for (const name of SHAPES) {
+          level[name] += ((name === active ? 1 : 0) - level[name]) * (1 - Math.exp(-delta * 1.2))
+        }
+        const sink = (name) => (ease(level[name]) - 1) * SINK
+
+        PEBBLES.forEach(({ radius, top, phase }, i) => {
+          const x = 1.25 * Math.sin(time * 0.37 + phase)
+          const z = 1.25 * Math.sin(time * 0.29 + phase * 1.7 + 1)
+          uPebbles[i].value.set(x, top - radius + sink('pebbles'), z)
+        })
+
+        uRingCenter.value.set(0.35 * Math.sin(time * 0.21), -0.1 + sink('ring'), 0.35 * Math.cos(time * 0.17))
+        euler.set(Math.sin(time * 0.53) * 0.55, time * 0.4, Math.cos(time * 0.41) * 0.35)
+        uRingRotation.value.setFromMatrix4(rotation.makeRotationFromEuler(euler)).transpose()
+
+        uCubeCenter.value.set(0, -0.5 + sink('cube'), 0)
+        uCubeRotation.value.setFromMatrix4(rotation.makeRotationAxis(axis, time * 0.45)).transpose()
+
+        uDunes.value = ease(level.dunes)
+
+        finger.press += ((finger.over ? 1 : 0) - finger.press) * (1 - Math.exp(-delta * 8))
+        finger.position.lerp(finger.target, 1 - Math.exp(-delta * 14))
+        uFinger.value.set(finger.position.x, 0.4 - FINGER + (finger.press - 1) * SINK, finger.position.z)
+      }
+
+      // The pointer presses wherever it points on the board.
+      const raycaster = new THREE.Raycaster()
+      const pointer = new THREE.Vector2()
+      const surface = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.2)
+      const hit = new THREE.Vector3()
+      renderer.domElement.addEventListener('pointermove', (event) => {
+        pointer.set((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1)
+        raycaster.setFromCamera(pointer, camera)
+        const onBoard =
+          raycaster.ray.intersectPlane(surface, hit) !== null &&
+          Math.abs(hit.x) < BOARD / 2 &&
+          Math.abs(hit.z) < BOARD / 2
+        if (onBoard && !finger.over && finger.press < 0.05) finger.position.copy(hit)
+        if (onBoard) finger.target.copy(hit)
+        finger.over = onBoard
+      })
+      renderer.domElement.addEventListener('pointerleave', () => (finger.over = false))
+
+      // ---- Ambient occlusion: XeGTAO on an opaque prepass, darkening only the ambient light ----
+
+      const prePass = pass(scene, camera, { samples: 0 })
+      prePass.transparent = false
+      prePass.contextNode = context({ getAO: null })
+      prePass.setMRT(mrt({ output: packNormalToRGB(normalViewGeometry) }))
+      prePass.getTexture('output').type = THREE.UnsignedByteType
+      const prePassNormal = sample((uv) => unpackRGBToNormal(prePass.getTextureNode().sample(uv)))
+
+      const occlusion = xeGTAO(prePass.getTextureNode('depth'), camera, {
+        normalNode: prePassNormal,
+        radius: 0.35,
+        thinOccluder: 0.2,
+      })
+      const aoContext = builtinAOContext(occlusion.getMaterialAONode())
+
+      const scenePass = pass(scene, camera)
+      const pipeline = new THREE.RenderPipeline(renderer)
+      pipeline.outputColorTransform = false
+      function setOutput() {
+        scenePass.contextNode = params.ao ? aoContext : null
+        scenePass.needsUpdate = true
+        // both views tone-map with AgX
+        const ao = vec4(vec3(occlusion.getAONode()), 1)
+        pipeline.outputNode = renderOutput(params.view === 'occlusion' ? ao : scenePass.getTextureNode())
+        pipeline.needsUpdate = true
+      }
+      setOutput()
+
+      const gui = new GUI({ title: 'Ambient occlusion' })
+      if (window.innerWidth < 600) gui.close()
+      gui.add(params, 'ao').name('ambient occlusion').onChange(setOutput)
+      gui.add(params, 'view', ['beauty', 'occlusion']).onChange(setOutput)
+      gui.add(occlusion.radius, 'value', 0.05, 1, 0.01).name('radius (m)')
+      gui.add(occlusion.intensity, 'value', 0, 1, 0.01).name('intensity')
+      gui.add(occlusion.power, 'value', 0.5, 4, 0.05).name('power')
+      gui.add(occlusion, 'resolutionScale', 0.25, 1, 0.05).name('resolution')
+      gui.add(occlusion, 'temporalAccumulation').name('temporal accumulation')
+      const board = gui.addFolder('Pins')
+      board.add(params, 'shape', ['cycle', ...SHAPES])
+      board.add(params, 'speed', 0, 3, 0.01)
+      board.add(params, 'memory', 0, 3, 0.01).name('memory (s)')
+      board.add(params, 'peakColor').name('peak color').onChange((value) => (uPeakColor.value = value ? 1 : 0))
+
+      const timer = new THREE.Timer()
+      timer.connect(document)
+      renderer.setAnimationLoop((now) => {
+        timer.update(now)
+        animate(Math.min(timer.getDelta(), 1 / 20))
+        renderer.compute(updatePins)
+        controls.update()
+        pipeline.render()
+        stats.update()
+        renderer.resolveTimestampsAsync('compute')
+        renderer.resolveTimestampsAsync('render')
+      })
+    </script>
+  </body>
+</html>

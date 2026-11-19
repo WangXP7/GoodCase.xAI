@@ -1,0 +1,22 @@
+
+color:
+ktx.exe –encode uastc –genmipmap –assign_oetf srgb –target_type RGB –uastc_quality 3 –uastc_rdo_l 4 –zcmp 20 .\ktx\Bricks_color.ktx .\Jpg\Bricks_color.jpg
+
+ 
+
+normals:
+
+ktx encode uastc –genmipmap –assign_oetf linear –target_type RGB –normalize –uastc_quality 3 –uastc_rdo_l 0.5 –zcmp 20 .\ktx2\wall_6_n2.ktx .\wall_6_n.jpg
+ktx encode --uastc –genmipmap –assign_oetf linear –target_type RGB –normalize –uastc_quality 3 –uastc_rdo_l 0.5 –zcmp 20 .\ktx2\wall_6_n2.ktx .\wall_6_n.jpg
+ktx encode –genmipmap –assign_oetf linear –target_type RGB –normalize –uastc_quality 3 –uastc_rdo_l 0.5 –zcmp 20 .\ktx2\wall_6_n2.ktx .\wall_6_n.jpg
+ktx encode uastc .\ktx2\wall_6_n2.ktx .\wall_6_n.jpg
+
+pbr:
+
+ktx.exe –encode uastc –genmipmap –assign_oetf linear –target_type RG –uastc_quality 3 –uastc_rdo_l 1 –zcmp 20 .\ktx2\Bricks_pbr.ktx .\Jpg\Bricks_pbr.jpg
+
+ 
+
+AO:
+
+ktx.exe –encode uastc –genmipmap –assign_oetf linear –target_type R –uastc_quality 3 –uastc_rdo_l 4 –zcmp 20 .\ktx2\Bricks_AO.ktx .\Jpg\Bricks_AO.jpg

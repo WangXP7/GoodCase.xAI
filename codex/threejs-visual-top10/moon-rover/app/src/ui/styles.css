@@ -1,0 +1,592 @@
+/* ============================================================
+   REGOLITH — mission-control UI
+   Palette: vacuum black, regolith bone, telemetry cyan, caution amber
+   ============================================================ */
+:root{
+  --void:#04050a;
+  --bone:#d8d2c6;
+  --bone-dim:#8b8578;
+  --cyan:#6fe3f5;
+  --cyan-dim:#2b6a76;
+  --amber:#ffb454;
+  --red:#ff5f56;
+  --green:#8ff08a;
+  --hair:rgba(216,210,198,.13);
+  --hair2:rgba(216,210,198,.26);
+  --panel:rgba(6,8,13,.82);
+  --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,"DejaVu Sans Mono",monospace;
+
+  /* HUD SIZE, from the settings panel. Lives on :root so the instrument
+     panels and the touch furniture scale together. */
+  --hud-k:1;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--void);}
+body{
+  font-family:var(--mono);
+  color:var(--bone);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  user-select:none;
+  touch-action:none;
+}
+canvas#stage{position:fixed;inset:0;width:100%;height:100%;display:block;background:#000;}
+
+.hidden{display:none !important;}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;}
+
+/* ---------------- overlays ---------------- */
+/* reduced motion: nothing here is load-bearing, so just stop it moving */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
+
+.overlay{
+  position:fixed;inset:0;z-index:40;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(120% 100% at 50% 20%, rgba(12,16,26,.88), rgba(2,3,6,.97));
+  backdrop-filter:blur(7px) saturate(.7);
+  animation:fadein .4s ease;
+}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.overlay::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(to bottom,rgba(255,255,255,.022) 0 1px,transparent 1px 3px);
+  mix-blend-mode:overlay;opacity:.45;
+}
+
+/* ---------------- boot ---------------- */
+.boot .boot-inner{text-align:center;max-width:560px;padding:32px;}
+.crest{color:var(--bone);opacity:.75;margin-bottom:20px;animation:spin 44s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.title{
+  font-size:clamp(38px,7vw,72px);letter-spacing:.42em;font-weight:400;
+  margin-right:-.42em;
+}
+.title.big{font-size:clamp(44px,6vw,78px)}
+.subtitle{margin-top:14px;color:var(--bone-dim);letter-spacing:.30em;font-size:12px;text-transform:uppercase}
+.loadbar{margin:34px auto 10px;width:min(420px,70vw);height:2px;background:rgba(216,210,198,.12);overflow:hidden}
+.loadbar i{display:block;height:100%;width:0%;background:var(--cyan);transition:width .25s ease}
+.loadtext{font-size:11px;letter-spacing:.18em;color:var(--bone-dim);text-transform:uppercase;min-height:1.2em}
+.legal{margin-top:38px;font-size:9.5px;letter-spacing:.24em;color:rgba(216,210,198,.30)}
+
+/* ---------------- menu ---------------- */
+.menu-grid{
+  width:min(1120px,92vw);display:grid;grid-template-columns:1.35fr .85fr;gap:56px;align-items:center;
+  padding:28px;
+}
+.brief{margin:26px 0 30px;font-size:13px;line-height:1.85;color:#a8a396;max-width:52ch;}
+.brief b{color:var(--bone);font-weight:400;border-bottom:1px solid var(--cyan-dim)}
+.brief em{color:var(--amber);font-style:normal}
+.menu-actions{display:flex;flex-direction:column;gap:9px;max-width:330px}
+.hint{margin-top:26px;font-size:10px;letter-spacing:.2em;color:rgba(216,210,198,.32)}
+
+.btn{
+  position:relative;padding:13px 20px;letter-spacing:.22em;font-size:12px;
+  border:1px solid var(--hair2);background:rgba(216,210,198,.03);
+  text-align:left;transition:background .16s ease,border-color .16s ease,color .16s ease;overflow:hidden;
+}
+.btn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--cyan);opacity:0;transition:opacity .16s}
+.btn:hover{background:rgba(111,227,245,.08);border-color:var(--cyan-dim)}
+.btn:hover::before{opacity:1}
+.btn.primary{border-color:var(--cyan-dim);background:rgba(111,227,245,.10);color:#dff8fd}
+.btn.primary:hover{background:rgba(111,227,245,.18)}
+.btn.ghost{border-color:var(--hair);color:var(--bone-dim)}
+.btn.ghost:hover{color:var(--bone)}
+.btn.danger:hover{border-color:rgba(255,95,86,.5);background:rgba(255,95,86,.10);color:#ffb8b3}
+
+.dossier{border:1px solid var(--hair);padding:22px;background:rgba(216,210,198,.02)}
+.dossier-row{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px dashed var(--hair);font-size:11px;letter-spacing:.14em}
+.dossier-row:last-child{border-bottom:none}
+.dossier-row span{color:rgba(216,210,198,.42)}
+.dossier-row b{font-weight:400}
+.dossier-row.alert b{color:var(--red);animation:blink 2.4s steps(1) infinite}
+@keyframes blink{0%,60%{opacity:1}61%,100%{opacity:.25}}
+
+/* ---------------- full-screen sheets (codex / pause / help) ----------------
+   Deliberately NOT called .panel: that class is the HUD instrument panel, and
+   it sets position:relative. An overlay carrying both collapsed to a 2 px
+   strip, because .panel is declared later and killed the .overlay inset:0. */
+.panel-head{
+  position:absolute;top:0;left:0;right:0;height:62px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;border-bottom:1px solid var(--hair);background:rgba(4,5,10,.7)
+}
+.panel-head h2{font-size:13px;letter-spacing:.34em;font-weight:400}
+.x{font-size:10px;letter-spacing:.2em;border:1px solid var(--hair2);padding:6px 11px;color:var(--bone-dim)}
+.x:hover{color:var(--bone);border-color:var(--cyan-dim)}
+.panel-foot{position:absolute;bottom:0;left:0;right:0;padding:16px 28px;display:flex;gap:10px;border-top:1px solid var(--hair);background:rgba(4,5,10,.7)}
+.panel-foot .btn{flex:0 0 auto;padding:11px 18px}
+.overlay.sheet{align-items:stretch;justify-content:stretch;padding:0}
+.overlay.sheet > *{width:100%}
+
+.settings{position:absolute;inset:62px 0 82px 0;overflow-y:auto;padding:28px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px;align-content:start}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 15px;border:1px solid var(--hair);background:rgba(216,210,198,.02)}
+.set-row label{font-size:10.5px;letter-spacing:.16em;color:#b4afa3}
+.set-row small{display:block;color:rgba(216,210,198,.34);letter-spacing:.04em;margin-top:4px;font-size:9.5px}
+.seg{display:flex;border:1px solid var(--hair2);flex:0 0 auto}
+.seg button{padding:7px 11px;font-size:9.5px;letter-spacing:.12em;color:var(--bone-dim)}
+.seg button.on{background:rgba(111,227,245,.14);color:#dff8fd}
+input[type=range]{-webkit-appearance:none;width:120px;height:2px;background:var(--hair2);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--cyan);cursor:pointer}
+
+.keys{position:absolute;inset:62px 0 0 0;overflow-y:auto;padding:32px 28px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px 34px;align-content:start}
+.keygroup h4{font-size:9.5px;letter-spacing:.3em;color:var(--cyan);margin-bottom:12px;font-weight:400}
+.keyrow{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--hair);font-size:11px}
+.keyrow span{color:rgba(216,210,198,.55)}
+kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;border:1px solid var(--hair2);border-bottom-width:2px;font-size:10px;letter-spacing:.04em;background:rgba(216,210,198,.05)}
+
+.codex-body{position:absolute;inset:62px 0 0 0;display:grid;grid-template-columns:320px 1fr}
+.codex-list{list-style:none;overflow-y:auto;border-right:1px solid var(--hair);padding:12px 0}
+.codex-list li{padding:12px 24px;font-size:11px;letter-spacing:.08em;cursor:pointer;border-left:2px solid transparent;color:var(--bone-dim)}
+.codex-list li:hover{background:rgba(216,210,198,.04);color:var(--bone)}
+.codex-list li.on{border-left-color:var(--cyan);background:rgba(111,227,245,.06);color:#dff8fd}
+.codex-list li.locked{opacity:.32;cursor:default;font-style:italic}
+.codex-list li small{display:block;font-size:8.5px;letter-spacing:.22em;color:var(--cyan-dim);margin-bottom:3px}
+.codex-read{overflow-y:auto;padding:42px 54px;max-width:78ch;line-height:1.95;font-size:13px;color:#a8a396}
+.codex-read h3{color:var(--bone);font-size:18px;letter-spacing:.16em;font-weight:400;margin-bottom:6px}
+.codex-read .meta{font-size:9.5px;letter-spacing:.24em;color:var(--cyan-dim);margin-bottom:26px}
+.codex-read p{margin-bottom:16px}
+.codex-read p.sig{color:var(--bone-dim);border-left:2px solid var(--hair2);padding-left:16px;font-style:italic}
+
+/* ---------------- mission card ---------------- */
+.card{background:rgba(2,3,6,.88)}
+.card-inner{width:min(660px,88vw);border:1px solid var(--hair2);background:var(--panel);padding:44px 46px;position:relative}
+.card-inner::before{content:"";position:absolute;left:-1px;top:-1px;width:30px;height:30px;border-left:2px solid var(--cyan);border-top:2px solid var(--cyan)}
+.card-inner::after{content:"";position:absolute;right:-1px;bottom:-1px;width:30px;height:30px;border-right:2px solid var(--cyan);border-bottom:2px solid var(--cyan)}
+.card-kicker{font-size:9.5px;letter-spacing:.36em;color:var(--cyan)}
+.card-title{font-size:28px;letter-spacing:.2em;font-weight:400;margin:12px 0 20px}
+.card-text{font-size:13px;line-height:1.9;color:#a8a396;margin-bottom:24px}
+.card-obj{border-top:1px solid var(--hair);padding-top:16px;margin-bottom:28px}
+.card-obj div{font-size:11px;letter-spacing:.08em;padding:5px 0;color:#b4afa3}
+.card-obj div::before{content:"▸ ";color:var(--amber)}
+
+/* ============================================================
+   HUD — a three-row grid. Every panel owns a cell, so nothing can
+   drift underneath anything else at any window size.
+
+   Every dimension below is a multiple of --s, the HUD unit, rather
+   than a hand-picked pixel value. Breakpoints set --u for the device
+   class and the HUD SIZE setting multiplies it through --hud-k, so
+   the whole instrument set scales from one knob and keeps its
+   proportions. Nothing here is sized in vw/vh: a HUD that scales
+   with the window gets tiny on a laptop and huge on a TV, when what
+   actually matters is how far the screen is from your face.
+   ============================================================ */
+.hud{
+  --u:1px;                                  /* device-class default */
+  --s:calc(var(--u) * var(--hud-k));        /* the HUD unit */
+
+  position:fixed;inset:0;z-index:20;pointer-events:none;
+  display:grid;
+  /* minmax(0,1fr) on the middle column: a 1fr track's automatic minimum is
+     min-content, and the 660 px compass canvas would otherwise pin the grid
+     wider than the window and shove the right-hand rail off-screen. */
+  grid-template-columns:
+    minmax(calc(240 * var(--s)), calc(326 * var(--s)))
+    minmax(0, 1fr)
+    minmax(calc(266 * var(--s)), calc(318 * var(--s)));
+  grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:
+    "mission compass clock"
+    "log     .       rail"
+    "bottom  bottom  bottom";
+  padding:calc(16 * var(--s)) calc(20 * var(--s));
+  gap:calc(12 * var(--s)) calc(18 * var(--s));
+  font-size:calc(11 * var(--s));
+  letter-spacing:.08em;
+  color:var(--bone);
+  transition:opacity .25s ease;
+}
+.hud > div{min-width:0}
+.z-mission{grid-area:mission;align-self:start}
+.z-compass{grid-area:compass;align-self:start;justify-self:center;overflow:hidden}
+.z-clock  {grid-area:clock;align-self:start;justify-self:end}
+.z-log    {grid-area:log;align-self:end;min-height:0}
+.z-rail   {grid-area:rail;align-self:start;justify-self:end;display:flex;flex-direction:column;gap:calc(10 * var(--s))}
+.z-bottom {grid-area:bottom;display:flex;gap:calc(12 * var(--s));align-items:flex-end;flex-wrap:nowrap;overflow:hidden}
+
+/* ---------------- shared panel ---------------- */
+.panel{
+  border:1px solid var(--hair);
+  background:linear-gradient(180deg,rgba(10,13,19,.76),rgba(6,8,12,.62));
+  backdrop-filter:blur(4px);
+  padding:calc(9 * var(--s)) calc(12 * var(--s)) calc(10 * var(--s));
+  position:relative;
+}
+.panel::before{content:"";position:absolute;left:-1px;top:-1px;width:calc(16 * var(--s));height:1px;background:var(--cyan);opacity:.5}
+/* Type carries a floor that the scale cannot push through. Shrinking the HUD
+   should take space off the instruments — canvases, bars, padding — not make
+   the labels unreadable, and a panel that sizes to its content just gets a
+   little wider rather than clipping. */
+.panel > header{
+  display:flex;justify-content:space-between;align-items:baseline;gap:calc(12 * var(--s));
+  font-size:max(8px, calc(8.5 * var(--s)));letter-spacing:.26em;color:rgba(216,210,198,.40);
+  padding-bottom:calc(7 * var(--s));margin-bottom:calc(8 * var(--s));border-bottom:1px solid var(--hair);
+  white-space:nowrap;
+}
+.panel > header b{font-weight:400;color:var(--cyan);letter-spacing:.12em;font-variant-numeric:tabular-nums}
+
+/* ---------------- mission ---------------- */
+.mission{border-left:2px solid var(--amber)}
+.mission > header{border-bottom:none;padding-bottom:0;margin-bottom:calc(3 * var(--s));color:var(--amber);letter-spacing:.30em}
+.mission h3{font-size:max(11px, calc(15 * var(--s)));letter-spacing:.20em;font-weight:400;margin:calc(1 * var(--s)) 0 calc(9 * var(--s));color:var(--bone)}
+.mission-obj div{
+  display:grid;grid-template-columns:calc(11 * var(--s)) 1fr;gap:calc(6 * var(--s));align-items:baseline;
+  font-size:max(9.5px, calc(10.5 * var(--s)));letter-spacing:.03em;padding:calc(2.5 * var(--s)) 0;color:rgba(216,210,198,.66);
+}
+.mission-obj .done{color:rgba(143,240,138,.58);text-decoration:line-through}
+.mission-obj i{font-style:normal;color:var(--amber);opacity:.85}
+.mission-obj .done i{color:var(--green);opacity:.7}
+.mission-obj small{display:block;color:rgba(216,210,198,.30);letter-spacing:.01em;font-size:max(8px, calc(9.5 * var(--s)));text-decoration:none}
+
+/* ---------------- clock ---------------- */
+.clock{min-width:calc(206 * var(--s))}
+.clock .row{display:flex;justify-content:space-between;gap:calc(16 * var(--s));padding:calc(2.5 * var(--s)) 0;font-size:max(9px, calc(10 * var(--s)))}
+.clock .row span{color:rgba(216,210,198,.36);letter-spacing:.18em}
+.clock .row b{font-weight:400;color:var(--bone);font-variant-numeric:tabular-nums}
+
+/* ---------------- compass ---------------- */
+.z-compass canvas{display:block;opacity:.95;width:calc(660 * var(--s));max-width:100%;height:auto}
+
+/* ---------------- right rail ---------------- */
+.map canvas{display:block;width:calc(258 * var(--s));height:calc(258 * var(--s))}
+.bay .baygrid{display:grid;grid-template-columns:repeat(6,1fr);gap:calc(5 * var(--s))}
+.slot{aspect-ratio:1;border:1px solid var(--hair2);position:relative;background:rgba(216,210,198,.02)}
+.slot.full{border-color:var(--cyan-dim);background:rgba(111,227,245,.10)}
+.slot.full::after{content:"";position:absolute;inset:28%;background:var(--cyan);opacity:.7;
+  clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
+.slot.rare.full{border-color:rgba(255,180,84,.55);background:rgba(255,180,84,.11)}
+.slot.rare.full::after{background:var(--amber)}
+
+/* ---------------- systems ---------------- */
+.sys{width:calc(214 * var(--s));height:calc(168 * var(--s))}
+.gauge{margin-bottom:calc(9 * var(--s));overflow:hidden}
+.gauge label{font-size:max(8px, calc(8.5 * var(--s)));letter-spacing:.20em;color:rgba(216,210,198,.42)}
+.gauge b{float:right;font-size:max(9.5px, calc(10 * var(--s)));font-weight:400;color:var(--bone);font-variant-numeric:tabular-nums}
+.gauge .bar{clear:both;height:calc(3 * var(--s));margin-top:calc(5 * var(--s));background:rgba(216,210,198,.10);position:relative;overflow:hidden}
+.gauge .bar i{position:absolute;inset:0;transform-origin:left;background:var(--cyan);
+  transition:transform .22s ease,background .3s}
+.gauge.warn .bar i{background:var(--amber)}
+.gauge.crit .bar i{background:var(--red);animation:pulse .9s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.chips{display:flex;flex-wrap:wrap;gap:calc(4 * var(--s));margin-top:1px}
+.chip{font-size:max(8px, calc(8 * var(--s)));letter-spacing:.14em;padding:calc(2.5 * var(--s)) calc(6 * var(--s));border:1px solid var(--hair2);
+  color:rgba(216,210,198,.42);white-space:nowrap}
+.chip.on{border-color:var(--cyan-dim);color:var(--cyan);background:rgba(111,227,245,.08)}
+
+/* ---------------- instrument cluster ---------------- */
+.inst{height:calc(168 * var(--s));display:flex;flex-direction:column;justify-content:flex-end}
+.inst canvas{display:block}
+.drive{padding:calc(9 * var(--s)) calc(10 * var(--s))}
+.drive canvas{width:calc(130 * var(--s));height:calc(130 * var(--s))}
+.wheels canvas{width:calc(236 * var(--s));height:calc(112 * var(--s))}
+.gpr{background:linear-gradient(180deg,rgba(6,12,16,.82),rgba(4,7,11,.66))}
+.gpr canvas{width:calc(290 * var(--s));height:calc(112 * var(--s))}
+
+/* ---------------- log feed ---------------- */
+.logfeed{display:flex;flex-direction:column-reverse;gap:calc(4 * var(--s));max-height:calc(168 * var(--s));overflow:hidden}
+.logline{
+  font-size:max(9.5px, calc(10.5 * var(--s)));letter-spacing:.03em;color:rgba(216,210,198,.80);
+  padding:calc(4 * var(--s)) calc(9 * var(--s));border-left:2px solid var(--cyan-dim);
+  background:linear-gradient(90deg,rgba(8,11,17,.74),rgba(8,11,17,0));
+  animation:slidein .26s ease;
+}
+.logline.warn{border-left-color:var(--amber);color:#e8cfa6}
+.logline.bad{border-left-color:var(--red);color:#e8b0ab}
+.logline.good{border-left-color:var(--green);color:#bfe6bc}
+.logline.fade{opacity:0;transition:opacity .8s ease}
+@keyframes slidein{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+
+/* ---------------- centre overlays ---------------- */
+.hud > .reticle,.hud > .prompt,.hud > .vig,.hud > .discovery{position:absolute}
+.reticle{left:50%;top:50%;width:3px;height:3px;margin:-1.5px;border-radius:50%;
+  background:rgba(216,210,198,.45);box-shadow:0 0 5px rgba(0,0,0,.9)}
+.prompt{left:50%;top:calc(50% + 44px);transform:translateX(-50%);
+  padding:calc(7 * var(--s)) calc(15 * var(--s));border:1px solid var(--hair2);background:rgba(8,11,17,.80);
+  font-size:max(10px, calc(10.5 * var(--s)));letter-spacing:.12em;white-space:nowrap}
+.prompt kbd{margin:0 1px}
+
+.vig{inset:0;pointer-events:none;box-shadow:inset 0 0 220px rgba(0,0,0,0);transition:box-shadow .35s ease}
+.vig.hit{box-shadow:inset 0 0 220px rgba(255,60,50,.5)}
+
+.discovery{left:50%;top:30%;transform:translateX(-50%);text-align:center;
+  animation:disc .5s cubic-bezier(.2,.9,.2,1)}
+@keyframes disc{from{opacity:0;transform:translateX(-50%) scale(.94)}to{opacity:1;transform:translateX(-50%) scale(1)}}
+.d-kicker{font-size:calc(9 * var(--s));letter-spacing:.40em;color:var(--cyan)}
+.d-name{font-size:calc(23 * var(--s));letter-spacing:.24em;margin:calc(9 * var(--s)) 0 calc(5 * var(--s))}
+.d-sub{font-size:calc(10 * var(--s));letter-spacing:.14em;color:rgba(216,210,198,.52);max-width:46ch;margin:0 auto;line-height:1.6}
+
+/* ============================================================
+   RESPONSIVE
+
+   Two different things happen as the screen gets smaller. Down to
+   tablet size the HUD just scales: --u shrinks and the reference
+   instruments stay. Below that, scaling alone stops working — a
+   390 px screen cannot carry mission control at any size that is
+   still legible, and shrinking further only gives you six panels of
+   6 px type. So phones drop instruments instead, and the ones that
+   remain get *bigger* than the tablet's.
+   ============================================================ */
+@media (max-width:1500px){
+  .hud .wheels{display:none}
+}
+@media (max-width:1120px){
+  .hud .gpr{display:none}
+}
+@media (max-width:1180px){
+  .menu-grid{grid-template-columns:1fr;gap:30px}
+  .menu-right{display:none}
+  .hud{--u:.94px}
+  .codex-body{grid-template-columns:250px 1fr}
+  .codex-read{padding:30px 32px}
+}
+
+/* ---- tablets ----
+   The compass strip goes (its 660 px ribbon has nowhere to live once the
+   side rails meet in the middle) and the mission panel is pinned to its
+   content width — left to stretch across a 1fr track it ran to 70 % of an
+   iPad's width for the sake of one line of text. */
+@media (max-width:900px){
+  .hud{
+    --u:.90px;
+    grid-template-columns:minmax(0,1fr) minmax(calc(200 * var(--s)),calc(238 * var(--s)));
+    grid-template-rows:auto minmax(0,1fr) auto;
+    grid-template-areas:
+      "mission clock"
+      "log     rail"
+      "bottom  bottom";
+    padding:calc(13 * var(--s)) calc(15 * var(--s));
+    gap:calc(9 * var(--s)) calc(11 * var(--s));
+  }
+  .hud .z-compass{display:none}
+  .z-mission{justify-self:start;max-width:calc(420 * var(--s))}
+  .map canvas{width:calc(196 * var(--s));height:calc(196 * var(--s))}
+  .logfeed{max-height:calc(120 * var(--s))}
+}
+
+/* ============================================================
+   touch controls — only mounted on coarse-pointer devices
+   ============================================================ */
+#touch{
+  --u:1px;
+  --s:calc(var(--u) * var(--hud-k));
+  /* Sticks are sized for a thumb, not for the layout, so they take the scale
+     knob at half strength — the HUD can halve without the controls following
+     it down to something you cannot hit. The button columns derive their
+     offset from --stick rather than carrying a hand-tuned number, so the two
+     cannot drift into each other when either is retuned. */
+  --stick:calc(126px * (.5 + var(--hud-k) * .5));
+  position:fixed;inset:0;z-index:26;pointer-events:none;
+  padding:0 max(14px,env(safe-area-inset-left)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-right))
+}
+#touch .stick{position:absolute;bottom:max(18px,env(safe-area-inset-bottom));
+  width:var(--stick);height:var(--stick);
+  border:1px solid var(--hair2);border-radius:50%;
+  pointer-events:auto;background:rgba(8,11,17,.34);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;touch-action:none}
+#touch .stick.left{left:max(18px,env(safe-area-inset-left))}
+#touch .stick.right{right:max(18px,env(safe-area-inset-right))}
+#touch .stick span{position:absolute;bottom:-15px;font-size:7.5px;letter-spacing:.24em;
+  color:rgba(216,210,198,.34)}
+#touch .nub{position:absolute;width:calc(var(--stick) * .4);height:calc(var(--stick) * .4);border-radius:50%;
+  background:rgba(111,227,245,.18);border:1px solid var(--cyan-dim)}
+#touch .tbtns,#touch .tbtns2{position:absolute;display:flex;gap:calc(6 * var(--s));pointer-events:auto}
+#touch .tbtns{right:max(18px,env(safe-area-inset-right));bottom:calc(var(--stick) + 26px);flex-direction:column;align-items:flex-end}
+#touch .tbtns2{left:max(18px,env(safe-area-inset-left));bottom:calc(var(--stick) + 26px);flex-direction:column}
+#touch .tb{min-width:calc(60 * var(--s));padding:calc(9 * var(--s)) calc(11 * var(--s));border:1px solid var(--hair2);
+  font-size:calc(9 * var(--s));letter-spacing:.14em;background:rgba(8,11,17,.62);color:var(--bone-dim);
+  backdrop-filter:blur(3px);touch-action:none;text-align:center}
+#touch .tb.on{border-color:var(--cyan);color:var(--cyan);background:rgba(111,227,245,.16)}
+#touch .tb.wide{min-width:calc(78 * var(--s))}
+
+/* ---- anything with thumbsticks ----
+   The sticks and the two button columns own the bottom of the screen, so on a
+   touch device the whole HUD moves above them. An 820 px tablet has room to
+   spare and still puts a thumb over each bottom corner, which is exactly where
+   the instrument cluster used to sit.
+
+   The hook is a body class set by the code that actually mounts the sticks,
+   not a (pointer:coarse) media query. Those two can disagree — and the rule
+   that matters is "are there thumbsticks on screen", which only the mounting
+   code knows. Both blocks are bounded away from the phone breakpoint below so
+   exactly one layout wins per device class. */
+@media (min-width:901px) and (min-height:521px){
+  body.touch-controls .hud{
+    grid-template-rows:auto auto minmax(0,1fr);
+    grid-template-areas:
+      "mission compass clock"
+      "bottom  bottom  rail"
+      ".       log     .";
+    align-content:start;
+  }
+  /* The rail is taller than the instrument cluster, so row 2 takes the rail's
+     height and row 3 starts level with the button columns. Keeping the log in
+     the middle track is what holds it clear of them — spanning the full width
+     put it straight through both. */
+  body.touch-controls .z-log{align-self:start;justify-self:start}
+  body.touch-controls .z-bottom{align-items:flex-start}
+  /* the cluster needs two tracks; boxed into one it crushed SYSTEMS to 87 px */
+  body.touch-controls .map canvas{width:calc(208 * var(--s));height:calc(208 * var(--s))}
+}
+@media (min-width:701px) and (max-width:900px) and (min-height:521px){
+  body.touch-controls .hud{
+    grid-template-rows:auto auto minmax(0,1fr);
+    grid-template-areas:
+      "mission clock"
+      "bottom  rail"
+      "log     log";
+    align-content:start;
+  }
+  body.touch-controls .z-log{align-self:start}
+  body.touch-controls .z-bottom{align-items:flex-start}
+}
+
+/* ---- phones ----
+   The bottom third belongs to the thumbs, so the HUD moves to the top of
+   the screen. More importantly the instrument list is cut to what you
+   steer by — objective, heading, speed, power, map — because that is the
+   only way to get readable type onto a 390 px screen. The sample bay,
+   thermal gauge, status chips, wheel monitor, radar scope and the clock
+   are reference readouts: they are in the pause panel and the codex, and
+   nobody reads them mid-corner. --u goes UP relative to the tablet, not
+   down: fewer instruments, each one bigger. */
+@media (max-width:700px), (max-height:520px){
+  .hud{
+    --u:.95px;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-rows:auto auto minmax(0,1fr);
+    grid-template-areas:
+      "mission rail"
+      "bottom  rail"
+      "log     log";
+    align-content:start;
+    padding:max(calc(7 * var(--s)),env(safe-area-inset-top)) calc(9 * var(--s)) 0 calc(9 * var(--s));
+    gap:calc(6 * var(--s)) calc(8 * var(--s));
+  }
+  .hud .z-compass,.hud .wheels,.hud .gpr,.hud .bay,.hud .z-clock,
+  .hud .chips,.hud #gHeat{display:none}
+  /* Fill a narrow portrait track, but stop there: on a landscape phone the
+     same 1fr track is 730 px wide and one line of objective text has no
+     business spanning it. */
+  .z-mission{justify-self:stretch;max-width:calc(320 * var(--s))}
+  /* the basin name makes the map panel wider than the map; the scale stays */
+  .map > header span{display:none}
+  .map > header{justify-content:flex-end}
+  .z-bottom{grid-area:bottom;align-items:stretch;gap:calc(7 * var(--s))}
+  .z-rail{align-self:start}
+  .z-log{grid-area:log;align-self:start}
+  .panel{padding:calc(6 * var(--s)) calc(8 * var(--s)) calc(7 * var(--s))}
+  .panel > header{font-size:max(8.5px, calc(9.5 * var(--s)));letter-spacing:.16em;padding-bottom:calc(4 * var(--s));margin-bottom:calc(5 * var(--s))}
+  .mission h3{font-size:max(11px, calc(13 * var(--s)));letter-spacing:.13em;margin:0 0 calc(4 * var(--s))}
+  .mission-obj div{font-size:max(9.5px, calc(11 * var(--s)));padding:calc(1.5 * var(--s)) 0;grid-template-columns:calc(10 * var(--s)) 1fr;gap:calc(5 * var(--s))}
+  .mission-obj small{display:none}
+  /* a finished objective has served its purpose; the space has not */
+  .mission-obj .done{display:none}
+  .map canvas{width:calc(104 * var(--s));height:calc(104 * var(--s))}
+  .z-bottom{justify-content:flex-start}
+  /* basis, not grow — with the dial hidden in landscape a growing panel ate
+     the whole row */
+  .sys{width:auto;height:auto;flex:0 1 calc(196 * var(--s));min-width:0}
+  .gauge{margin-bottom:calc(5 * var(--s))}
+  .gauge label{font-size:max(8.5px, calc(9 * var(--s)));letter-spacing:.12em}
+  .gauge b{font-size:max(10px, calc(11 * var(--s)))}
+  .inst{height:auto;justify-content:center}
+  .drive{padding:calc(5 * var(--s)) calc(6 * var(--s));flex:0 0 auto}
+  .drive canvas{width:calc(86 * var(--s));height:calc(86 * var(--s))}
+  .logfeed{max-height:calc(44 * var(--s));gap:calc(3 * var(--s))}
+  .logline{font-size:max(9.5px, calc(10 * var(--s)));padding:calc(3 * var(--s)) calc(6 * var(--s));letter-spacing:0}
+  .prompt{font-size:max(10px, calc(10 * var(--s)));padding:calc(5 * var(--s)) calc(10 * var(--s));top:auto;bottom:46%}
+  .reticle{opacity:.65}
+  .discovery{top:24%}
+  .d-name{font-size:calc(17 * var(--s));letter-spacing:.16em}
+  .d-sub{font-size:calc(9.5 * var(--s));max-width:32ch}
+}
+
+/* short viewport (landscape phone): almost no vertical room, so the dial goes,
+   the map shrinks, and the thumb furniture comes down with it */
+@media (max-height:520px){
+  .hud{--u:.90px;gap:calc(4 * var(--s)) calc(8 * var(--s));padding-top:max(calc(5 * var(--s)),env(safe-area-inset-top))}
+  /* A landscape phone is short, not narrow. Stacking mission over the
+     instrument cluster walks the HUD straight down into the button columns,
+     so lay it out along the top edge instead and leave everything below y≈90
+     to the game and the thumbs. */
+  @media (min-width:601px){
+    .hud{
+      grid-template-columns:auto auto minmax(0,1fr) auto;
+      grid-template-rows:auto minmax(0,1fr);
+      grid-template-areas:
+        "mission bottom .   rail"
+        "log     log    log log";
+    }
+  }
+  .hud .drive{display:none}
+  .map canvas{width:calc(68 * var(--s));height:calc(68 * var(--s))}
+  .mission h3{font-size:max(10.5px, calc(12 * var(--s)));margin:0 0 calc(3 * var(--s))}
+  /* One line here, not two. On a 353 px screen the HUD ran to 45 % of the
+     height and the thumbs began at 70 %, leaving an 88 px slot of actual game
+     between them. Every row above is bought out of that slot. */
+  .logfeed{max-height:calc(24 * var(--s))}
+  /* the auto grid column squeezed this to 92 px and ran INTEGRITY into 100% */
+  .sys{flex:0 0 auto;width:calc(178 * var(--s))}
+  /* size to content: stretched, it took the map's height and left a hole */
+  .z-bottom{align-items:flex-start}
+  /* the thumb furniture comes down with the layout */
+  /* the thumb furniture comes down with the layout */
+  #touch{--stick:calc(84px * (.5 + var(--hud-k) * .5))}
+  #touch .stick{bottom:max(10px,env(safe-area-inset-bottom))}
+  #touch .stick span{display:none}
+
+  /* Five stacked buttons plus a stick is 300 px of a 370 px screen, so on a
+     real landscape phone the columns climbed straight up the left and right
+     edges into the mission panel and the map. The strip between the two
+     sticks is dead space — put the buttons there in a row instead, and the
+     whole top of the screen is free for the HUD again. */
+  #touch .tbtns,#touch .tbtns2{
+    flex-direction:row;align-items:flex-end;
+    bottom:max(12px,env(safe-area-inset-bottom));
+  }
+  #touch .tbtns2{left:calc(var(--stick) + 40px)}
+  #touch .tbtns{right:calc(var(--stick) + 40px)}
+  #touch .tb{min-width:calc(46 * var(--s));padding:calc(7 * var(--s)) calc(6 * var(--s));
+    font-size:max(8px, calc(8.5 * var(--s)))}
+  #touch .tb.wide{min-width:calc(56 * var(--s))}
+
+  /* Nine buttons plus two sticks need ~740 px of width in one row. Narrower
+     than that — an SE in landscape is 667 — and the two groups walk into each
+     other in the middle, so everything gets tighter. */
+  @media (max-width:790px){
+    #touch .tbtns,#touch .tbtns2{gap:calc(4 * var(--s))}
+    #touch .tbtns2{left:calc(var(--stick) + 22px)}
+    #touch .tbtns{right:calc(var(--stick) + 22px)}
+    #touch .tb{min-width:calc(37 * var(--s));padding:calc(6 * var(--s)) calc(3 * var(--s));
+      letter-spacing:.04em}
+    #touch .tb.wide{min-width:calc(43 * var(--s))}
+  }
+
+  /* nothing sits at the sides above the sticks any more, so the log gets the
+     full width back, and the discovery card drops below the top band */
+  .z-log{padding:0}
+  .discovery{top:50%}
+  .d-name{font-size:max(11px, calc(14 * var(--s)))}
+}
+
+/* menus have to be reachable with a thumb too */
+@media (max-width:700px), (max-height:520px){
+  .menu-grid{padding:18px;gap:18px}
+  .menu-actions{max-width:none}
+  .btn{padding:14px 16px;font-size:11px}
+  .brief{font-size:11.5px;line-height:1.7;margin:16px 0 20px}
+  .title{letter-spacing:.30em;margin-right:-.30em}
+  .panel-head{height:52px;padding:0 16px}
+  .settings{inset:52px 0 74px 0;padding:14px;grid-template-columns:1fr;gap:8px}
+  .keys{inset:52px 0 0 0;padding:18px 14px;grid-template-columns:1fr;gap:18px}
+  .codex-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .codex-list{max-height:34vh;border-right:none;border-bottom:1px solid var(--hair)}
+  .codex-read{padding:20px 18px;font-size:12px;line-height:1.8}
+  .card-inner{padding:24px 20px}
+  .card-title{font-size:20px}
+  .card-text{font-size:11.5px;line-height:1.75}
+  .panel-foot{padding:10px 14px;gap:6px;flex-wrap:wrap}
+  .panel-foot .btn{padding:9px 12px;font-size:10px}
+}

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "target": "ES2022",
+    "module": "esnext",
+    "noImplicitAny": false,
+    "strict": false
+  },
+  "include": [
+    "*.js",
+    "../src/*.js"
+  ],
+  "exclude": [
+    "pluginExport.js",
+    "box2d.wasm.js",
+    "../src/engineRelease.js",
+    "../src/engineExport.js"
+  ]
+}

@@ -1,0 +1,5883 @@
+{
+ "cardThickness": 0.016,
+ "layerGap": 0.004,
+ "tiles": {
+  "meadow": {
+   "flaps": 15,
+   "top": 13,
+   "flatTop": 0.04,
+   "oob": 0.007,
+   "tris": 1592,
+   "maxLayer": 7,
+   "height": 1.285,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.55692,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "fence_pad_nw_0",
+     "layer": 5,
+     "delay": 0.917,
+     "foldAngle": -1.57836,
+     "tris": 84
+    },
+    {
+     "name": "fence_pad_nw_1",
+     "layer": 6,
+     "delay": 0.833,
+     "foldAngle": -1.5835,
+     "tris": 84
+    },
+    {
+     "name": "fence_pad_ne_0",
+     "layer": 0,
+     "delay": 0.75,
+     "foldAngle": -1.57012,
+     "tris": 84
+    },
+    {
+     "name": "fence_pad_ne_1",
+     "layer": 1,
+     "delay": 0.667,
+     "foldAngle": -1.57536,
+     "tris": 84
+    },
+    {
+     "name": "fence_pad_se_0",
+     "layer": 2,
+     "delay": 0.583,
+     "foldAngle": -1.55397,
+     "tris": 84
+    },
+    {
+     "name": "fence_pad_se_1",
+     "layer": 3,
+     "delay": 0.5,
+     "foldAngle": -1.5721,
+     "tris": 84
+    },
+    {
+     "name": "fence_pad_sw_0",
+     "layer": 5,
+     "delay": 0.417,
+     "foldAngle": -1.58944,
+     "tris": 84
+    },
+    {
+     "name": "hay",
+     "layer": 5,
+     "delay": 0.333,
+     "foldAngle": -1.56876,
+     "tris": 92
+    },
+    {
+     "name": "bush_g10",
+     "layer": 6,
+     "delay": 0.25,
+     "foldAngle": -1.54989,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 7,
+     "delay": 0.167,
+     "foldAngle": -1.54809,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g20",
+     "layer": 5,
+     "delay": 0.083,
+     "foldAngle": -1.55613,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 7,
+     "delay": 0.0,
+     "foldAngle": -1.55701,
+     "tris": 76
+    }
+   ]
+  },
+  "meadow_flowers": {
+   "flaps": 10,
+   "top": 10,
+   "flatTop": 0.024,
+   "oob": 0.0,
+   "tris": 1032,
+   "maxLayer": 3,
+   "height": 0.5,
+   "hinges": [
+    {
+     "name": "beehive",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.59842,
+     "tris": 90
+    },
+    {
+     "name": "bush_g10",
+     "layer": 1,
+     "delay": 0.889,
+     "foldAngle": -1.57852,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 2,
+     "delay": 0.778,
+     "foldAngle": -1.57576,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g12",
+     "layer": 3,
+     "delay": 0.667,
+     "foldAngle": 1.61502,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g20",
+     "layer": 0,
+     "delay": 0.556,
+     "foldAngle": -1.61229,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g21",
+     "layer": 1,
+     "delay": 0.444,
+     "foldAngle": -1.54908,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g22",
+     "layer": 2,
+     "delay": 0.333,
+     "foldAngle": -1.56521,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g23",
+     "layer": 2,
+     "delay": 0.222,
+     "foldAngle": -1.61166,
+     "tris": 68
+    },
+    {
+     "name": "rock_g30",
+     "layer": 0,
+     "delay": 0.111,
+     "foldAngle": -1.57868,
+     "tris": 52
+    },
+    {
+     "name": "mushrooms",
+     "layer": 1,
+     "delay": 0.0,
+     "foldAngle": -1.55018,
+     "tris": 92
+    }
+   ]
+  },
+  "hills": {
+   "flaps": 9,
+   "top": 7,
+   "flatTop": 0.06,
+   "oob": 0.0,
+   "tris": 1218,
+   "maxLayer": 12,
+   "height": 1.174,
+   "hinges": [
+    {
+     "name": "bush_rear",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.55281,
+     "tris": 52
+    },
+    {
+     "name": "bush",
+     "layer": 1,
+     "delay": 0.833,
+     "foldAngle": -1.55759,
+     "tris": 76
+    },
+    {
+     "name": "ridge_d",
+     "layer": 2,
+     "delay": 0.667,
+     "foldAngle": 1.53203,
+     "tris": 131
+    },
+    {
+     "name": "tree",
+     "layer": 7,
+     "delay": 0.5,
+     "foldAngle": 1.56248,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 7,
+     "delay": 0.5,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 7,
+     "delay": 0.5,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "ridge_c",
+     "layer": 10,
+     "delay": 0.333,
+     "foldAngle": 1.55253,
+     "tris": 131
+    },
+    {
+     "name": "ridge_b",
+     "layer": 11,
+     "delay": 0.167,
+     "foldAngle": 1.55079,
+     "tris": 131
+    },
+    {
+     "name": "ridge_a",
+     "layer": 12,
+     "delay": 0.0,
+     "foldAngle": 1.60654,
+     "tris": 131
+    }
+   ]
+  },
+  "forest": {
+   "flaps": 18,
+   "top": 10,
+   "flatTop": 0.12,
+   "oob": 0.0,
+   "tris": 1868,
+   "maxLayer": 27,
+   "height": 1.408,
+   "hinges": [
+    {
+     "name": "pine_a",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.57125,
+     "tris": 140
+    },
+    {
+     "name": "pine_a_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "pine_a_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 56
+    },
+    {
+     "name": "tree_b",
+     "layer": 9,
+     "delay": 0.889,
+     "foldAngle": 1.55419,
+     "tris": 140
+    },
+    {
+     "name": "tree_b_xf",
+     "layer": 9,
+     "delay": 0.889,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_b_xb",
+     "layer": 9,
+     "delay": 0.889,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_a",
+     "layer": 16,
+     "delay": 0.778,
+     "foldAngle": -1.56309,
+     "tris": 140
+    },
+    {
+     "name": "tree_a_xf",
+     "layer": 16,
+     "delay": 0.778,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_a_xb",
+     "layer": 16,
+     "delay": 0.778,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "pine_b",
+     "layer": 23,
+     "delay": 0.667,
+     "foldAngle": -1.60347,
+     "tris": 140
+    },
+    {
+     "name": "pine_b_xf",
+     "layer": 23,
+     "delay": 0.667,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_b_xb",
+     "layer": 23,
+     "delay": 0.667,
+     "foldAngle": 1.5708,
+     "tris": 52
+    },
+    {
+     "name": "bush_g10",
+     "layer": 19,
+     "delay": 0.556,
+     "foldAngle": -1.57735,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g11",
+     "layer": 20,
+     "delay": 0.444,
+     "foldAngle": 1.61071,
+     "tris": 68
+    },
+    {
+     "name": "bush_g20",
+     "layer": 26,
+     "delay": 0.333,
+     "foldAngle": -1.58141,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 27,
+     "delay": 0.222,
+     "foldAngle": -1.61935,
+     "tris": 76
+    },
+    {
+     "name": "stump",
+     "layer": 26,
+     "delay": 0.111,
+     "foldAngle": -1.56806,
+     "tris": 90
+    },
+    {
+     "name": "mushrooms",
+     "layer": 27,
+     "delay": 0.0,
+     "foldAngle": -1.59743,
+     "tris": 90
+    }
+   ]
+  },
+  "grove": {
+   "flaps": 13,
+   "top": 9,
+   "flatTop": 0.072,
+   "oob": 0.0,
+   "tris": 1324,
+   "maxLayer": 15,
+   "height": 1.401,
+   "hinges": [
+    {
+     "name": "tree_a",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.60539,
+     "tris": 140
+    },
+    {
+     "name": "tree_a_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_a_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_b",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": -1.5836,
+     "tris": 140
+    },
+    {
+     "name": "tree_b_xf",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_b_xb",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "bush_g10",
+     "layer": 12,
+     "delay": 0.75,
+     "foldAngle": -1.52331,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 13,
+     "delay": 0.625,
+     "foldAngle": -1.55708,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g12",
+     "layer": 14,
+     "delay": 0.5,
+     "foldAngle": -1.57968,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g13",
+     "layer": 15,
+     "delay": 0.375,
+     "foldAngle": -1.60503,
+     "tris": 76
+    },
+    {
+     "name": "mushrooms",
+     "layer": 5,
+     "delay": 0.25,
+     "foldAngle": -1.58396,
+     "tris": 90
+    },
+    {
+     "name": "bench",
+     "layer": 5,
+     "delay": 0.125,
+     "foldAngle": -1.56893,
+     "tris": 90
+    },
+    {
+     "name": "rock_g20",
+     "layer": 0,
+     "delay": 0.0,
+     "foldAngle": -1.56176,
+     "tris": 52
+    }
+   ]
+  },
+  "rocks": {
+   "flaps": 14,
+   "top": 14,
+   "flatTop": 0.04,
+   "oob": 0.013,
+   "tris": 1210,
+   "maxLayer": 7,
+   "height": 0.785,
+   "hinges": [
+    {
+     "name": "boulder_c_rear",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": 1.60539,
+     "tris": 52
+    },
+    {
+     "name": "boulder_c",
+     "layer": 1,
+     "delay": 0.923,
+     "foldAngle": 1.61408,
+     "tris": 76
+    },
+    {
+     "name": "boulder_b_rear",
+     "layer": 0,
+     "delay": 0.846,
+     "foldAngle": -1.59546,
+     "tris": 52
+    },
+    {
+     "name": "boulder_b",
+     "layer": 1,
+     "delay": 0.769,
+     "foldAngle": -1.52815,
+     "tris": 76
+    },
+    {
+     "name": "boulder_a_rear",
+     "layer": 2,
+     "delay": 0.692,
+     "foldAngle": -1.59888,
+     "tris": 52
+    },
+    {
+     "name": "boulder_a",
+     "layer": 3,
+     "delay": 0.615,
+     "foldAngle": -1.60629,
+     "tris": 76
+    },
+    {
+     "name": "boulder_d_rear",
+     "layer": 4,
+     "delay": 0.538,
+     "foldAngle": -1.56002,
+     "tris": 50
+    },
+    {
+     "name": "boulder_d",
+     "layer": 5,
+     "delay": 0.462,
+     "foldAngle": -1.55132,
+     "tris": 74
+    },
+    {
+     "name": "tuft_a_rear",
+     "layer": 2,
+     "delay": 0.385,
+     "foldAngle": -1.52326,
+     "tris": 52
+    },
+    {
+     "name": "tuft_a",
+     "layer": 3,
+     "delay": 0.308,
+     "foldAngle": -1.54444,
+     "tris": 76
+    },
+    {
+     "name": "pebble_rear",
+     "layer": 2,
+     "delay": 0.231,
+     "foldAngle": -1.58445,
+     "tris": 50
+    },
+    {
+     "name": "pebble",
+     "layer": 3,
+     "delay": 0.154,
+     "foldAngle": -1.58389,
+     "tris": 74
+    },
+    {
+     "name": "tuft_b_rear",
+     "layer": 6,
+     "delay": 0.077,
+     "foldAngle": 1.53225,
+     "tris": 52
+    },
+    {
+     "name": "tuft_b",
+     "layer": 7,
+     "delay": 0.0,
+     "foldAngle": 1.60555,
+     "tris": 76
+    }
+   ]
+  },
+  "pond": {
+   "flaps": 20,
+   "top": 14,
+   "flatTop": 0.04,
+   "oob": 0.0,
+   "tris": 2115,
+   "maxLayer": 7,
+   "height": 0.748,
+   "hinges": [
+    {
+     "name": "cottage_back",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cottage_front",
+     "layer": 3,
+     "delay": 0.923,
+     "foldAngle": 1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cottage_wall_l",
+     "layer": 3,
+     "delay": 0.923,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "cottage_wall_r",
+     "layer": 3,
+     "delay": 0.923,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "cottage_roof_f",
+     "layer": 3,
+     "delay": 0.923,
+     "foldAngle": 0.54271,
+     "tris": 12
+    },
+    {
+     "name": "cottage_roof_b",
+     "layer": 3,
+     "delay": 0.923,
+     "foldAngle": -1.08543,
+     "tris": 12
+    },
+    {
+     "name": "lamp_a",
+     "layer": 6,
+     "delay": 0.846,
+     "foldAngle": 1.54883,
+     "tris": 48
+    },
+    {
+     "name": "reeds_a_rear",
+     "layer": 6,
+     "delay": 0.769,
+     "foldAngle": 1.5315,
+     "tris": 76
+    },
+    {
+     "name": "reeds_a",
+     "layer": 7,
+     "delay": 0.692,
+     "foldAngle": 1.60375,
+     "tris": 100
+    },
+    {
+     "name": "jetty",
+     "layer": 1,
+     "delay": 0.615,
+     "foldAngle": -0.10472,
+     "tris": 20
+    },
+    {
+     "name": "jetty_post_a",
+     "layer": 1,
+     "delay": 0.615,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "jetty_post_b",
+     "layer": 1,
+     "delay": 0.615,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "boat",
+     "layer": 4,
+     "delay": 0.538,
+     "foldAngle": -1.56853,
+     "tris": 52
+    },
+    {
+     "name": "reeds_g10",
+     "layer": 0,
+     "delay": 0.462,
+     "foldAngle": 1.57024,
+     "tris": 100
+    },
+    {
+     "name": "rock_g11",
+     "layer": 1,
+     "delay": 0.385,
+     "foldAngle": 1.61872,
+     "tris": 52
+    },
+    {
+     "name": "reeds_g20",
+     "layer": 0,
+     "delay": 0.308,
+     "foldAngle": -1.57661,
+     "tris": 100
+    },
+    {
+     "name": "tuft_g21",
+     "layer": 1,
+     "delay": 0.231,
+     "foldAngle": -1.60801,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g22",
+     "layer": 2,
+     "delay": 0.154,
+     "foldAngle": 1.56987,
+     "tris": 76
+    },
+    {
+     "name": "reeds_g30",
+     "layer": 2,
+     "delay": 0.077,
+     "foldAngle": -1.56484,
+     "tris": 100
+    },
+    {
+     "name": "flowers_g32",
+     "layer": 3,
+     "delay": 0.0,
+     "foldAngle": -1.54489,
+     "tris": 76
+    }
+   ]
+  },
+  "windmill": {
+   "flaps": 11,
+   "top": 9,
+   "flatTop": 0.056,
+   "oob": 0.0,
+   "tris": 1349,
+   "maxLayer": 11,
+   "height": 1.629,
+   "hinges": [
+    {
+     "name": "mill",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": -1.5708,
+     "tris": 248
+    },
+    {
+     "name": "mill_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 32
+    },
+    {
+     "name": "mill_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "fence_0",
+     "layer": 0,
+     "delay": 0.875,
+     "foldAngle": 1.57078,
+     "tris": 84
+    },
+    {
+     "name": "bush_g10",
+     "layer": 0,
+     "delay": 0.75,
+     "foldAngle": -1.5687,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 1,
+     "delay": 0.625,
+     "foldAngle": -1.58433,
+     "tris": 76
+    },
+    {
+     "name": "scarecrow",
+     "layer": 11,
+     "delay": 0.5,
+     "foldAngle": -1.53657,
+     "tris": 92
+    },
+    {
+     "name": "cart",
+     "layer": 11,
+     "delay": 0.375,
+     "foldAngle": -1.5353,
+     "tris": 92
+    },
+    {
+     "name": "hay",
+     "layer": 11,
+     "delay": 0.25,
+     "foldAngle": -1.56262,
+     "tris": 92
+    },
+    {
+     "name": "bush_g20",
+     "layer": 11,
+     "delay": 0.125,
+     "foldAngle": -1.58126,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 11,
+     "delay": 0.0,
+     "foldAngle": -1.62219,
+     "tris": 76
+    }
+   ]
+  },
+  "path_straight": {
+   "flaps": 10,
+   "top": 8,
+   "flatTop": 0.04,
+   "oob": 0.0,
+   "tris": 1299,
+   "maxLayer": 7,
+   "height": 1.222,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.56576,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "bush_g10",
+     "layer": 6,
+     "delay": 0.857,
+     "foldAngle": -1.60039,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 6,
+     "delay": 0.714,
+     "foldAngle": -1.52487,
+     "tris": 76
+    },
+    {
+     "name": "fence_0",
+     "layer": 0,
+     "delay": 0.571,
+     "foldAngle": 1.56314,
+     "tris": 84
+    },
+    {
+     "name": "flowers_g20",
+     "layer": 1,
+     "delay": 0.429,
+     "foldAngle": -1.6079,
+     "tris": 76
+    },
+    {
+     "name": "bush_g30",
+     "layer": 0,
+     "delay": 0.286,
+     "foldAngle": -1.58863,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g31",
+     "layer": 1,
+     "delay": 0.143,
+     "foldAngle": 1.55072,
+     "tris": 76
+    },
+    {
+     "name": "rock_g40",
+     "layer": 7,
+     "delay": 0.0,
+     "foldAngle": -1.60844,
+     "tris": 52
+    }
+   ]
+  },
+  "path_corner": {
+   "flaps": 9,
+   "top": 7,
+   "flatTop": 0.048,
+   "oob": 0.0,
+   "tris": 1070,
+   "maxLayer": 9,
+   "height": 1.285,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.56502,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "bush_g10",
+     "layer": 5,
+     "delay": 0.833,
+     "foldAngle": -1.6106,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 6,
+     "delay": 0.667,
+     "foldAngle": -1.5863,
+     "tris": 76
+    },
+    {
+     "name": "cart",
+     "layer": 7,
+     "delay": 0.5,
+     "foldAngle": -1.57704,
+     "tris": 92
+    },
+    {
+     "name": "tuft_g20",
+     "layer": 8,
+     "delay": 0.333,
+     "foldAngle": -1.54876,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 9,
+     "delay": 0.167,
+     "foldAngle": -1.59928,
+     "tris": 76
+    },
+    {
+     "name": "rock_g30",
+     "layer": 0,
+     "delay": 0.0,
+     "foldAngle": -1.5369,
+     "tris": 52
+    }
+   ]
+  },
+  "path_t": {
+   "flaps": 11,
+   "top": 9,
+   "flatTop": 0.056,
+   "oob": 0.0,
+   "tris": 1607,
+   "maxLayer": 11,
+   "height": 1.222,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.55647,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "bush_g10",
+     "layer": 6,
+     "delay": 0.875,
+     "foldAngle": -1.58089,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 7,
+     "delay": 0.75,
+     "foldAngle": -1.53475,
+     "tris": 76
+    },
+    {
+     "name": "bench",
+     "layer": 8,
+     "delay": 0.625,
+     "foldAngle": -1.53648,
+     "tris": 90
+    },
+    {
+     "name": "bush_g20",
+     "layer": 9,
+     "delay": 0.5,
+     "foldAngle": 1.57887,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 10,
+     "delay": 0.375,
+     "foldAngle": -1.55269,
+     "tris": 76
+    },
+    {
+     "name": "guidepost",
+     "layer": 11,
+     "delay": 0.25,
+     "foldAngle": -1.57222,
+     "tris": 86
+    },
+    {
+     "name": "flowers_g30",
+     "layer": 0,
+     "delay": 0.125,
+     "foldAngle": -1.58072,
+     "tris": 76
+    },
+    {
+     "name": "rock_g40",
+     "layer": 0,
+     "delay": 0.0,
+     "foldAngle": -1.5684,
+     "tris": 50
+    }
+   ]
+  },
+  "path_cross": {
+   "flaps": 11,
+   "top": 9,
+   "flatTop": 0.04,
+   "oob": 0.005,
+   "tris": 1751,
+   "maxLayer": 7,
+   "height": 1.223,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.55584,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "bush_g10",
+     "layer": 6,
+     "delay": 0.875,
+     "foldAngle": -1.60875,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 7,
+     "delay": 0.75,
+     "foldAngle": -1.5395,
+     "tris": 76
+    },
+    {
+     "name": "guidepost",
+     "layer": 0,
+     "delay": 0.625,
+     "foldAngle": -1.5411,
+     "tris": 90
+    },
+    {
+     "name": "flowers_g20",
+     "layer": 1,
+     "delay": 0.5,
+     "foldAngle": -1.5579,
+     "tris": 76
+    },
+    {
+     "name": "barrels",
+     "layer": 0,
+     "delay": 0.375,
+     "foldAngle": -1.56786,
+     "tris": 92
+    },
+    {
+     "name": "tuft_g30",
+     "layer": 1,
+     "delay": 0.25,
+     "foldAngle": -1.61408,
+     "tris": 68
+    },
+    {
+     "name": "rock_g40",
+     "layer": 0,
+     "delay": 0.125,
+     "foldAngle": -1.58437,
+     "tris": 50
+    },
+    {
+     "name": "flowers_g41",
+     "layer": 1,
+     "delay": 0.0,
+     "foldAngle": -1.55772,
+     "tris": 76
+    }
+   ]
+  },
+  "path_end": {
+   "flaps": 12,
+   "top": 8,
+   "flatTop": 0.064,
+   "oob": 0.015,
+   "tris": 1383,
+   "maxLayer": 13,
+   "height": 1.222,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.57742,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "signpost",
+     "layer": 10,
+     "delay": 0.857,
+     "foldAngle": -1.59354,
+     "tris": 114
+    },
+    {
+     "name": "signpost_xf",
+     "layer": 10,
+     "delay": 0.857,
+     "foldAngle": 1.5708,
+     "tris": 52
+    },
+    {
+     "name": "signpost_xb",
+     "layer": 10,
+     "delay": 0.857,
+     "foldAngle": 1.5708,
+     "tris": 52
+    },
+    {
+     "name": "bush_g10",
+     "layer": 0,
+     "delay": 0.714,
+     "foldAngle": -1.55186,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 0,
+     "delay": 0.571,
+     "foldAngle": -1.54008,
+     "tris": 76
+    },
+    {
+     "name": "bench",
+     "layer": 13,
+     "delay": 0.429,
+     "foldAngle": -1.55841,
+     "tris": 90
+    },
+    {
+     "name": "flowers_g20",
+     "layer": 6,
+     "delay": 0.286,
+     "foldAngle": -1.55322,
+     "tris": 76
+    },
+    {
+     "name": "rock_g30",
+     "layer": 1,
+     "delay": 0.143,
+     "foldAngle": -1.55186,
+     "tris": 52
+    },
+    {
+     "name": "flowers_g31",
+     "layer": 2,
+     "delay": 0.0,
+     "foldAngle": -1.61862,
+     "tris": 76
+    }
+   ]
+  },
+  "lantern_post": {
+   "flaps": 11,
+   "top": 7,
+   "flatTop": 0.036,
+   "oob": 0.0,
+   "tris": 1256,
+   "maxLayer": 6,
+   "height": 0.779,
+   "hinges": [
+    {
+     "name": "lantern_post",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": -1.58476,
+     "tris": 220
+    },
+    {
+     "name": "lamp_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 42
+    },
+    {
+     "name": "lamp_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 42
+    },
+    {
+     "name": "post_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "post_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "tuft_g10",
+     "layer": 6,
+     "delay": 0.833,
+     "foldAngle": -1.52247,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 6,
+     "delay": 0.667,
+     "foldAngle": -1.60887,
+     "tris": 76
+    },
+    {
+     "name": "crates",
+     "layer": 6,
+     "delay": 0.5,
+     "foldAngle": -1.54536,
+     "tris": 88
+    },
+    {
+     "name": "bush_g20",
+     "layer": 0,
+     "delay": 0.333,
+     "foldAngle": -1.61324,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 1,
+     "delay": 0.167,
+     "foldAngle": 1.55158,
+     "tris": 76
+    },
+    {
+     "name": "rock_g30",
+     "layer": 0,
+     "delay": 0.0,
+     "foldAngle": -1.54045,
+     "tris": 52
+    }
+   ]
+  },
+  "house": {
+   "flaps": 27,
+   "top": 18,
+   "flatTop": 0.096,
+   "oob": 0.005,
+   "tris": 2221,
+   "maxLayer": 21,
+   "height": 1.285,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.56921,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "well",
+     "layer": 0,
+     "delay": 0.941,
+     "foldAngle": 1.60258,
+     "tris": 90
+    },
+    {
+     "name": "house_back",
+     "layer": 5,
+     "delay": 0.882,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "house_front",
+     "layer": 8,
+     "delay": 0.824,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "house_wall_l",
+     "layer": 8,
+     "delay": 0.824,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "house_wall_r",
+     "layer": 8,
+     "delay": 0.824,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "house_roof_f",
+     "layer": 8,
+     "delay": 0.824,
+     "foldAngle": 0.61186,
+     "tris": 12
+    },
+    {
+     "name": "house_roof_b",
+     "layer": 8,
+     "delay": 0.824,
+     "foldAngle": -1.22373,
+     "tris": 12
+    },
+    {
+     "name": "house_chim",
+     "layer": 8,
+     "delay": 0.824,
+     "foldAngle": 2.52973,
+     "tris": 42
+    },
+    {
+     "name": "house_chim_x",
+     "layer": 8,
+     "delay": 0.824,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "house_chim_lid",
+     "layer": 8,
+     "delay": 0.824,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "bush_g10",
+     "layer": 5,
+     "delay": 0.765,
+     "foldAngle": -1.56308,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 6,
+     "delay": 0.706,
+     "foldAngle": -1.54205,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g12",
+     "layer": 7,
+     "delay": 0.647,
+     "foldAngle": -1.57737,
+     "tris": 68
+    },
+    {
+     "name": "barrels",
+     "layer": 17,
+     "delay": 0.588,
+     "foldAngle": -1.54141,
+     "tris": 92
+    },
+    {
+     "name": "flowers_g20",
+     "layer": 18,
+     "delay": 0.529,
+     "foldAngle": -1.62127,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g21",
+     "layer": 19,
+     "delay": 0.471,
+     "foldAngle": -1.59047,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g22",
+     "layer": 20,
+     "delay": 0.412,
+     "foldAngle": 1.56549,
+     "tris": 76
+    },
+    {
+     "name": "fence_l_0",
+     "layer": 0,
+     "delay": 0.353,
+     "foldAngle": -1.58028,
+     "tris": 64
+    },
+    {
+     "name": "fence_l_1",
+     "layer": 1,
+     "delay": 0.294,
+     "foldAngle": -1.5451,
+     "tris": 64
+    },
+    {
+     "name": "fence_r_0",
+     "layer": 0,
+     "delay": 0.235,
+     "foldAngle": -1.58131,
+     "tris": 64
+    },
+    {
+     "name": "fence_r_1",
+     "layer": 21,
+     "delay": 0.176,
+     "foldAngle": -1.58863,
+     "tris": 64
+    },
+    {
+     "name": "flowers_g30",
+     "layer": 2,
+     "delay": 0.118,
+     "foldAngle": -1.57127,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g31",
+     "layer": 3,
+     "delay": 0.059,
+     "foldAngle": -1.56072,
+     "tris": 68
+    },
+    {
+     "name": "rock_g32",
+     "layer": 3,
+     "delay": 0.0,
+     "foldAngle": -1.52276,
+     "tris": 50
+    }
+   ]
+  },
+  "village": {
+   "flaps": 31,
+   "top": 18,
+   "flatTop": 0.088,
+   "oob": 0.0,
+   "tris": 2549,
+   "maxLayer": 19,
+   "height": 1.293,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 4,
+     "delay": 1.0,
+     "foldAngle": 1.59982,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 4,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 4,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "house_w_back",
+     "layer": 7,
+     "delay": 0.941,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "house_w_front",
+     "layer": 10,
+     "delay": 0.882,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "house_w_wall_l",
+     "layer": 10,
+     "delay": 0.882,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "house_w_wall_r",
+     "layer": 10,
+     "delay": 0.882,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "house_w_roof_f",
+     "layer": 10,
+     "delay": 0.882,
+     "foldAngle": 0.5966,
+     "tris": 12
+    },
+    {
+     "name": "house_w_roof_b",
+     "layer": 10,
+     "delay": 0.882,
+     "foldAngle": -1.1932,
+     "tris": 12
+    },
+    {
+     "name": "house_w_chim",
+     "layer": 10,
+     "delay": 0.882,
+     "foldAngle": 2.54499,
+     "tris": 42
+    },
+    {
+     "name": "house_w_chim_x",
+     "layer": 10,
+     "delay": 0.882,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "house_w_chim_lid",
+     "layer": 10,
+     "delay": 0.882,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "cottage_a_back",
+     "layer": 7,
+     "delay": 0.824,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cottage_a_front",
+     "layer": 10,
+     "delay": 0.765,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cottage_a_wall_l",
+     "layer": 10,
+     "delay": 0.765,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "cottage_a_wall_r",
+     "layer": 10,
+     "delay": 0.765,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "cottage_a_roof_f",
+     "layer": 10,
+     "delay": 0.765,
+     "foldAngle": 0.67223,
+     "tris": 12
+    },
+    {
+     "name": "cottage_a_roof_b",
+     "layer": 10,
+     "delay": 0.765,
+     "foldAngle": -1.34446,
+     "tris": 12
+    },
+    {
+     "name": "barrels",
+     "layer": 19,
+     "delay": 0.706,
+     "foldAngle": -1.57532,
+     "tris": 92
+    },
+    {
+     "name": "bush_g10",
+     "layer": 13,
+     "delay": 0.647,
+     "foldAngle": -1.55385,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 14,
+     "delay": 0.588,
+     "foldAngle": -1.57995,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g12",
+     "layer": 15,
+     "delay": 0.529,
+     "foldAngle": 1.5487,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g20",
+     "layer": 13,
+     "delay": 0.471,
+     "foldAngle": -1.57522,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g21",
+     "layer": 14,
+     "delay": 0.412,
+     "foldAngle": -1.52823,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g22",
+     "layer": 15,
+     "delay": 0.353,
+     "foldAngle": -1.57961,
+     "tris": 76
+    },
+    {
+     "name": "fence_yard_0",
+     "layer": 0,
+     "delay": 0.294,
+     "foldAngle": -1.58505,
+     "tris": 64
+    },
+    {
+     "name": "fence_yard_1",
+     "layer": 1,
+     "delay": 0.235,
+     "foldAngle": 1.57434,
+     "tris": 64
+    },
+    {
+     "name": "cart",
+     "layer": 0,
+     "delay": 0.176,
+     "foldAngle": -1.598,
+     "tris": 92
+    },
+    {
+     "name": "hay",
+     "layer": 0,
+     "delay": 0.118,
+     "foldAngle": 1.57126,
+     "tris": 90
+    },
+    {
+     "name": "bush_g30",
+     "layer": 2,
+     "delay": 0.059,
+     "foldAngle": -1.58907,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g31",
+     "layer": 3,
+     "delay": 0.0,
+     "foldAngle": -1.60654,
+     "tris": 76
+    }
+   ]
+  },
+  "river_straight": {
+   "flaps": 7,
+   "top": 7,
+   "flatTop": 0.02,
+   "oob": 0.0,
+   "tris": 1121,
+   "maxLayer": 2,
+   "height": 0.782,
+   "hinges": [
+    {
+     "name": "reeds_a_rear",
+     "layer": 1,
+     "delay": 1.0,
+     "foldAngle": 1.6057,
+     "tris": 76
+    },
+    {
+     "name": "reeds_a",
+     "layer": 2,
+     "delay": 0.833,
+     "foldAngle": -1.52869,
+     "tris": 100
+    },
+    {
+     "name": "reeds_g10",
+     "layer": 0,
+     "delay": 0.667,
+     "foldAngle": -1.57905,
+     "tris": 100
+    },
+    {
+     "name": "rock_g11",
+     "layer": 1,
+     "delay": 0.5,
+     "foldAngle": -1.55087,
+     "tris": 52
+    },
+    {
+     "name": "bush_g20",
+     "layer": 0,
+     "delay": 0.333,
+     "foldAngle": 1.5472,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 1,
+     "delay": 0.167,
+     "foldAngle": 1.61266,
+     "tris": 76
+    },
+    {
+     "name": "bush_g30",
+     "layer": 2,
+     "delay": 0.0,
+     "foldAngle": 1.55065,
+     "tris": 76
+    }
+   ]
+  },
+  "river_corner": {
+   "flaps": 11,
+   "top": 9,
+   "flatTop": 0.056,
+   "oob": 0.0,
+   "tris": 1541,
+   "maxLayer": 11,
+   "height": 1.23,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 5,
+     "delay": 1.0,
+     "foldAngle": -1.57479,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 5,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 5,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "bush_g10",
+     "layer": 8,
+     "delay": 0.875,
+     "foldAngle": -1.55331,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 9,
+     "delay": 0.75,
+     "foldAngle": -1.57088,
+     "tris": 76
+    },
+    {
+     "name": "reeds_a_rear",
+     "layer": 8,
+     "delay": 0.625,
+     "foldAngle": 1.62202,
+     "tris": 76
+    },
+    {
+     "name": "reeds_a",
+     "layer": 9,
+     "delay": 0.5,
+     "foldAngle": 1.61467,
+     "tris": 100
+    },
+    {
+     "name": "reeds_g20",
+     "layer": 8,
+     "delay": 0.375,
+     "foldAngle": -1.55693,
+     "tris": 100
+    },
+    {
+     "name": "rock_g21",
+     "layer": 9,
+     "delay": 0.25,
+     "foldAngle": -1.53506,
+     "tris": 52
+    },
+    {
+     "name": "tuft_g30",
+     "layer": 10,
+     "delay": 0.125,
+     "foldAngle": -1.59819,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g31",
+     "layer": 11,
+     "delay": 0.0,
+     "foldAngle": -1.5792,
+     "tris": 76
+    }
+   ]
+  },
+  "river_source": {
+   "flaps": 13,
+   "top": 13,
+   "flatTop": 0.04,
+   "oob": 0.013,
+   "tris": 1511,
+   "maxLayer": 7,
+   "height": 0.741,
+   "hinges": [
+    {
+     "name": "spring",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": 1.6057,
+     "tris": 74
+    },
+    {
+     "name": "crag_a_rear",
+     "layer": 1,
+     "delay": 0.917,
+     "foldAngle": 1.5998,
+     "tris": 52
+    },
+    {
+     "name": "crag_a",
+     "layer": 2,
+     "delay": 0.833,
+     "foldAngle": 1.56593,
+     "tris": 76
+    },
+    {
+     "name": "crag_b_rear",
+     "layer": 3,
+     "delay": 0.75,
+     "foldAngle": 1.53281,
+     "tris": 52
+    },
+    {
+     "name": "crag_b",
+     "layer": 4,
+     "delay": 0.667,
+     "foldAngle": -1.54792,
+     "tris": 76
+    },
+    {
+     "name": "crag_c_rear",
+     "layer": 3,
+     "delay": 0.583,
+     "foldAngle": 1.53085,
+     "tris": 52
+    },
+    {
+     "name": "crag_c",
+     "layer": 4,
+     "delay": 0.5,
+     "foldAngle": 1.53945,
+     "tris": 76
+    },
+    {
+     "name": "reeds_g10",
+     "layer": 5,
+     "delay": 0.417,
+     "foldAngle": -1.5758,
+     "tris": 100
+    },
+    {
+     "name": "rock_g11",
+     "layer": 6,
+     "delay": 0.333,
+     "foldAngle": -1.54676,
+     "tris": 50
+    },
+    {
+     "name": "bush_g20",
+     "layer": 4,
+     "delay": 0.25,
+     "foldAngle": -1.53382,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 5,
+     "delay": 0.167,
+     "foldAngle": -1.61709,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g30",
+     "layer": 6,
+     "delay": 0.083,
+     "foldAngle": -1.55637,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g31",
+     "layer": 7,
+     "delay": 0.0,
+     "foldAngle": -1.54133,
+     "tris": 76
+    }
+   ]
+  },
+  "bridge": {
+   "flaps": 18,
+   "top": 12,
+   "flatTop": 0.0368,
+   "oob": 0.0,
+   "tris": 2074,
+   "maxLayer": 6,
+   "height": 0.524,
+   "hinges": [
+    {
+     "name": "side_w_b",
+     "layer": 1,
+     "delay": 1.0,
+     "foldAngle": 1.22173,
+     "tris": 216
+    },
+    {
+     "name": "side_w",
+     "layer": 5,
+     "delay": 0.909,
+     "foldAngle": 1.22173,
+     "tris": 216
+    },
+    {
+     "name": "side_w_post_a",
+     "layer": 5,
+     "delay": 0.909,
+     "foldAngle": 1.5708,
+     "tris": 24
+    },
+    {
+     "name": "side_w_post_b",
+     "layer": 5,
+     "delay": 0.909,
+     "foldAngle": -1.5708,
+     "tris": 24
+    },
+    {
+     "name": "side_e_b",
+     "layer": 1,
+     "delay": 0.818,
+     "foldAngle": 1.22173,
+     "tris": 216
+    },
+    {
+     "name": "side_e",
+     "layer": 5,
+     "delay": 0.727,
+     "foldAngle": 1.22173,
+     "tris": 216
+    },
+    {
+     "name": "side_e_post_a",
+     "layer": 5,
+     "delay": 0.727,
+     "foldAngle": 1.5708,
+     "tris": 24
+    },
+    {
+     "name": "side_e_post_b",
+     "layer": 5,
+     "delay": 0.727,
+     "foldAngle": -1.5708,
+     "tris": 24
+    },
+    {
+     "name": "ramp_s",
+     "layer": 5,
+     "delay": 0.636,
+     "foldAngle": -0.45379,
+     "tris": 18
+    },
+    {
+     "name": "ramp_s_crown",
+     "layer": 5,
+     "delay": 0.636,
+     "foldAngle": 0.31416,
+     "tris": 16
+    },
+    {
+     "name": "ramp_n",
+     "layer": 6,
+     "delay": 0.545,
+     "foldAngle": -0.45379,
+     "tris": 18
+    },
+    {
+     "name": "ramp_n_crown",
+     "layer": 6,
+     "delay": 0.545,
+     "foldAngle": 0.31416,
+     "tris": 16
+    },
+    {
+     "name": "reeds_g10",
+     "layer": 5,
+     "delay": 0.455,
+     "foldAngle": 1.57616,
+     "tris": 100
+    },
+    {
+     "name": "rock_g11",
+     "layer": 6,
+     "delay": 0.364,
+     "foldAngle": 1.56462,
+     "tris": 52
+    },
+    {
+     "name": "reeds_g20",
+     "layer": 5,
+     "delay": 0.273,
+     "foldAngle": 1.54588,
+     "tris": 100
+    },
+    {
+     "name": "bush_g30",
+     "layer": 5,
+     "delay": 0.182,
+     "foldAngle": 1.5233,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g31",
+     "layer": 6,
+     "delay": 0.091,
+     "foldAngle": 1.58406,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g40",
+     "layer": 5,
+     "delay": 0.0,
+     "foldAngle": -1.61892,
+     "tris": 76
+    }
+   ]
+  },
+  "desert_dunes": {
+   "flaps": 19,
+   "top": 15,
+   "flatTop": 0.072,
+   "oob": 0.01,
+   "tris": 2605,
+   "maxLayer": 14,
+   "height": 0.921,
+   "hinges": [
+    {
+     "name": "thorn_bush_g10",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.53898,
+     "tris": 76
+    },
+    {
+     "name": "desert_flowers_g11",
+     "layer": 1,
+     "delay": 0.929,
+     "foldAngle": -1.60236,
+     "tris": 76
+    },
+    {
+     "name": "barrel_cactus_g20",
+     "layer": 0,
+     "delay": 0.857,
+     "foldAngle": -1.5982,
+     "tris": 76
+    },
+    {
+     "name": "desert_flowers_g21",
+     "layer": 1,
+     "delay": 0.786,
+     "foldAngle": -1.59953,
+     "tris": 76
+    },
+    {
+     "name": "thorn_bush_g22",
+     "layer": 1,
+     "delay": 0.714,
+     "foldAngle": -1.5404,
+     "tris": 76
+    },
+    {
+     "name": "pots",
+     "layer": 1,
+     "delay": 0.643,
+     "foldAngle": -1.54051,
+     "tris": 88
+    },
+    {
+     "name": "cactus",
+     "layer": 5,
+     "delay": 0.571,
+     "foldAngle": -1.53988,
+     "tris": 156
+    },
+    {
+     "name": "cactus_xf",
+     "layer": 5,
+     "delay": 0.571,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "cactus_xb",
+     "layer": 5,
+     "delay": 0.571,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "dune_front",
+     "layer": 8,
+     "delay": 0.5,
+     "foldAngle": 1.59536,
+     "tris": 132
+    },
+    {
+     "name": "dead_tree",
+     "layer": 6,
+     "delay": 0.429,
+     "foldAngle": -1.5898,
+     "tris": 116
+    },
+    {
+     "name": "dead_tree_xf",
+     "layer": 6,
+     "delay": 0.429,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "dead_tree_xb",
+     "layer": 6,
+     "delay": 0.429,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "dune_b_l",
+     "layer": 8,
+     "delay": 0.357,
+     "foldAngle": 1.61417,
+     "tris": 192
+    },
+    {
+     "name": "dune_b_r",
+     "layer": 10,
+     "delay": 0.286,
+     "foldAngle": 1.53165,
+     "tris": 192
+    },
+    {
+     "name": "dune_b_m",
+     "layer": 12,
+     "delay": 0.214,
+     "foldAngle": 1.53783,
+     "tris": 132
+    },
+    {
+     "name": "dune_a_l",
+     "layer": 12,
+     "delay": 0.143,
+     "foldAngle": 1.59466,
+     "tris": 192
+    },
+    {
+     "name": "dune_a_r",
+     "layer": 14,
+     "delay": 0.071,
+     "foldAngle": 1.55405,
+     "tris": 192
+    },
+    {
+     "name": "stone_a",
+     "layer": 0,
+     "delay": 0.0,
+     "foldAngle": -1.54849,
+     "tris": 71
+    }
+   ]
+  },
+  "desert_dunes_b": {
+   "flaps": 13,
+   "top": 11,
+   "flatTop": 0.044,
+   "oob": 0.0,
+   "tris": 1789,
+   "maxLayer": 7,
+   "height": 0.707,
+   "hinges": [
+    {
+     "name": "thorn_bush_g10",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.60256,
+     "tris": 76
+    },
+    {
+     "name": "desert_flowers_g11",
+     "layer": 1,
+     "delay": 0.9,
+     "foldAngle": -1.60054,
+     "tris": 76
+    },
+    {
+     "name": "cactus",
+     "layer": 2,
+     "delay": 0.8,
+     "foldAngle": -1.54305,
+     "tris": 156
+    },
+    {
+     "name": "cactus_xf",
+     "layer": 2,
+     "delay": 0.8,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "cactus_xb",
+     "layer": 2,
+     "delay": 0.8,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "thorn_bush_g20",
+     "layer": 5,
+     "delay": 0.7,
+     "foldAngle": -1.54013,
+     "tris": 76
+    },
+    {
+     "name": "barrel_cactus_g21",
+     "layer": 6,
+     "delay": 0.6,
+     "foldAngle": -1.61267,
+     "tris": 76
+    },
+    {
+     "name": "desert_flowers_g22",
+     "layer": 0,
+     "delay": 0.5,
+     "foldAngle": -1.58979,
+     "tris": 76
+    },
+    {
+     "name": "crates",
+     "layer": 0,
+     "delay": 0.4,
+     "foldAngle": -1.53863,
+     "tris": 92
+    },
+    {
+     "name": "dune_front",
+     "layer": 7,
+     "delay": 0.3,
+     "foldAngle": 1.58246,
+     "tris": 132
+    },
+    {
+     "name": "dune_a_l",
+     "layer": 2,
+     "delay": 0.2,
+     "foldAngle": 1.56988,
+     "tris": 192
+    },
+    {
+     "name": "dune_a_r",
+     "layer": 5,
+     "delay": 0.1,
+     "foldAngle": 1.56511,
+     "tris": 192
+    },
+    {
+     "name": "dune_a_m",
+     "layer": 7,
+     "delay": 0.0,
+     "foldAngle": 1.54193,
+     "tris": 132
+    }
+   ]
+  },
+  "desert_dunes_c": {
+   "flaps": 11,
+   "top": 11,
+   "flatTop": 0.048,
+   "oob": 0.0,
+   "tris": 1584,
+   "maxLayer": 8,
+   "height": 0.869,
+   "hinges": [
+    {
+     "name": "barrel_cactus_g10",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.57312,
+     "tris": 76
+    },
+    {
+     "name": "barrel_cactus_g11",
+     "layer": 1,
+     "delay": 0.9,
+     "foldAngle": -1.57496,
+     "tris": 76
+    },
+    {
+     "name": "desert_flowers_g12",
+     "layer": 1,
+     "delay": 0.8,
+     "foldAngle": -1.52691,
+     "tris": 76
+    },
+    {
+     "name": "stone_a",
+     "layer": 0,
+     "delay": 0.7,
+     "foldAngle": -1.57423,
+     "tris": 71
+    },
+    {
+     "name": "thorn_bush_g20",
+     "layer": 2,
+     "delay": 0.6,
+     "foldAngle": -1.61023,
+     "tris": 76
+    },
+    {
+     "name": "desert_flowers_g21",
+     "layer": 3,
+     "delay": 0.5,
+     "foldAngle": -1.52582,
+     "tris": 76
+    },
+    {
+     "name": "dune_front",
+     "layer": 3,
+     "delay": 0.4,
+     "foldAngle": 1.54,
+     "tris": 132
+    },
+    {
+     "name": "dune_b",
+     "layer": 2,
+     "delay": 0.3,
+     "foldAngle": 1.54216,
+     "tris": 132
+    },
+    {
+     "name": "dune_a_l",
+     "layer": 4,
+     "delay": 0.2,
+     "foldAngle": 1.56436,
+     "tris": 192
+    },
+    {
+     "name": "dune_a_r",
+     "layer": 6,
+     "delay": 0.1,
+     "foldAngle": 1.56058,
+     "tris": 192
+    },
+    {
+     "name": "dune_a_m",
+     "layer": 8,
+     "delay": 0.0,
+     "foldAngle": 1.59333,
+     "tris": 132
+    }
+   ]
+  },
+  "desert_cacti": {
+   "flaps": 15,
+   "top": 9,
+   "flatTop": 0.0552,
+   "oob": 0.006,
+   "tris": 1660,
+   "maxLayer": 9,
+   "height": 1.231,
+   "hinges": [
+    {
+     "name": "flowers",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.53237,
+     "tris": 84
+    },
+    {
+     "name": "barrel_b",
+     "layer": 0,
+     "delay": 0.875,
+     "foldAngle": -1.5808,
+     "tris": 84
+    },
+    {
+     "name": "barrel_a",
+     "layer": 1,
+     "delay": 0.75,
+     "foldAngle": -1.55859,
+     "tris": 84
+    },
+    {
+     "name": "pear",
+     "layer": 0,
+     "delay": 0.625,
+     "foldAngle": -1.57274,
+     "tris": 100
+    },
+    {
+     "name": "cactus_c",
+     "layer": 2,
+     "delay": 0.5,
+     "foldAngle": -1.57242,
+     "tris": 156
+    },
+    {
+     "name": "cactus_c_xf",
+     "layer": 2,
+     "delay": 0.5,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "cactus_c_xb",
+     "layer": 2,
+     "delay": 0.5,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "cactus_b",
+     "layer": 2,
+     "delay": 0.375,
+     "foldAngle": -1.56576,
+     "tris": 156
+    },
+    {
+     "name": "cactus_b_xf",
+     "layer": 2,
+     "delay": 0.375,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "cactus_b_xb",
+     "layer": 2,
+     "delay": 0.375,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "cactus_a",
+     "layer": 9,
+     "delay": 0.25,
+     "foldAngle": 1.557,
+     "tris": 156
+    },
+    {
+     "name": "cactus_a_xf",
+     "layer": 9,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "cactus_a_xb",
+     "layer": 9,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "stone_c",
+     "layer": 5,
+     "delay": 0.125,
+     "foldAngle": -1.55511,
+     "tris": 71
+    },
+    {
+     "name": "stone_a",
+     "layer": 0,
+     "delay": 0.0,
+     "foldAngle": -1.5674,
+     "tris": 71
+    }
+   ]
+  },
+  "desert_camp": {
+   "flaps": 18,
+   "top": 10,
+   "flatTop": 0.0832,
+   "oob": 0.0,
+   "tris": 2125,
+   "maxLayer": 16,
+   "height": 1.358,
+   "hinges": [
+    {
+     "name": "pots",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.52861,
+     "tris": 80
+    },
+    {
+     "name": "thorn_bush_g10",
+     "layer": 0,
+     "delay": 0.889,
+     "foldAngle": -1.54986,
+     "tris": 76
+    },
+    {
+     "name": "desert_flowers_g11",
+     "layer": 1,
+     "delay": 0.778,
+     "foldAngle": -1.58378,
+     "tris": 76
+    },
+    {
+     "name": "tent_c",
+     "layer": 2,
+     "delay": 0.667,
+     "foldAngle": -1.53847,
+     "tris": 156
+    },
+    {
+     "name": "tent_c_xf",
+     "layer": 2,
+     "delay": 0.667,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tent_c_xb",
+     "layer": 2,
+     "delay": 0.667,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "fire_a",
+     "layer": 1,
+     "delay": 0.556,
+     "foldAngle": -1.5708,
+     "tris": 50
+    },
+    {
+     "name": "fire_b",
+     "layer": 3,
+     "delay": 0.444,
+     "foldAngle": -1.5708,
+     "tris": 50
+    },
+    {
+     "name": "crates",
+     "layer": 4,
+     "delay": 0.333,
+     "foldAngle": -1.55231,
+     "tris": 84
+    },
+    {
+     "name": "tent_b",
+     "layer": 9,
+     "delay": 0.222,
+     "foldAngle": 1.58677,
+     "tris": 158
+    },
+    {
+     "name": "tent_b_xf",
+     "layer": 9,
+     "delay": 0.222,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "tent_b_xb",
+     "layer": 9,
+     "delay": 0.222,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "tent_a",
+     "layer": 8,
+     "delay": 0.111,
+     "foldAngle": 1.59251,
+     "tris": 158
+    },
+    {
+     "name": "tent_a_xf",
+     "layer": 8,
+     "delay": 0.111,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tent_a_xb",
+     "layer": 8,
+     "delay": 0.111,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "palm",
+     "layer": 16,
+     "delay": 0.0,
+     "foldAngle": 1.53749,
+     "tris": 156
+    },
+    {
+     "name": "palm_xf",
+     "layer": 16,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "palm_xb",
+     "layer": 16,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 72
+    }
+   ]
+  },
+  "desert_oasis": {
+   "flaps": 15,
+   "top": 9,
+   "flatTop": 0.0672,
+   "oob": 0.02,
+   "tris": 1934,
+   "maxLayer": 12,
+   "height": 1.442,
+   "hinges": [
+    {
+     "name": "flowers",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.56522,
+     "tris": 84
+    },
+    {
+     "name": "stone_a",
+     "layer": 0,
+     "delay": 0.875,
+     "foldAngle": -1.59684,
+     "tris": 71
+    },
+    {
+     "name": "stone_c",
+     "layer": 0,
+     "delay": 0.75,
+     "foldAngle": -1.56069,
+     "tris": 71
+    },
+    {
+     "name": "reeds_rear",
+     "layer": 2,
+     "delay": 0.625,
+     "foldAngle": 1.54143,
+     "tris": 76
+    },
+    {
+     "name": "reeds",
+     "layer": 3,
+     "delay": 0.5,
+     "foldAngle": 1.60252,
+     "tris": 100
+    },
+    {
+     "name": "ripple",
+     "layer": 4,
+     "delay": 0.375,
+     "foldAngle": -0.34907,
+     "tris": 20
+    },
+    {
+     "name": "palm_c",
+     "layer": 5,
+     "delay": 0.25,
+     "foldAngle": 1.58384,
+     "tris": 156
+    },
+    {
+     "name": "palm_c_xf",
+     "layer": 5,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 58
+    },
+    {
+     "name": "palm_c_xb",
+     "layer": 5,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 78
+    },
+    {
+     "name": "palm_b",
+     "layer": 8,
+     "delay": 0.125,
+     "foldAngle": 1.57568,
+     "tris": 156
+    },
+    {
+     "name": "palm_b_xf",
+     "layer": 8,
+     "delay": 0.125,
+     "foldAngle": 1.5708,
+     "tris": 58
+    },
+    {
+     "name": "palm_b_xb",
+     "layer": 8,
+     "delay": 0.125,
+     "foldAngle": 1.5708,
+     "tris": 78
+    },
+    {
+     "name": "palm_a",
+     "layer": 12,
+     "delay": 0.0,
+     "foldAngle": 1.57223,
+     "tris": 156
+    },
+    {
+     "name": "palm_a_xf",
+     "layer": 12,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "palm_a_xb",
+     "layer": 12,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 72
+    }
+   ]
+  },
+  "desert_market": {
+   "flaps": 15,
+   "top": 9,
+   "flatTop": 0.0472,
+   "oob": 0.01,
+   "tris": 1951,
+   "maxLayer": 7,
+   "height": 1.273,
+   "hinges": [
+    {
+     "name": "crates",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.55026,
+     "tris": 84
+    },
+    {
+     "name": "pots_b",
+     "layer": 0,
+     "delay": 0.875,
+     "foldAngle": -1.56399,
+     "tris": 80
+    },
+    {
+     "name": "pots_a",
+     "layer": 0,
+     "delay": 0.75,
+     "foldAngle": -1.60883,
+     "tris": 80
+    },
+    {
+     "name": "thorn_bush_g10",
+     "layer": 0,
+     "delay": 0.625,
+     "foldAngle": 1.53311,
+     "tris": 76
+    },
+    {
+     "name": "desert_flowers_g11",
+     "layer": 1,
+     "delay": 0.5,
+     "foldAngle": -1.59607,
+     "tris": 76
+    },
+    {
+     "name": "well",
+     "layer": 2,
+     "delay": 0.375,
+     "foldAngle": -1.53854,
+     "tris": 96
+    },
+    {
+     "name": "stall_e",
+     "layer": 0,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 160
+    },
+    {
+     "name": "stall_e_side_l",
+     "layer": 0,
+     "delay": 0.25,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "stall_e_side_r",
+     "layer": 0,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "stall_w",
+     "layer": 3,
+     "delay": 0.125,
+     "foldAngle": 1.5708,
+     "tris": 160
+    },
+    {
+     "name": "stall_w_side_l",
+     "layer": 3,
+     "delay": 0.125,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "stall_w_side_r",
+     "layer": 3,
+     "delay": 0.125,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "palm",
+     "layer": 7,
+     "delay": 0.0,
+     "foldAngle": 1.60152,
+     "tris": 156
+    },
+    {
+     "name": "palm_xf",
+     "layer": 7,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 58
+    },
+    {
+     "name": "palm_xb",
+     "layer": 7,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 78
+    }
+   ]
+  },
+  "desert_ruin": {
+   "flaps": 11,
+   "top": 7,
+   "flatTop": 0.048,
+   "oob": 0.0,
+   "tris": 1659,
+   "maxLayer": 9,
+   "height": 1.387,
+   "hinges": [
+    {
+     "name": "steps",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 212
+    },
+    {
+     "name": "ziggurat_mid",
+     "layer": 1,
+     "delay": 0.833,
+     "foldAngle": 1.5708,
+     "tris": 212
+    },
+    {
+     "name": "barrel",
+     "layer": 0,
+     "delay": 0.667,
+     "foldAngle": -1.56164,
+     "tris": 84
+    },
+    {
+     "name": "thorn",
+     "layer": 0,
+     "delay": 0.5,
+     "foldAngle": -1.57406,
+     "tris": 84
+    },
+    {
+     "name": "column_b",
+     "layer": 6,
+     "delay": 0.333,
+     "foldAngle": -1.56281,
+     "tris": 156
+    },
+    {
+     "name": "column_b_xf",
+     "layer": 6,
+     "delay": 0.333,
+     "foldAngle": 1.5708,
+     "tris": 24
+    },
+    {
+     "name": "column_b_xb",
+     "layer": 6,
+     "delay": 0.333,
+     "foldAngle": 1.5708,
+     "tris": 24
+    },
+    {
+     "name": "column_a",
+     "layer": 6,
+     "delay": 0.167,
+     "foldAngle": -1.56529,
+     "tris": 156
+    },
+    {
+     "name": "column_a_xf",
+     "layer": 6,
+     "delay": 0.167,
+     "foldAngle": 1.5708,
+     "tris": 24
+    },
+    {
+     "name": "column_a_xb",
+     "layer": 6,
+     "delay": 0.167,
+     "foldAngle": 1.5708,
+     "tris": 24
+    },
+    {
+     "name": "ziggurat",
+     "layer": 9,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 212
+    }
+   ]
+  },
+  "snow_pines": {
+   "flaps": 18,
+   "top": 10,
+   "flatTop": 0.0592,
+   "oob": 0.0,
+   "tris": 2185,
+   "maxLayer": 10,
+   "height": 1.486,
+   "hinges": [
+    {
+     "name": "snowbush_g10",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.57372,
+     "tris": 76
+    },
+    {
+     "name": "ice_rock_g11",
+     "layer": 1,
+     "delay": 0.889,
+     "foldAngle": -1.59747,
+     "tris": 76
+    },
+    {
+     "name": "snowbush_g20",
+     "layer": 0,
+     "delay": 0.778,
+     "foldAngle": 1.55723,
+     "tris": 76
+    },
+    {
+     "name": "ice_rock_g21",
+     "layer": 1,
+     "delay": 0.667,
+     "foldAngle": -1.56212,
+     "tris": 76
+    },
+    {
+     "name": "sled",
+     "layer": 0,
+     "delay": 0.556,
+     "foldAngle": -1.56497,
+     "tris": 92
+    },
+    {
+     "name": "woodpile",
+     "layer": 0,
+     "delay": 0.444,
+     "foldAngle": -1.60118,
+     "tris": 90
+    },
+    {
+     "name": "pine_e",
+     "layer": 2,
+     "delay": 0.333,
+     "foldAngle": -1.59733,
+     "tris": 154
+    },
+    {
+     "name": "pine_e_xf",
+     "layer": 2,
+     "delay": 0.333,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_e_xb",
+     "layer": 2,
+     "delay": 0.333,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_d",
+     "layer": 3,
+     "delay": 0.222,
+     "foldAngle": -1.60494,
+     "tris": 156
+    },
+    {
+     "name": "pine_d_xf",
+     "layer": 3,
+     "delay": 0.222,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "pine_d_xb",
+     "layer": 3,
+     "delay": 0.222,
+     "foldAngle": 1.5708,
+     "tris": 76
+    },
+    {
+     "name": "pine_b",
+     "layer": 6,
+     "delay": 0.111,
+     "foldAngle": 1.56388,
+     "tris": 154
+    },
+    {
+     "name": "pine_b_xf",
+     "layer": 6,
+     "delay": 0.111,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "pine_b_xb",
+     "layer": 6,
+     "delay": 0.111,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "pine_a",
+     "layer": 10,
+     "delay": 0.0,
+     "foldAngle": 1.59607,
+     "tris": 156
+    },
+    {
+     "name": "pine_a_xf",
+     "layer": 10,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "pine_a_xb",
+     "layer": 10,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 64
+    }
+   ]
+  },
+  "snow_drifts": {
+   "flaps": 19,
+   "top": 13,
+   "flatTop": 0.082,
+   "oob": 0.0,
+   "tris": 2741,
+   "maxLayer": 16,
+   "height": 1.044,
+   "hinges": [
+    {
+     "name": "snowbush_g10",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.56237,
+     "tris": 76
+    },
+    {
+     "name": "ice_rock_g11",
+     "layer": 1,
+     "delay": 0.917,
+     "foldAngle": -1.54109,
+     "tris": 76
+    },
+    {
+     "name": "ice_rock_g20",
+     "layer": 0,
+     "delay": 0.833,
+     "foldAngle": -1.54654,
+     "tris": 76
+    },
+    {
+     "name": "snowbush_g21",
+     "layer": 1,
+     "delay": 0.75,
+     "foldAngle": -1.56341,
+     "tris": 76
+    },
+    {
+     "name": "snowman",
+     "layer": 2,
+     "delay": 0.667,
+     "foldAngle": -1.57029,
+     "tris": 92
+    },
+    {
+     "name": "drift_c_l",
+     "layer": 3,
+     "delay": 0.583,
+     "foldAngle": 1.54527,
+     "tris": 192
+    },
+    {
+     "name": "drift_c_r",
+     "layer": 5,
+     "delay": 0.5,
+     "foldAngle": 1.5392,
+     "tris": 192
+    },
+    {
+     "name": "pine_b",
+     "layer": 2,
+     "delay": 0.417,
+     "foldAngle": -1.57639,
+     "tris": 154
+    },
+    {
+     "name": "pine_b_xf",
+     "layer": 2,
+     "delay": 0.417,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_b_xb",
+     "layer": 2,
+     "delay": 0.417,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_a",
+     "layer": 9,
+     "delay": 0.333,
+     "foldAngle": -1.55381,
+     "tris": 154
+    },
+    {
+     "name": "pine_a_xf",
+     "layer": 9,
+     "delay": 0.333,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "pine_a_xb",
+     "layer": 9,
+     "delay": 0.333,
+     "foldAngle": 1.5708,
+     "tris": 76
+    },
+    {
+     "name": "birch",
+     "layer": 2,
+     "delay": 0.25,
+     "foldAngle": -1.56389,
+     "tris": 156
+    },
+    {
+     "name": "birch_xf",
+     "layer": 2,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "birch_xb",
+     "layer": 2,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 88
+    },
+    {
+     "name": "drift_a_l",
+     "layer": 12,
+     "delay": 0.167,
+     "foldAngle": 1.53492,
+     "tris": 192
+    },
+    {
+     "name": "drift_a_r",
+     "layer": 14,
+     "delay": 0.083,
+     "foldAngle": 1.54208,
+     "tris": 192
+    },
+    {
+     "name": "drift_a_m",
+     "layer": 16,
+     "delay": 0.0,
+     "foldAngle": 1.60675,
+     "tris": 150
+    }
+   ]
+  },
+  "snow_cabin": {
+   "flaps": 19,
+   "top": 8,
+   "flatTop": 0.0992,
+   "oob": 0.0,
+   "tris": 1701,
+   "maxLayer": 20,
+   "height": 1.315,
+   "hinges": [
+    {
+     "name": "cabin_back",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cabin_front",
+     "layer": 3,
+     "delay": 0.857,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cabin_wall_l",
+     "layer": 3,
+     "delay": 0.857,
+     "foldAngle": 1.5708,
+     "tris": 32
+    },
+    {
+     "name": "cabin_wall_r",
+     "layer": 3,
+     "delay": 0.857,
+     "foldAngle": -1.5708,
+     "tris": 32
+    },
+    {
+     "name": "cabin_roof_f",
+     "layer": 3,
+     "delay": 0.857,
+     "foldAngle": 0.83776,
+     "tris": 12
+    },
+    {
+     "name": "cabin_roof_b",
+     "layer": 3,
+     "delay": 0.857,
+     "foldAngle": -1.67552,
+     "tris": 12
+    },
+    {
+     "name": "cabin_chim",
+     "layer": 3,
+     "delay": 0.857,
+     "foldAngle": 2.30383,
+     "tris": 42
+    },
+    {
+     "name": "cabin_chim_x",
+     "layer": 3,
+     "delay": 0.857,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "cabin_chim_lid",
+     "layer": 3,
+     "delay": 0.857,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "sled",
+     "layer": 0,
+     "delay": 0.714,
+     "foldAngle": -1.53987,
+     "tris": 84
+    },
+    {
+     "name": "fence",
+     "layer": 12,
+     "delay": 0.571,
+     "foldAngle": -1.55689,
+     "tris": 82
+    },
+    {
+     "name": "drift",
+     "layer": 13,
+     "delay": 0.429,
+     "foldAngle": 1.57627,
+     "tris": 150
+    },
+    {
+     "name": "woodpile",
+     "layer": 0,
+     "delay": 0.286,
+     "foldAngle": -1.54448,
+     "tris": 98
+    },
+    {
+     "name": "pine_b",
+     "layer": 5,
+     "delay": 0.143,
+     "foldAngle": 1.60353,
+     "tris": 154
+    },
+    {
+     "name": "pine_b_xf",
+     "layer": 5,
+     "delay": 0.143,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "pine_b_xb",
+     "layer": 5,
+     "delay": 0.143,
+     "foldAngle": 1.5708,
+     "tris": 76
+    },
+    {
+     "name": "pine_a",
+     "layer": 20,
+     "delay": 0.0,
+     "foldAngle": 1.55897,
+     "tris": 154
+    },
+    {
+     "name": "pine_a_xf",
+     "layer": 20,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "pine_a_xb",
+     "layer": 20,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 64
+    }
+   ]
+  },
+  "snow_hamlet": {
+   "flaps": 29,
+   "top": 13,
+   "flatTop": 0.0872,
+   "oob": 0.011,
+   "tris": 2374,
+   "maxLayer": 17,
+   "height": 1.114,
+   "hinges": [
+    {
+     "name": "cabin_w_back",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cabin_w_front",
+     "layer": 3,
+     "delay": 0.917,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cabin_w_wall_l",
+     "layer": 3,
+     "delay": 0.917,
+     "foldAngle": 1.5708,
+     "tris": 32
+    },
+    {
+     "name": "cabin_w_wall_r",
+     "layer": 3,
+     "delay": 0.917,
+     "foldAngle": -1.5708,
+     "tris": 32
+    },
+    {
+     "name": "cabin_w_roof_f",
+     "layer": 3,
+     "delay": 0.917,
+     "foldAngle": 0.83776,
+     "tris": 12
+    },
+    {
+     "name": "cabin_w_roof_b",
+     "layer": 3,
+     "delay": 0.917,
+     "foldAngle": -1.67552,
+     "tris": 12
+    },
+    {
+     "name": "cabin_w_chim",
+     "layer": 3,
+     "delay": 0.917,
+     "foldAngle": 2.30383,
+     "tris": 42
+    },
+    {
+     "name": "cabin_w_chim_x",
+     "layer": 3,
+     "delay": 0.917,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "cabin_w_chim_lid",
+     "layer": 3,
+     "delay": 0.917,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "cabin_e_back",
+     "layer": 0,
+     "delay": 0.833,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cabin_e_front",
+     "layer": 3,
+     "delay": 0.75,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "cabin_e_wall_l",
+     "layer": 3,
+     "delay": 0.75,
+     "foldAngle": 1.5708,
+     "tris": 32
+    },
+    {
+     "name": "cabin_e_wall_r",
+     "layer": 3,
+     "delay": 0.75,
+     "foldAngle": -1.5708,
+     "tris": 32
+    },
+    {
+     "name": "cabin_e_roof_f",
+     "layer": 3,
+     "delay": 0.75,
+     "foldAngle": 0.83776,
+     "tris": 12
+    },
+    {
+     "name": "cabin_e_roof_b",
+     "layer": 3,
+     "delay": 0.75,
+     "foldAngle": -1.67552,
+     "tris": 12
+    },
+    {
+     "name": "cabin_e_chim",
+     "layer": 3,
+     "delay": 0.75,
+     "foldAngle": 2.30383,
+     "tris": 42
+    },
+    {
+     "name": "cabin_e_chim_x",
+     "layer": 3,
+     "delay": 0.75,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "cabin_e_chim_lid",
+     "layer": 3,
+     "delay": 0.75,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "woodpile",
+     "layer": 12,
+     "delay": 0.667,
+     "foldAngle": -1.57822,
+     "tris": 98
+    },
+    {
+     "name": "fence_yard_a_0",
+     "layer": 12,
+     "delay": 0.583,
+     "foldAngle": -1.59188,
+     "tris": 84
+    },
+    {
+     "name": "fence_yard_b_0",
+     "layer": 0,
+     "delay": 0.5,
+     "foldAngle": -1.58736,
+     "tris": 84
+    },
+    {
+     "name": "snowman",
+     "layer": 13,
+     "delay": 0.417,
+     "foldAngle": 1.5639,
+     "tris": 100
+    },
+    {
+     "name": "sled",
+     "layer": 13,
+     "delay": 0.333,
+     "foldAngle": -1.61026,
+     "tris": 84
+    },
+    {
+     "name": "lamp",
+     "layer": 14,
+     "delay": 0.25,
+     "foldAngle": -1.58476,
+     "tris": 236
+    },
+    {
+     "name": "snowbush_g10",
+     "layer": 12,
+     "delay": 0.167,
+     "foldAngle": -1.56431,
+     "tris": 76
+    },
+    {
+     "name": "ice_rock_g11",
+     "layer": 13,
+     "delay": 0.083,
+     "foldAngle": -1.62089,
+     "tris": 76
+    },
+    {
+     "name": "pine",
+     "layer": 17,
+     "delay": 0.0,
+     "foldAngle": 1.53748,
+     "tris": 156
+    },
+    {
+     "name": "pine_xf",
+     "layer": 17,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_xb",
+     "layer": 17,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    }
+   ]
+  },
+  "frozen_pond": {
+   "flaps": 14,
+   "top": 9,
+   "flatTop": 0.0592,
+   "oob": 0.018,
+   "tris": 2112,
+   "maxLayer": 10,
+   "height": 1.225,
+   "hinges": [
+    {
+     "name": "drift_bank_c",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": 1.57382,
+     "tris": 150
+    },
+    {
+     "name": "drift_bank_b",
+     "layer": 0,
+     "delay": 0.875,
+     "foldAngle": 1.56356,
+     "tris": 150
+    },
+    {
+     "name": "drift_bank_a",
+     "layer": 0,
+     "delay": 0.75,
+     "foldAngle": 1.61115,
+     "tris": 150
+    },
+    {
+     "name": "sign",
+     "layer": 0,
+     "delay": 0.625,
+     "foldAngle": -1.52604,
+     "tris": 76
+    },
+    {
+     "name": "sled",
+     "layer": 0,
+     "delay": 0.5,
+     "foldAngle": -1.56121,
+     "tris": 84
+    },
+    {
+     "name": "ice_a",
+     "layer": 0,
+     "delay": 0.375,
+     "foldAngle": -1.61314,
+     "tris": 84
+    },
+    {
+     "name": "pine_b",
+     "layer": 3,
+     "delay": 0.25,
+     "foldAngle": 1.59174,
+     "tris": 156
+    },
+    {
+     "name": "pine_b_xf",
+     "layer": 3,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "pine_b_xb",
+     "layer": 3,
+     "delay": 0.25,
+     "foldAngle": 1.5708,
+     "tris": 76
+    },
+    {
+     "name": "pine_a",
+     "layer": 10,
+     "delay": 0.125,
+     "foldAngle": 1.57136,
+     "tris": 154
+    },
+    {
+     "name": "pine_a_xf",
+     "layer": 10,
+     "delay": 0.125,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "pine_a_xb",
+     "layer": 10,
+     "delay": 0.125,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "igloo",
+     "layer": 1,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 128
+    },
+    {
+     "name": "igloo_xb",
+     "layer": 1,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 40
+    }
+   ]
+  },
+  "village_b": {
+   "flaps": 28,
+   "top": 17,
+   "flatTop": 0.1192,
+   "oob": 0.0,
+   "tris": 2712,
+   "maxLayer": 25,
+   "height": 1.298,
+   "hinges": [
+    {
+     "name": "tree",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5824,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "house_back",
+     "layer": 6,
+     "delay": 0.938,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "house_front",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "house_wall_l",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "house_wall_r",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "house_roof_f",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": 0.68881,
+     "tris": 12
+    },
+    {
+     "name": "house_roof_b",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": -1.37762,
+     "tris": 12
+    },
+    {
+     "name": "house_chim",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": 2.45279,
+     "tris": 42
+    },
+    {
+     "name": "house_chim_x",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "house_chim_lid",
+     "layer": 9,
+     "delay": 0.875,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "barrels",
+     "layer": 18,
+     "delay": 0.812,
+     "foldAngle": -1.53864,
+     "tris": 92
+    },
+    {
+     "name": "bed_a",
+     "layer": 6,
+     "delay": 0.75,
+     "foldAngle": -1.586,
+     "tris": 116
+    },
+    {
+     "name": "bed_b",
+     "layer": 6,
+     "delay": 0.688,
+     "foldAngle": -1.55853,
+     "tris": 104
+    },
+    {
+     "name": "beehive",
+     "layer": 7,
+     "delay": 0.625,
+     "foldAngle": 1.5839,
+     "tris": 90
+    },
+    {
+     "name": "fence_gd_0",
+     "layer": 7,
+     "delay": 0.562,
+     "foldAngle": -1.58157,
+     "tris": 64
+    },
+    {
+     "name": "fence_gd_1",
+     "layer": 8,
+     "delay": 0.5,
+     "foldAngle": -1.56888,
+     "tris": 64
+    },
+    {
+     "name": "flowers_g10",
+     "layer": 8,
+     "delay": 0.438,
+     "foldAngle": -1.6094,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g11",
+     "layer": 9,
+     "delay": 0.375,
+     "foldAngle": -1.60448,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g12",
+     "layer": 0,
+     "delay": 0.312,
+     "foldAngle": -1.62079,
+     "tris": 76
+    },
+    {
+     "name": "woodpile",
+     "layer": 0,
+     "delay": 0.25,
+     "foldAngle": -1.59108,
+     "tris": 90
+    },
+    {
+     "name": "bush_g20",
+     "layer": 18,
+     "delay": 0.188,
+     "foldAngle": -1.53578,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 19,
+     "delay": 0.125,
+     "foldAngle": -1.60879,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g22",
+     "layer": 20,
+     "delay": 0.062,
+     "foldAngle": -1.57485,
+     "tris": 68
+    },
+    {
+     "name": "pine",
+     "layer": 25,
+     "delay": 0.0,
+     "foldAngle": -1.55879,
+     "tris": 140
+    },
+    {
+     "name": "pine_xf",
+     "layer": 25,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_xb",
+     "layer": 25,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 52
+    }
+   ]
+  },
+  "village_green": {
+   "flaps": 19,
+   "top": 15,
+   "flatTop": 0.072,
+   "oob": 0.0,
+   "tris": 2420,
+   "maxLayer": 15,
+   "height": 1.36,
+   "hinges": [
+    {
+     "name": "tree_a",
+     "layer": 4,
+     "delay": 1.0,
+     "foldAngle": 1.59548,
+     "tris": 140
+    },
+    {
+     "name": "tree_a_xf",
+     "layer": 4,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_a_xb",
+     "layer": 4,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_b",
+     "layer": 11,
+     "delay": 0.929,
+     "foldAngle": 1.59529,
+     "tris": 140
+    },
+    {
+     "name": "tree_b_xf",
+     "layer": 11,
+     "delay": 0.929,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_b_xb",
+     "layer": 11,
+     "delay": 0.929,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "well",
+     "layer": 7,
+     "delay": 0.857,
+     "foldAngle": -1.60417,
+     "tris": 90
+    },
+    {
+     "name": "bush_g10",
+     "layer": 8,
+     "delay": 0.786,
+     "foldAngle": -1.58596,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 9,
+     "delay": 0.714,
+     "foldAngle": -1.58479,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g12",
+     "layer": 10,
+     "delay": 0.643,
+     "foldAngle": 1.62275,
+     "tris": 68
+    },
+    {
+     "name": "bench",
+     "layer": 7,
+     "delay": 0.571,
+     "foldAngle": -1.56533,
+     "tris": 90
+    },
+    {
+     "name": "flowers_g20",
+     "layer": 0,
+     "delay": 0.5,
+     "foldAngle": -1.61806,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g21",
+     "layer": 1,
+     "delay": 0.429,
+     "foldAngle": -1.57452,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g22",
+     "layer": 2,
+     "delay": 0.357,
+     "foldAngle": 1.53998,
+     "tris": 76
+    },
+    {
+     "name": "lamp_a",
+     "layer": 14,
+     "delay": 0.286,
+     "foldAngle": -1.54175,
+     "tris": 48
+    },
+    {
+     "name": "tuft_g30",
+     "layer": 0,
+     "delay": 0.214,
+     "foldAngle": -1.60296,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g31",
+     "layer": 1,
+     "delay": 0.143,
+     "foldAngle": -1.58154,
+     "tris": 76
+    },
+    {
+     "name": "rock_g32",
+     "layer": 2,
+     "delay": 0.071,
+     "foldAngle": -1.55519,
+     "tris": 52
+    },
+    {
+     "name": "guidepost",
+     "layer": 15,
+     "delay": 0.0,
+     "foldAngle": -1.54796,
+     "tris": 86
+    }
+   ]
+  },
+  "river_reeds": {
+   "flaps": 19,
+   "top": 15,
+   "flatTop": 0.0512,
+   "oob": 0.018,
+   "tris": 2107,
+   "maxLayer": 8,
+   "height": 1.242,
+   "hinges": [
+    {
+     "name": "reeds_g10",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.60074,
+     "tris": 100
+    },
+    {
+     "name": "reeds_g11",
+     "layer": 1,
+     "delay": 0.929,
+     "foldAngle": -1.55799,
+     "tris": 100
+    },
+    {
+     "name": "rock_g12",
+     "layer": 2,
+     "delay": 0.857,
+     "foldAngle": 1.52663,
+     "tris": 52
+    },
+    {
+     "name": "reeds_g20",
+     "layer": 1,
+     "delay": 0.786,
+     "foldAngle": -1.52918,
+     "tris": 100
+    },
+    {
+     "name": "tuft_g21",
+     "layer": 2,
+     "delay": 0.714,
+     "foldAngle": -1.59912,
+     "tris": 68
+    },
+    {
+     "name": "reeds_g22",
+     "layer": 3,
+     "delay": 0.643,
+     "foldAngle": -1.52664,
+     "tris": 100
+    },
+    {
+     "name": "reeds_g30",
+     "layer": 0,
+     "delay": 0.571,
+     "foldAngle": -1.53594,
+     "tris": 100
+    },
+    {
+     "name": "flowers_g31",
+     "layer": 1,
+     "delay": 0.5,
+     "foldAngle": -1.54104,
+     "tris": 76
+    },
+    {
+     "name": "jetty",
+     "layer": 0,
+     "delay": 0.429,
+     "foldAngle": -0.10472,
+     "tris": 20
+    },
+    {
+     "name": "jetty_post_a",
+     "layer": 0,
+     "delay": 0.429,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "jetty_post_b",
+     "layer": 0,
+     "delay": 0.429,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "boat",
+     "layer": 0,
+     "delay": 0.357,
+     "foldAngle": -1.5703,
+     "tris": 52
+    },
+    {
+     "name": "barrel",
+     "layer": 0,
+     "delay": 0.286,
+     "foldAngle": -1.57457,
+     "tris": 92
+    },
+    {
+     "name": "bush_g40",
+     "layer": 3,
+     "delay": 0.214,
+     "foldAngle": -1.52613,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g41",
+     "layer": 4,
+     "delay": 0.143,
+     "foldAngle": -1.52333,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g42",
+     "layer": 5,
+     "delay": 0.071,
+     "foldAngle": 1.57637,
+     "tris": 68
+    },
+    {
+     "name": "tree",
+     "layer": 8,
+     "delay": 0.0,
+     "foldAngle": 1.55204,
+     "tris": 140
+    },
+    {
+     "name": "tree_xf",
+     "layer": 8,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "tree_xb",
+     "layer": 8,
+     "delay": 0.0,
+     "foldAngle": 1.5708,
+     "tris": 60
+    }
+   ]
+  },
+  "blossom_orchard": {
+   "flaps": 17,
+   "top": 9,
+   "flatTop": 0.124,
+   "oob": 0.0,
+   "tris": 2082,
+   "maxLayer": 28,
+   "height": 1.336,
+   "hinges": [
+    {
+     "name": "tree_a",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.54193,
+     "tris": 156
+    },
+    {
+     "name": "tree_a_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tree_a_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tree_b",
+     "layer": 10,
+     "delay": 0.875,
+     "foldAngle": 1.59911,
+     "tris": 154
+    },
+    {
+     "name": "tree_b_xf",
+     "layer": 10,
+     "delay": 0.875,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "tree_b_xb",
+     "layer": 10,
+     "delay": 0.875,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "tree_c",
+     "layer": 17,
+     "delay": 0.75,
+     "foldAngle": -1.55787,
+     "tris": 156
+    },
+    {
+     "name": "tree_c_xf",
+     "layer": 17,
+     "delay": 0.75,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "tree_c_xb",
+     "layer": 17,
+     "delay": 0.75,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "tree_d",
+     "layer": 24,
+     "delay": 0.625,
+     "foldAngle": -1.57372,
+     "tris": 156
+    },
+    {
+     "name": "tree_d_xf",
+     "layer": 24,
+     "delay": 0.625,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "tree_d_xb",
+     "layer": 24,
+     "delay": 0.625,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "beehive",
+     "layer": 27,
+     "delay": 0.5,
+     "foldAngle": -1.58842,
+     "tris": 122
+    },
+    {
+     "name": "flowers_g10",
+     "layer": 27,
+     "delay": 0.375,
+     "foldAngle": -1.60632,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g11",
+     "layer": 28,
+     "delay": 0.25,
+     "foldAngle": -1.61213,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g20",
+     "layer": 27,
+     "delay": 0.125,
+     "foldAngle": 1.621,
+     "tris": 76
+    },
+    {
+     "name": "hives",
+     "layer": 27,
+     "delay": 0.0,
+     "foldAngle": 1.55074,
+     "tris": 122
+    }
+   ]
+  },
+  "blossom_garden": {
+   "flaps": 11,
+   "top": 9,
+   "flatTop": 0.049,
+   "oob": 0.0,
+   "tris": 1936,
+   "maxLayer": 9,
+   "height": 0.958,
+   "hinges": [
+    {
+     "name": "greenhouse",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.55823,
+     "tris": 156
+    },
+    {
+     "name": "greenhouse_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "greenhouse_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "arch_a",
+     "layer": 5,
+     "delay": 0.875,
+     "foldAngle": 1.56052,
+     "tris": 200
+    },
+    {
+     "name": "arch_b",
+     "layer": 6,
+     "delay": 0.75,
+     "foldAngle": 1.56955,
+     "tris": 200
+    },
+    {
+     "name": "bed_a",
+     "layer": 7,
+     "delay": 0.625,
+     "foldAngle": 1.53644,
+     "tris": 116
+    },
+    {
+     "name": "bed_b",
+     "layer": 8,
+     "delay": 0.5,
+     "foldAngle": -1.5453,
+     "tris": 104
+    },
+    {
+     "name": "bed_c",
+     "layer": 7,
+     "delay": 0.375,
+     "foldAngle": -1.55718,
+     "tris": 104
+    },
+    {
+     "name": "bed_d",
+     "layer": 8,
+     "delay": 0.25,
+     "foldAngle": -1.55641,
+     "tris": 116
+    },
+    {
+     "name": "hives",
+     "layer": 8,
+     "delay": 0.125,
+     "foldAngle": -1.53553,
+     "tris": 122
+    },
+    {
+     "name": "stone_lantern",
+     "layer": 9,
+     "delay": 0.0,
+     "foldAngle": -1.55807,
+     "tris": 128
+    }
+   ]
+  },
+  "blossom_gazebo": {
+   "flaps": 10,
+   "top": 6,
+   "flatTop": 0.064,
+   "oob": 0.0,
+   "tris": 1656,
+   "maxLayer": 13,
+   "height": 1.351,
+   "hinges": [
+    {
+     "name": "tree_a",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.58364,
+     "tris": 156
+    },
+    {
+     "name": "tree_a_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "tree_a_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "bed_b",
+     "layer": 0,
+     "delay": 0.8,
+     "foldAngle": 1.59425,
+     "tris": 104
+    },
+    {
+     "name": "gazebo",
+     "layer": 10,
+     "delay": 0.6,
+     "foldAngle": 1.55049,
+     "tris": 156
+    },
+    {
+     "name": "gazebo_xf",
+     "layer": 10,
+     "delay": 0.6,
+     "foldAngle": 1.5708,
+     "tris": 70
+    },
+    {
+     "name": "gazebo_xb",
+     "layer": 10,
+     "delay": 0.6,
+     "foldAngle": 1.5708,
+     "tris": 66
+    },
+    {
+     "name": "picnic",
+     "layer": 13,
+     "delay": 0.4,
+     "foldAngle": -1.53157,
+     "tris": 76
+    },
+    {
+     "name": "bed",
+     "layer": 13,
+     "delay": 0.2,
+     "foldAngle": -1.6035,
+     "tris": 116
+    },
+    {
+     "name": "stone_lantern",
+     "layer": 0,
+     "delay": 0.0,
+     "foldAngle": -1.59595,
+     "tris": 128
+    }
+   ]
+  },
+  "blossom_lane": {
+   "flaps": 19,
+   "top": 11,
+   "flatTop": 0.128,
+   "oob": 0.0,
+   "tris": 2613,
+   "maxLayer": 29,
+   "height": 1.29,
+   "hinges": [
+    {
+     "name": "tree_a",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.59374,
+     "tris": 156
+    },
+    {
+     "name": "tree_a_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tree_a_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tree_b",
+     "layer": 10,
+     "delay": 0.9,
+     "foldAngle": 1.57946,
+     "tris": 156
+    },
+    {
+     "name": "tree_b_xf",
+     "layer": 10,
+     "delay": 0.9,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "tree_b_xb",
+     "layer": 10,
+     "delay": 0.9,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "tree_c",
+     "layer": 17,
+     "delay": 0.8,
+     "foldAngle": -1.54862,
+     "tris": 154
+    },
+    {
+     "name": "tree_c_xf",
+     "layer": 17,
+     "delay": 0.8,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "tree_c_xb",
+     "layer": 17,
+     "delay": 0.8,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "tree_d",
+     "layer": 24,
+     "delay": 0.7,
+     "foldAngle": -1.54414,
+     "tris": 156
+    },
+    {
+     "name": "tree_d_xf",
+     "layer": 24,
+     "delay": 0.7,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "tree_d_xb",
+     "layer": 24,
+     "delay": 0.7,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "stone_lantern_a",
+     "layer": 20,
+     "delay": 0.6,
+     "foldAngle": -1.54271,
+     "tris": 128
+    },
+    {
+     "name": "stone_lantern_b",
+     "layer": 27,
+     "delay": 0.5,
+     "foldAngle": -1.52917,
+     "tris": 128
+    },
+    {
+     "name": "bench",
+     "layer": 0,
+     "delay": 0.4,
+     "foldAngle": -1.58099,
+     "tris": 106
+    },
+    {
+     "name": "flowers_g10",
+     "layer": 21,
+     "delay": 0.3,
+     "foldAngle": -1.57521,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g11",
+     "layer": 22,
+     "delay": 0.2,
+     "foldAngle": -1.5255,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g20",
+     "layer": 28,
+     "delay": 0.1,
+     "foldAngle": -1.54025,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g21",
+     "layer": 29,
+     "delay": 0.0,
+     "foldAngle": -1.59274,
+     "tris": 68
+    }
+   ]
+  },
+  "deep_pines": {
+   "flaps": 19,
+   "top": 11,
+   "flatTop": 0.096,
+   "oob": 0.015,
+   "tris": 2238,
+   "maxLayer": 21,
+   "height": 1.752,
+   "hinges": [
+    {
+     "name": "pine_a",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.57673,
+     "tris": 156
+    },
+    {
+     "name": "pine_a_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 66
+    },
+    {
+     "name": "pine_a_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 70
+    },
+    {
+     "name": "pine_b",
+     "layer": 10,
+     "delay": 0.9,
+     "foldAngle": 1.60171,
+     "tris": 156
+    },
+    {
+     "name": "pine_b_xf",
+     "layer": 10,
+     "delay": 0.9,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_b_xb",
+     "layer": 10,
+     "delay": 0.9,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_c",
+     "layer": 10,
+     "delay": 0.8,
+     "foldAngle": 1.57205,
+     "tris": 156
+    },
+    {
+     "name": "pine_c_xf",
+     "layer": 10,
+     "delay": 0.8,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_c_xb",
+     "layer": 10,
+     "delay": 0.8,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_d",
+     "layer": 17,
+     "delay": 0.7,
+     "foldAngle": -1.55145,
+     "tris": 156
+    },
+    {
+     "name": "pine_d_xf",
+     "layer": 17,
+     "delay": 0.7,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "pine_d_xb",
+     "layer": 17,
+     "delay": 0.7,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "mossy_boulder_g10",
+     "layer": 13,
+     "delay": 0.6,
+     "foldAngle": -1.59996,
+     "tris": 76
+    },
+    {
+     "name": "fern_g11",
+     "layer": 14,
+     "delay": 0.5,
+     "foldAngle": -1.5673,
+     "tris": 76
+    },
+    {
+     "name": "fern_g12",
+     "layer": 14,
+     "delay": 0.4,
+     "foldAngle": 1.6216,
+     "tris": 76
+    },
+    {
+     "name": "fern_g20",
+     "layer": 0,
+     "delay": 0.3,
+     "foldAngle": -1.58249,
+     "tris": 76
+    },
+    {
+     "name": "mossy_boulder_g21",
+     "layer": 0,
+     "delay": 0.2,
+     "foldAngle": -1.59716,
+     "tris": 76
+    },
+    {
+     "name": "stump",
+     "layer": 20,
+     "delay": 0.1,
+     "foldAngle": -1.57197,
+     "tris": 104
+    },
+    {
+     "name": "mushrooms",
+     "layer": 21,
+     "delay": 0.0,
+     "foldAngle": -1.53981,
+     "tris": 112
+    }
+   ]
+  },
+  "mushroom_glade": {
+   "flaps": 17,
+   "top": 9,
+   "flatTop": 0.124,
+   "oob": 0.0,
+   "tris": 2090,
+   "maxLayer": 28,
+   "height": 1.506,
+   "hinges": [
+    {
+     "name": "pine_a",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.55829,
+     "tris": 156
+    },
+    {
+     "name": "pine_a_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_a_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_b",
+     "layer": 10,
+     "delay": 0.875,
+     "foldAngle": 1.56298,
+     "tris": 156
+    },
+    {
+     "name": "pine_b_xf",
+     "layer": 10,
+     "delay": 0.875,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_b_xb",
+     "layer": 10,
+     "delay": 0.875,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "shroom_a",
+     "layer": 17,
+     "delay": 0.75,
+     "foldAngle": 1.5434,
+     "tris": 154
+    },
+    {
+     "name": "shroom_a_xf",
+     "layer": 17,
+     "delay": 0.75,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "shroom_a_xb",
+     "layer": 17,
+     "delay": 0.75,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "shroom_b",
+     "layer": 24,
+     "delay": 0.625,
+     "foldAngle": 1.58727,
+     "tris": 152
+    },
+    {
+     "name": "shroom_b_xf",
+     "layer": 24,
+     "delay": 0.625,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "shroom_b_xb",
+     "layer": 24,
+     "delay": 0.625,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "shroom_c",
+     "layer": 6,
+     "delay": 0.5,
+     "foldAngle": -1.5735,
+     "tris": 92
+    },
+    {
+     "name": "stump_a",
+     "layer": 27,
+     "delay": 0.375,
+     "foldAngle": -1.61291,
+     "tris": 104
+    },
+    {
+     "name": "stump_b",
+     "layer": 0,
+     "delay": 0.25,
+     "foldAngle": -1.57557,
+     "tris": 90
+    },
+    {
+     "name": "fern_a",
+     "layer": 28,
+     "delay": 0.125,
+     "foldAngle": -1.58865,
+     "tris": 100
+    },
+    {
+     "name": "fern_b",
+     "layer": 27,
+     "delay": 0.0,
+     "foldAngle": -1.53436,
+     "tris": 96
+    }
+   ]
+  },
+  "fallen_log": {
+   "flaps": 14,
+   "top": 10,
+   "flatTop": 0.068,
+   "oob": 0.019,
+   "tris": 1893,
+   "maxLayer": 14,
+   "height": 1.525,
+   "hinges": [
+    {
+     "name": "pine_a",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.53869,
+     "tris": 156
+    },
+    {
+     "name": "pine_a_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "pine_a_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "pine_b",
+     "layer": 10,
+     "delay": 0.889,
+     "foldAngle": 1.543,
+     "tris": 156
+    },
+    {
+     "name": "pine_b_xf",
+     "layer": 10,
+     "delay": 0.889,
+     "foldAngle": 1.5708,
+     "tris": 66
+    },
+    {
+     "name": "pine_b_xb",
+     "layer": 10,
+     "delay": 0.889,
+     "foldAngle": 1.5708,
+     "tris": 70
+    },
+    {
+     "name": "boulder_a_rear",
+     "layer": 13,
+     "delay": 0.778,
+     "foldAngle": -1.52753,
+     "tris": 52
+    },
+    {
+     "name": "boulder_a",
+     "layer": 14,
+     "delay": 0.667,
+     "foldAngle": -1.5762,
+     "tris": 76
+    },
+    {
+     "name": "boulder_b_rear",
+     "layer": 0,
+     "delay": 0.556,
+     "foldAngle": -1.54182,
+     "tris": 52
+    },
+    {
+     "name": "boulder_b",
+     "layer": 1,
+     "delay": 0.444,
+     "foldAngle": -1.54003,
+     "tris": 76
+    },
+    {
+     "name": "log",
+     "layer": 6,
+     "delay": 0.333,
+     "foldAngle": -0.97738,
+     "tris": 182
+    },
+    {
+     "name": "log_b",
+     "layer": 7,
+     "delay": 0.222,
+     "foldAngle": -0.97738,
+     "tris": 182
+    },
+    {
+     "name": "fern_a",
+     "layer": 13,
+     "delay": 0.111,
+     "foldAngle": -1.60084,
+     "tris": 100
+    },
+    {
+     "name": "mushrooms",
+     "layer": 0,
+     "delay": 0.0,
+     "foldAngle": -1.59862,
+     "tris": 112
+    }
+   ]
+  },
+  "watchtower": {
+   "flaps": 18,
+   "top": 8,
+   "flatTop": 0.12,
+   "oob": 0.0,
+   "tris": 2617,
+   "maxLayer": 27,
+   "height": 1.522,
+   "hinges": [
+    {
+     "name": "pine_a",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.57942,
+     "tris": 156
+    },
+    {
+     "name": "pine_a_xf",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_a_xb",
+     "layer": 3,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_b",
+     "layer": 10,
+     "delay": 0.857,
+     "foldAngle": 1.55103,
+     "tris": 156
+    },
+    {
+     "name": "pine_b_xf",
+     "layer": 10,
+     "delay": 0.857,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_b_xb",
+     "layer": 10,
+     "delay": 0.857,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tower",
+     "layer": 17,
+     "delay": 0.714,
+     "foldAngle": 1.57684,
+     "tris": 156
+    },
+    {
+     "name": "tower_xf",
+     "layer": 17,
+     "delay": 0.714,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tower_xb",
+     "layer": 17,
+     "delay": 0.714,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "cabin",
+     "layer": 24,
+     "delay": 0.571,
+     "foldAngle": 1.59495,
+     "tris": 152
+    },
+    {
+     "name": "cabin_xf",
+     "layer": 24,
+     "delay": 0.571,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "cabin_xb",
+     "layer": 24,
+     "delay": 0.571,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "pine_c",
+     "layer": 24,
+     "delay": 0.429,
+     "foldAngle": -1.58208,
+     "tris": 156
+    },
+    {
+     "name": "pine_c_xf",
+     "layer": 24,
+     "delay": 0.429,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "pine_c_xb",
+     "layer": 24,
+     "delay": 0.429,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "stump",
+     "layer": 27,
+     "delay": 0.286,
+     "foldAngle": -1.60647,
+     "tris": 104
+    },
+    {
+     "name": "guidepost",
+     "layer": 27,
+     "delay": 0.143,
+     "foldAngle": -1.54657,
+     "tris": 192
+    },
+    {
+     "name": "fern_a",
+     "layer": 27,
+     "delay": 0.0,
+     "foldAngle": -1.52867,
+     "tris": 100
+    }
+   ]
+  },
+  "church": {
+   "flaps": 17,
+   "top": 10,
+   "flatTop": 0.08,
+   "oob": 0.0,
+   "tris": 1869,
+   "maxLayer": 17,
+   "height": 1.554,
+   "hinges": [
+    {
+     "name": "tree_a",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.57637,
+     "tris": 156
+    },
+    {
+     "name": "tree_a_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tree_a_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "nave_back",
+     "layer": 5,
+     "delay": 0.889,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "nave_front",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": -1.5708,
+     "tris": 28
+    },
+    {
+     "name": "nave_wall_l",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "nave_wall_r",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "nave_roof_f",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": 0.79936,
+     "tris": 12
+    },
+    {
+     "name": "nave_roof_b",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": -1.59872,
+     "tris": 12
+    },
+    {
+     "name": "steeple",
+     "layer": 15,
+     "delay": 0.667,
+     "foldAngle": -1.5708,
+     "tris": 228
+    },
+    {
+     "name": "steeple_x",
+     "layer": 15,
+     "delay": 0.667,
+     "foldAngle": 1.5708,
+     "tris": 60
+    },
+    {
+     "name": "bench_a",
+     "layer": 11,
+     "delay": 0.556,
+     "foldAngle": -1.57507,
+     "tris": 106
+    },
+    {
+     "name": "bench_b",
+     "layer": 0,
+     "delay": 0.444,
+     "foldAngle": -1.57215,
+     "tris": 106
+    },
+    {
+     "name": "lamp",
+     "layer": 16,
+     "delay": 0.333,
+     "foldAngle": -1.5594,
+     "tris": 48
+    },
+    {
+     "name": "bed",
+     "layer": 16,
+     "delay": 0.222,
+     "foldAngle": -1.57141,
+     "tris": 116
+    },
+    {
+     "name": "fence_l_0",
+     "layer": 17,
+     "delay": 0.111,
+     "foldAngle": -1.55162,
+     "tris": 64
+    },
+    {
+     "name": "fence_r_0",
+     "layer": 1,
+     "delay": 0.0,
+     "foldAngle": -1.54748,
+     "tris": 64
+    }
+   ]
+  },
+  "barn_farm": {
+   "flaps": 20,
+   "top": 14,
+   "flatTop": 0.068,
+   "oob": 0.007,
+   "tris": 1759,
+   "maxLayer": 14,
+   "height": 0.865,
+   "hinges": [
+    {
+     "name": "granary",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.59947,
+     "tris": 152
+    },
+    {
+     "name": "granary_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "granary_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "barn_back",
+     "layer": 5,
+     "delay": 0.923,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "barn_front",
+     "layer": 8,
+     "delay": 0.846,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "barn_wall_l",
+     "layer": 8,
+     "delay": 0.846,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "barn_wall_r",
+     "layer": 8,
+     "delay": 0.846,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "barn_roof_f",
+     "layer": 8,
+     "delay": 0.846,
+     "foldAngle": 0.81884,
+     "tris": 12
+    },
+    {
+     "name": "barn_roof_b",
+     "layer": 8,
+     "delay": 0.846,
+     "foldAngle": -1.63769,
+     "tris": 12
+    },
+    {
+     "name": "fence_pad_nw_0",
+     "layer": 11,
+     "delay": 0.769,
+     "foldAngle": 1.57586,
+     "tris": 84
+    },
+    {
+     "name": "fence_pad_ne_0",
+     "layer": 12,
+     "delay": 0.692,
+     "foldAngle": -1.54636,
+     "tris": 84
+    },
+    {
+     "name": "fence_pad_se_0",
+     "layer": 13,
+     "delay": 0.615,
+     "foldAngle": -1.59232,
+     "tris": 84
+    },
+    {
+     "name": "fence_pad_sw_0",
+     "layer": 12,
+     "delay": 0.538,
+     "foldAngle": 1.56488,
+     "tris": 84
+    },
+    {
+     "name": "hay",
+     "layer": 13,
+     "delay": 0.462,
+     "foldAngle": -1.56452,
+     "tris": 112
+    },
+    {
+     "name": "barrel_trough",
+     "layer": 14,
+     "delay": 0.385,
+     "foldAngle": -1.57534,
+     "tris": 92
+    },
+    {
+     "name": "bush_g10",
+     "layer": 11,
+     "delay": 0.308,
+     "foldAngle": 1.53841,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g11",
+     "layer": 14,
+     "delay": 0.231,
+     "foldAngle": -1.53141,
+     "tris": 76
+    },
+    {
+     "name": "tuft_g20",
+     "layer": 6,
+     "delay": 0.154,
+     "foldAngle": -1.54054,
+     "tris": 68
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 14,
+     "delay": 0.077,
+     "foldAngle": 1.57433,
+     "tris": 76
+    },
+    {
+     "name": "cart",
+     "layer": 12,
+     "delay": 0.0,
+     "foldAngle": -1.54553,
+     "tris": 124
+    }
+   ]
+  },
+  "market_square": {
+   "flaps": 19,
+   "top": 11,
+   "flatTop": 0.065,
+   "oob": 0.0,
+   "tris": 2656,
+   "maxLayer": 13,
+   "height": 1.012,
+   "hinges": [
+    {
+     "name": "stall_a",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 106
+    },
+    {
+     "name": "stall_a_side_l",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "stall_a_side_r",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "stall_a_roof",
+     "layer": 0,
+     "delay": 1.0,
+     "foldAngle": 1.43117,
+     "tris": 12
+    },
+    {
+     "name": "fountain",
+     "layer": 4,
+     "delay": 0.9,
+     "foldAngle": 1.54736,
+     "tris": 156
+    },
+    {
+     "name": "fountain_xf",
+     "layer": 4,
+     "delay": 0.9,
+     "foldAngle": 1.5708,
+     "tris": 64
+    },
+    {
+     "name": "fountain_xb",
+     "layer": 4,
+     "delay": 0.9,
+     "foldAngle": 1.5708,
+     "tris": 72
+    },
+    {
+     "name": "bunting",
+     "layer": 7,
+     "delay": 0.8,
+     "foldAngle": 1.55721,
+     "tris": 28
+    },
+    {
+     "name": "stall_b",
+     "layer": 12,
+     "delay": 0.7,
+     "foldAngle": -1.5708,
+     "tris": 160
+    },
+    {
+     "name": "stall_b_side_l",
+     "layer": 12,
+     "delay": 0.7,
+     "foldAngle": -1.5708,
+     "tris": 12
+    },
+    {
+     "name": "stall_b_side_r",
+     "layer": 12,
+     "delay": 0.7,
+     "foldAngle": 1.5708,
+     "tris": 12
+    },
+    {
+     "name": "stall_b_roof",
+     "layer": 12,
+     "delay": 0.7,
+     "foldAngle": 1.43117,
+     "tris": 12
+    },
+    {
+     "name": "lamp_a",
+     "layer": 13,
+     "delay": 0.6,
+     "foldAngle": -1.59263,
+     "tris": 48
+    },
+    {
+     "name": "barrels",
+     "layer": 0,
+     "delay": 0.5,
+     "foldAngle": -1.58123,
+     "tris": 84
+    },
+    {
+     "name": "crates",
+     "layer": 0,
+     "delay": 0.4,
+     "foldAngle": -1.59152,
+     "tris": 48
+    },
+    {
+     "name": "cart",
+     "layer": 0,
+     "delay": 0.3,
+     "foldAngle": -1.61257,
+     "tris": 124
+    },
+    {
+     "name": "flowers_g10",
+     "layer": 8,
+     "delay": 0.2,
+     "foldAngle": 1.54185,
+     "tris": 76
+    },
+    {
+     "name": "bush_g20",
+     "layer": 3,
+     "delay": 0.1,
+     "foldAngle": -1.62047,
+     "tris": 76
+    },
+    {
+     "name": "flowers_g21",
+     "layer": 4,
+     "delay": 0.0,
+     "foldAngle": 1.55694,
+     "tris": 76
+    }
+   ]
+  },
+  "manor": {
+   "flaps": 16,
+   "top": 10,
+   "flatTop": 0.064,
+   "oob": 0.003,
+   "tris": 1516,
+   "maxLayer": 13,
+   "height": 1.006,
+   "hinges": [
+    {
+     "name": "tree_a",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.59126,
+     "tris": 156
+    },
+    {
+     "name": "tree_a_xf",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "tree_a_xb",
+     "layer": 2,
+     "delay": 1.0,
+     "foldAngle": 1.5708,
+     "tris": 68
+    },
+    {
+     "name": "manor_back",
+     "layer": 5,
+     "delay": 0.889,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "manor_front",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "manor_wall_l",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": 1.5708,
+     "tris": 16
+    },
+    {
+     "name": "manor_wall_r",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": -1.5708,
+     "tris": 16
+    },
+    {
+     "name": "manor_roof_f",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": 0.72485,
+     "tris": 12
+    },
+    {
+     "name": "manor_roof_b",
+     "layer": 8,
+     "delay": 0.778,
+     "foldAngle": -1.4497,
+     "tris": 12
+    },
+    {
+     "name": "laundry",
+     "layer": 11,
+     "delay": 0.667,
+     "foldAngle": 1.55896,
+     "tris": 28
+    },
+    {
+     "name": "bed_a",
+     "layer": 12,
+     "delay": 0.556,
+     "foldAngle": -1.59996,
+     "tris": 116
+    },
+    {
+     "name": "bed_b",
+     "layer": 11,
+     "delay": 0.444,
+     "foldAngle": -1.53866,
+     "tris": 104
+    },
+    {
+     "name": "lamp",
+     "layer": 12,
+     "delay": 0.333,
+     "foldAngle": -1.58071,
+     "tris": 48
+    },
+    {
+     "name": "barrel",
+     "layer": 13,
+     "delay": 0.222,
+     "foldAngle": -1.54092,
+     "tris": 92
+    },
+    {
+     "name": "bench",
+     "layer": 13,
+     "delay": 0.111,
+     "foldAngle": -1.5807,
+     "tris": 90
+    },
+    {
+     "name": "fence_l_0",
+     "layer": 13,
+     "delay": 0.0,
+     "foldAngle": -1.58266,
+     "tris": 64
+    }
+   ]
+  }
+ },
+ "traveller": {
+  "tris": 1064,
+  "height": 0.6
+ },
+ "bridge": {
+  "deckProfile": [
+   [
+    0.63,
+    0.0
+   ],
+   [
+    0.3064,
+    0.1578
+   ],
+   [
+    0.0,
+    0.2009
+   ]
+  ],
+  "halfWidth": 0.25,
+  "halfSpan": 0.63,
+  "axis": "z"
+ },
+ "lanternPost": {
+  "x": 0.5,
+  "z": 0.0,
+  "lanternX": 0.34,
+  "lanternY": 0.37
+ }
+}

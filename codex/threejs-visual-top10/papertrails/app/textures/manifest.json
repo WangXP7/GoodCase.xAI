@@ -1,0 +1,387 @@
+{
+ "paper": {
+  "file": "paper/card_albedo.png",
+  "type": "detail",
+  "colorSpace": "linear",
+  "repeat": 2.0,
+  "wrap": "repeat",
+  "core": true,
+  "size": [
+   1024,
+   1024
+  ],
+  "bytes": 667665,
+  "flipY": true,
+  "usage": "Fine cardstock fibre for cut pieces. Grey DETAIL map, linear data, mean 0.5: albedo.rgb *= 2.0 * d (== 1 + (2d-1)*strength). With a stock MeshStandardMaterial: map=this (NoColorSpace) and material.color multiplied by 2. NOT an sRGB albedo.",
+  "mean": 0.5,
+  "relRms": 0.112,
+  "strength": 1.0
+ },
+ "paperNormal": {
+  "file": "paper/card_normal.jpg",
+  "type": "normal",
+  "colorSpace": "linear",
+  "repeat": 2.0,
+  "wrap": "repeat",
+  "core": true,
+  "size": [
+   1024,
+   1024
+  ],
+  "bytes": 656249,
+  "flipY": true,
+  "usage": "Tangent-space normal for `paper` (same repeat/UV). OpenGL +Y convention for flipY=true. normalScale 1.0 = 5.5 deg mean tilt; 0.6-1.5 is sensible.",
+  "meanTiltDeg": 5.5,
+  "normalScale": 1.0
+ },
+ "paperRough": {
+  "file": "paper/paper_rough.png",
+  "type": "roughness",
+  "colorSpace": "linear",
+  "repeat": 2.0,
+  "wrap": "repeat",
+  "core": true,
+  "size": [
+   256,
+   256
+  ],
+  "bytes": 36637,
+  "flipY": true,
+  "usage": "Roughness in all channels (three reads G). Mean 0.93, min >= 0.80: dead matte. Shared by card and page stock. metalness = 0."
+ },
+ "pagePaper": {
+  "file": "paper/page_albedo.png",
+  "type": "detail",
+  "colorSpace": "linear",
+  "repeat": 2.5,
+  "wrap": "repeat",
+  "core": true,
+  "size": [
+   1024,
+   1024
+  ],
+  "bytes": 618366,
+  "flipY": true,
+  "usage": "Rougher book-page stock (longer visible fibres). Same DETAIL convention as `paper`: albedo.rgb *= 2.0 * d. For a page wider than ~3 tiles blend a second sample at repeat2 (0.5/0.5, rotate 90 deg) to hide the period.",
+  "mean": 0.5,
+  "relRms": 0.098,
+  "strength": 1.0,
+  "repeat2": 7.3
+ },
+ "pagePaperNormal": {
+  "file": "paper/page_normal.jpg",
+  "type": "normal",
+  "colorSpace": "linear",
+  "repeat": 2.5,
+  "wrap": "repeat",
+  "core": true,
+  "size": [
+   1024,
+   1024
+  ],
+  "bytes": 640580,
+  "flipY": true,
+  "usage": "Tangent-space normal for `pagePaper`. OpenGL +Y, flipY=true. normalScale 1.0 = 6 deg mean tilt.",
+  "meanTiltDeg": 6.0,
+  "normalScale": 1.0
+ },
+ "pagePaperRough": {
+  "file": "paper/paper_rough.png",
+  "type": "roughness",
+  "colorSpace": "linear",
+  "repeat": 2.5,
+  "wrap": "repeat",
+  "core": true,
+  "size": [
+   256,
+   256
+  ],
+  "bytes": 36637,
+  "flipY": true,
+  "aliasOf": "paperRough",
+  "usage": "Same file as paperRough (reuse the texture object; only the repeat differs)."
+ },
+ "edgeStrip": {
+  "file": "paper/edge_strip.png",
+  "type": "edge",
+  "colorSpace": "srgb",
+  "repeat": 2.0,
+  "wrap": [
+   "repeat",
+   "clamp"
+  ],
+  "core": true,
+  "size": [
+   1024,
+   256
+  ],
+  "bytes": 176235,
+  "flipY": true,
+  "usage": "Luminance for edge faces; multiply by the core colour #FBF6EA (or the book-board colour). U runs ALONG the edge (repeat = world units per U tile), V across the thickness. Two bands, V given for flipY=true: pageBlock = stacked sheets of the book block (30 sheet lines, irregular gaps); cutEdge = one card sheet (bright fuzzy core, darker compressed rims).",
+  "bands": {
+   "pageBlock": {
+    "px": [
+     0,
+     0,
+     1024,
+     176
+    ],
+    "v": [
+     0.3125,
+     1.0
+    ],
+    "sheets": 30
+   },
+   "cutEdge": {
+    "px": [
+     0,
+     192,
+     1024,
+     64
+    ],
+    "v": [
+     0.0,
+     0.25
+    ]
+   }
+  }
+ },
+ "printAtlas": {
+  "file": "paper/print_atlas.png",
+  "type": "print-atlas",
+  "colorSpace": "srgb",
+  "repeat": null,
+  "wrap": "clamp",
+  "core": true,
+  "size": [
+   2048,
+   1024
+  ],
+  "bytes": 1543614,
+  "flipY": true,
+  "usage": "All printed-detail overlays in one RGBA texture for the single shared cardstock material. Each cell: 448 px tileable content + 32 px wrapped gutter (keep UVs inside the cell rect; worldSize = suggested world units across the rect). A = ink coverage (straight alpha), RGB = ink composited over white. dark ink: albedo *= mix(vec3(1), rgb, k); or mix(albedo, yourInk, a*k). light ink (ripple): albedo = mix(albedo, #FBF6EA, a*k). Fibre detail multiplies AFTER the print so ink never hides fibre.",
+  "cell": 512,
+  "inner": 448,
+  "pad": 32,
+  "cells": {
+   "shingle": {
+    "px": [
+     32,
+     32,
+     448,
+     448
+    ],
+    "uvFlipY": [
+     0.015625,
+     0.53125,
+     0.234375,
+     0.96875
+    ],
+    "uvNoFlip": [
+     0.015625,
+     0.03125,
+     0.234375,
+     0.46875
+    ],
+    "ink": "dark",
+    "worldSize": 1.0
+   },
+   "brick": {
+    "px": [
+     544,
+     32,
+     448,
+     448
+    ],
+    "uvFlipY": [
+     0.265625,
+     0.53125,
+     0.484375,
+     0.96875
+    ],
+    "uvNoFlip": [
+     0.265625,
+     0.03125,
+     0.484375,
+     0.46875
+    ],
+    "ink": "dark",
+    "worldSize": 1.0
+   },
+   "wood": {
+    "px": [
+     1056,
+     32,
+     448,
+     448
+    ],
+    "uvFlipY": [
+     0.515625,
+     0.53125,
+     0.734375,
+     0.96875
+    ],
+    "uvNoFlip": [
+     0.515625,
+     0.03125,
+     0.734375,
+     0.46875
+    ],
+    "ink": "dark",
+    "worldSize": 0.5
+   },
+   "grass": {
+    "px": [
+     1568,
+     32,
+     448,
+     448
+    ],
+    "uvFlipY": [
+     0.765625,
+     0.53125,
+     0.984375,
+     0.96875
+    ],
+    "uvNoFlip": [
+     0.765625,
+     0.03125,
+     0.984375,
+     0.46875
+    ],
+    "ink": "dark",
+    "worldSize": 1.0
+   },
+   "ripple": {
+    "px": [
+     32,
+     544,
+     448,
+     448
+    ],
+    "uvFlipY": [
+     0.015625,
+     0.03125,
+     0.234375,
+     0.46875
+    ],
+    "uvNoFlip": [
+     0.015625,
+     0.53125,
+     0.234375,
+     0.96875
+    ],
+    "ink": "light",
+    "worldSize": 1.0
+   },
+   "halftone": {
+    "px": [
+     544,
+     544,
+     448,
+     448
+    ],
+    "uvFlipY": [
+     0.265625,
+     0.03125,
+     0.484375,
+     0.46875
+    ],
+    "uvNoFlip": [
+     0.265625,
+     0.53125,
+     0.484375,
+     0.96875
+    ],
+    "ink": "dark",
+    "worldSize": 0.5
+   },
+   "stipple": {
+    "px": [
+     1056,
+     544,
+     448,
+     448
+    ],
+    "uvFlipY": [
+     0.515625,
+     0.03125,
+     0.734375,
+     0.46875
+    ],
+    "uvNoFlip": [
+     0.515625,
+     0.53125,
+     0.734375,
+     0.96875
+    ],
+    "ink": "dark",
+    "worldSize": 1.0
+   },
+   "crease": {
+    "px": [
+     1568,
+     544,
+     448,
+     448
+    ],
+    "uvFlipY": [
+     0.765625,
+     0.03125,
+     0.984375,
+     0.46875
+    ],
+    "uvNoFlip": [
+     0.765625,
+     0.53125,
+     0.984375,
+     0.96875
+    ],
+    "ink": "dark",
+    "worldSize": null
+   }
+  }
+ },
+ "table": {
+  "file": "paper/table_wood.jpg",
+  "type": "albedo",
+  "colorSpace": "srgb",
+  "repeat": 6.0,
+  "wrap": "repeat",
+  "core": true,
+  "size": [
+   512,
+   512
+  ],
+  "bytes": 77122,
+  "flipY": true,
+  "usage": "Dark warm walnut table beyond the book, mean ~ #2D1C14 (surround umber). Real sRGB albedo, grain along U. Meant to sit out of focus; roughness 0.7-0.8, no normal map needed."
+ },
+ "blueNoise": {
+  "file": "paper/blue_noise.png",
+  "type": "noise",
+  "colorSpace": "linear",
+  "repeat": null,
+  "wrap": "repeat",
+  "core": true,
+  "size": [
+   128,
+   128
+  ],
+  "bytes": 49353,
+  "flipY": true,
+  "filter": "nearest",
+  "mipmaps": false,
+  "usage": "128 px tiling blue noise, 3 independent uniform channels (0..1). For post: grain, dither, DOF sample rotation. Sample with gl_FragCoord.xy / 128 (+ per-frame offset from state.time)."
+ },
+ "art": {
+  "file": "art/atlas.webp",
+  "type": "art-atlas",
+  "colorSpace": "srgb",
+  "repeat": null,
+  "wrap": "clamp",
+  "core": true,
+  "flipY": false,
+  "usage": "Illustrated cut-paper sprite atlas. Sampled by the paper material with uv1 (glTF TEXCOORD_1, top-left origin => flipY false) on art-card faces; sprite rects and outlines in art/atlas.json."
+ }
+}

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Worms</title>
+    <link rel="stylesheet" href="../../utils/lab/lab.css" />
+    <script src="../../utils/importmap.js"></script>
+  </head>
+  <body>
+    <div id="loading">
+      <p class="loading-title">Worms</p>
+      <div class="loading-bar" role="progressbar" aria-label="Loading"></div>
+      <p class="loading-stage" aria-live="polite">Loading</p>
+    </div>
+    <script type="module">
+      import * as THREE from 'three/webgpu'
+      import {
+        abs,
+        color,
+        exp,
+        float,
+        hash,
+        instanceIndex,
+        length,
+        max,
+        mix,
+        normalize,
+        pow,
+        smoothstep,
+        uv,
+        vec3,
+      } from 'three/tsl'
+      import { WormSimulation, WormSimulationHelper, WormState } from './WormSimulation.js'
+      import { HAND, Lab, dropStrands, seededRandom } from '../../utils/lab/Lab.js'
+
+      // Worms: big slimy worms dropped into a tray on a big lab bench. They squirm, crawl to the middle of the tray and
+      // squeeze into a tangled blob there: a still field that lifts and presses them, filled from the bottom up.
+
+      const params = {
+        // Simulation (rebuilds)
+        count: 130,
+        lengthMin: 0.68, // m
+        lengthMax: 0.85, // m
+        thickness: 0.052, // m
+        seed: 1,
+        // Pointer
+        tool: 'Grab',
+        // Gait (live)
+        frequency: 2,
+        amplitude: 0.45,
+        temperature: 1,
+        squirm: 12,
+        peristalsis: 0.3,
+        curl: 14, // 1/m
+        // wanderers crawl off toward the tray's walls
+        wander: false,
+        timeScale: 1,
+        capsules: false,
+      }
+      const LIVE = ['frequency', 'amplitude', 'temperature', 'squirm', 'peristalsis', 'curl', 'timeScale']
+      // Where WormSimulation's defaults don't fit, for worms this size.
+      const TUNING = {
+        // Soft, gooey and slimy: squeezed worms fold, shorten and slide over one another, and draw out when pulled.
+        numSubsteps: 7,
+        bendingIterations: 6,
+        bendingCompliance: 5,
+        stretchingCompliance: 0.05,
+        compressionCompliance: 0.002,
+        contactFriction: 0.05,
+        // the tray is their floor
+        colliderFriction: 0.015,
+        groundFriction: 0.015,
+        maxSpeed: 4.9,
+        // The blob slumps into a mound and presses its worms together; it drags them little, so the mass sloshes.
+        capture: 0.16,
+        skinDepth: 0.14,
+        buoyancy: 0.6,
+        skinPull: 1.6,
+        squeeze: 2.2,
+        rearPull: 1.5,
+        rearShare: 0.5,
+        lateralDrag: 4,
+        axialDrag: 0.6,
+        packing: 0.26,
+        restOutside: false,
+        wanderTime: 16,
+        wanderMinDistance: 0.4,
+        wanderMaxDistance: 1.2,
+        // Gait: no side-to-side swim; they crawl on the peristaltic wave and squirm in bursts, the pile too.
+        crawlAmplitude: 2,
+        crawlWavelength: 0.72,
+        climbAmplitude: 1.85,
+        tailAmplitude: 0.3,
+        wavelength: 1.4,
+        curlThreshold: 0.3,
+        serpentine: 0,
+        squirmBursts: 0.85,
+        squirmHead: 0.3,
+        heldSquirm: 0.3,
+        peristalsisFrequency: 3,
+        headPull: 0.4,
+        stuckTime: 4,
+        backupTime: 2.5,
+        // Wet: they slide easily but cling to the tray, and draw out as they peel off it.
+        forwardFriction: 0.025,
+        backwardFriction: 0.25,
+        lateralFriction: 0.5,
+        yieldSpeed: 0.015,
+        heldFriction: 0.5,
+        adhesionPull: 6,
+        heldAdhesion: 0.6,
+        breakGap: 2.5,
+        breakSpeed: 4,
+        restickDelay: 0.05,
+        toolCooldown: 1.5,
+      }
+      // The blob: its radius for 0.21 m³ of worm (the default worms), by the cube root of their volume for others.
+      const BLOB = { radius: 0.45, volume: 0.21 }
+      // The bench, × 1.6 m: its tray holds the blob and room to crawl round it.
+      const LAB_SCALE = 4
+
+      const lab = await Lab.create({
+        title: 'Worms',
+        hint: 'Drag a worm to pick it up · R drops again',
+        scale: LAB_SCALE,
+      })
+      // Crowded crawlers back away from each other; on an open bench they back off its edge, and can't climb back.
+      lab.addTray()
+
+      const material = new THREE.MeshPhysicalNodeMaterial({
+        name: 'worm',
+        roughness: 0.2,
+        clearcoat: 1,
+        clearcoatRoughness: 0.04,
+      })
+      // uv.x runs head (0) to tail (1); instanceIndex is the worm.
+      const along = uv().x
+      const skin = mix(color('#965a5a'), color('#74304e'), pow(hash(instanceIndex), 0.7).mul(0.75))
+      const tail = mix(skin, skin.mul(0.75), smoothstep(0.6, 1, along))
+      // The clitellum: a paler band a little behind the head.
+      material.colorNode = mix(tail, color('#a0605a'), smoothstep(0.035, 0.015, abs(along.sub(0.28))))
+      material.shadowSide = THREE.DoubleSide
+
+      let worms = null
+      let helper = null
+      let building = null
+      let rebuildQueued = false
+
+      function applySettings(sim) {
+        for (const key of LIVE) sim[key] = params[key]
+        sim.wanderChance = params.wander ? 0.6 : 0
+      }
+
+      function syncHelper() {
+        helper?.removeFromParent()
+        helper = null
+        if (!worms) return
+        // the capsules stand in for the bodies
+        worms.visible = !params.capsules
+        if (params.capsules) {
+          helper = new WormSimulationHelper(worms)
+          lab.add(helper)
+        }
+      }
+
+      // The blob, as the field WormSimulation reads: a ball sunk into the middle of the tray's floor, its radius flaring
+      // out toward the floor into a mound. It never moves, so its velocity is 0.
+      function createBlob(curves, radius) {
+        const totalLength = curves.reduce((sum, curve) => sum + curve.getLength(), 0)
+        const size = BLOB.radius * Math.cbrt((Math.PI * radius * radius * totalLength) / BLOB.volume)
+        const floor = lab.surface.y
+        const center = lab.surface.clone().setY(floor + 0.2 * size)
+        // extra radius at the floor, fading by 1/e every `falloff` above it, m
+        const flare = size / 3
+        const falloff = 0.55 * size
+        const radiusAt = (y) => size + flare * Math.exp(-Math.max(y - floor, 0) / falloff)
+        return {
+          floor,
+          boundingSphere: new THREE.Sphere(center, size + flare),
+          sample(position) {
+            const offset = position.sub(vec3(center))
+            const grow = float(flare).mul(exp(max(position.y.sub(floor), 0).div(falloff).negate()))
+            return { distance: length(offset).sub(size).sub(grow), normal: normalize(offset), velocity: vec3(0) }
+          },
+          // m³ inside per layer above the floor: each horizontal slice is a disc
+          volumeByHeight(step, count, out = new Float32Array(count)) {
+            const slices = 8
+            for (let i = 0; i < count; i++) {
+              let area = 0
+              for (let j = 0; j < slices; j++) {
+                const y = floor + (i + (j + 0.5) / slices) * step
+                area += Math.PI * Math.max(radiusAt(y) ** 2 - (y - center.y) ** 2, 0)
+              }
+              out[i] = (area / slices) * step
+            }
+            return out
+          },
+        }
+      }
+
+      async function build() {
+        Lab.stage('Dropping the worms')
+        const radius = params.thickness / 2
+        const curves = dropStrands({
+          count: params.count,
+          length: [params.lengthMin, Math.max(params.lengthMin, params.lengthMax)],
+          radius,
+          center: lab.surface,
+          // scattered low over the tray, round the blob
+          spread: 0.6,
+          height: [0.1, 2.2],
+          waviness: 0.08,
+          tilt: 0.3,
+          seed: params.seed,
+        })
+        const random = seededRandom(params.seed + 101)
+        const next = new WormSimulation(curves, material, {
+          field: createBlob(curves, radius),
+          radius,
+          colliders: lab.colliders,
+          states: new Uint8Array(curves.length).fill(WormState.LOOSE),
+          // each lies still a moment after landing, so they don't all set off at once
+          cooldowns: Float32Array.from(curves, () => 1.5 * random()),
+          headRounding: 0.12,
+          tailTaper: 0.28,
+          tailTip: 0.28,
+          radialSegments: 10,
+          lengthSegments: 2,
+          capSegments: 3,
+        })
+        next.name = 'worms'
+        next.ground = lab.ground
+        Object.assign(next, TUNING)
+        applySettings(next)
+        Lab.stage('Compiling the worms')
+        await next.compileAsync(lab.renderer)
+        if (worms) {
+          lab.scene.remove(worms)
+          worms.dispose()
+        }
+        worms = next
+        lab.add(worms)
+        syncHelper()
+      }
+
+      // One build at a time; a change during one builds again after it.
+      async function rebuild() {
+        if (building) {
+          rebuildQueued = true
+          return
+        }
+        building = build()
+        try {
+          await building
+        } finally {
+          building = null
+        }
+        if (rebuildQueued) {
+          rebuildQueued = false
+          rebuild()
+        }
+      }
+
+      await rebuild()
+
+      lab.onFrame((delta) => worms?.update(lab.renderer, delta))
+      lab.onReset(() => worms?.reset())
+      // Where a click would blast.
+      const CROSSHAIR = { hover: 'crosshair', drag: 'crosshair' }
+      // A thickness from a particle: on the worm, not beside it.
+      const reach = () => ({ radius: params.thickness })
+      lab.onGrab({
+        hit: async (raycaster) => worms !== null && (await worms.pickAsync(raycaster, reach())) !== null,
+        start(raycaster) {
+          if (!worms) return
+          if (params.tool === 'Blast') worms.blast(raycaster)
+          else worms.pick(raycaster, reach()).grabPicked().moveGrabAlongRay(raycaster.ray)
+        },
+        move: (raycaster) => worms?.moveGrabAlongRay(raycaster.ray),
+        end: () => worms?.endGrab(),
+        cursors: () => (params.tool === 'Blast' ? CROSSHAIR : HAND),
+      })
+
+      lab.gui.add(params, 'tool', ['Grab', 'Blast'])
+      lab.gui.add({ collapse: () => worms?.collapse() }, 'collapse').name('Knock all loose')
+
+      const simulation = lab.gui.addFolder('Simulation')
+      simulation.add(params, 'count', 4, 200, 1).onFinishChange(rebuild)
+      simulation.add(params, 'lengthMin', 0.2, 1.5, 0.01).name('shortest (m)').onFinishChange(rebuild)
+      simulation.add(params, 'lengthMax', 0.2, 1.5, 0.01).name('longest (m)').onFinishChange(rebuild)
+      simulation.add(params, 'thickness', 0.02, 0.1, 0.001).name('thickness (m)').onFinishChange(rebuild)
+      simulation
+        .add(
+          {
+            dropNew() {
+              params.seed++
+              rebuild()
+            },
+          },
+          'dropNew',
+        )
+        .name('Drop new worms')
+
+      const live = () => worms && applySettings(worms)
+      const gait = lab.gui.addFolder('Gait')
+      gait.add(params, 'frequency', 0, 4, 0.05).name('frequency (Hz)').onChange(live)
+      gait.add(params, 'amplitude', 0, 2, 0.05).onChange(live)
+      gait.add(params, 'temperature', 0, 3, 0.05).name('writhe').onChange(live)
+      gait.add(params, 'squirm', 0, 20, 0.5).onChange(live)
+      gait.add(params, 'peristalsis', 0, 0.5, 0.01).name('squeeze').onChange(live)
+      gait.add(params, 'curl', 0, 30, 1).name('coil in the blob (1/m)').onChange(live)
+      gait.add(params, 'wander').onChange(live)
+      gait.add(params, 'timeScale', 0, 2, 0.05).name('time scale').onChange(live)
+      gait.add(params, 'capsules').name('show capsules').onChange(syncHelper)
+
+      lab.ready()
+    </script>
+  </body>
+</html>
