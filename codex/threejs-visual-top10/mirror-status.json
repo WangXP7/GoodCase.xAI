@@ -2,9 +2,9 @@
   "sourceRef": "threejs-source",
   "sourceCommit": "6bb136635a0de08f2373d95ba2abe82ea481e9e7",
   "sourceProjects": 30,
-  "selfHostedProjects": 18,
-  "sourceOnlyProjects": 12,
-  "publishedSiteBytes": 135580145,
+  "selfHostedProjects": 19,
+  "sourceOnlyProjects": 11,
+  "publishedSiteBytes": 152737858,
   "cases": [
     {
       "slug": "tria-prima-fable-52",
@@ -195,8 +195,8 @@
       "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/hexgl",
       "sourceScope": "project-snapshot",
       "upstreamRevision": "6addc95a2fce3bf05f4d751823cc054c61a16d68",
-      "status": "source-only",
-      "note": "进入加载提示后仍未在本站测试环境确认飞船画面运行。"
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/hexgl/app/index.html"
     },
     {
       "slug": "tiny-world-builder",
