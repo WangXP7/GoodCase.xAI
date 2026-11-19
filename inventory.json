@@ -123,9 +123,10 @@
     "upstream": "https://github.com/zz85/slop-singapore",
     "commit": "3b98b6765a658e7da241f11da569abb8b44d2822",
     "license": "MIT",
-    "scope": "project-snapshot",
-    "files": 162,
-    "bytes": 58457559
+    "scope": "code-and-eligible-data",
+    "files": 160,
+    "bytes": 51922908,
+    "excludedData": "Trees.sg tree inventory and generated Singapore geography that embeds it, plus map tiles."
   },
   "starter-kit-racing": {
     "upstream": "https://github.com/gitdolucas/Starter-Kit-Racing",

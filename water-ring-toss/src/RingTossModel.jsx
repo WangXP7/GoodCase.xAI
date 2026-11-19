@@ -88,6 +88,6 @@ export default function RingTossModel(props) {
     );
 }
 
-useGLTF.preload("/WaterRingGame3.glb");
+useGLTF.preload("./WaterRingGame3.glb");
 useTexture.preload("./NormalMap.png");
 useTexture.preload("./RoughnessMap.png");
